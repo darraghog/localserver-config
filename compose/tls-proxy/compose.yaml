@@ -1,0 +1,10 @@
+# Caddy TLS proxy. Run bootstrap-tls.sh first. HTTPS: :8443 (hello-world), :8444 (n8n)
+services:
+  caddy:
+    image: docker.io/library/caddy:alpine
+    volumes:
+      - ../../certs:/certs:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    restart: unless-stopped
+    network_mode: host

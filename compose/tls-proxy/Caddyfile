@@ -1,0 +1,15 @@
+{
+	# off = no ACME, no HTTP redirect (avoids bind :80)
+	auto_https off
+}
+# TLS reverse proxy - :8443 (hello-world), :8444 (n8n)
+:8443 {
+  bind 0.0.0.0
+  tls /certs/server.pem /certs/server-key.pem
+  reverse_proxy 127.0.0.1:8080
+}
+:8444 {
+  bind 0.0.0.0
+  tls /certs/server.pem /certs/server-key.pem
+  reverse_proxy 127.0.0.1:5678
+}

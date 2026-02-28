@@ -1,0 +1,7 @@
+# Test stack - nginx on :8080
+services:
+  web:
+    image: docker.io/library/nginx:alpine
+    ports:
+      - "8080:80"
+    restart: unless-stopped
