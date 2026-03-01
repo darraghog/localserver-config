@@ -22,7 +22,7 @@ rsync -avz --delete \
 
 echo ""
 echo "[deploy-to-server] Running deploy on $TARGET..."
-ssh "$TARGET" "cd $REMOTE_PATH && chmod +x scripts/*.sh && ./scripts/deploy.sh --compose-only"
+ssh "$TARGET" "cd '$REMOTE_PATH' && chmod +x scripts/*.sh && ./scripts/deploy.sh --compose-only"
 
 echo ""
 echo "[deploy-to-server] Done."
