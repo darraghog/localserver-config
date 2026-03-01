@@ -20,10 +20,10 @@ log "   OK"
 log "4. Backend (hello-world) on 8080?"
 curl -s --connect-timeout 2 "http://127.0.0.1:8080/" >/dev/null && log "   OK" || log "   WARN: start hello-world stack"
 
-log "5. Curl https://127.0.0.1:8443/ (localhost)?"
-curl -sk --connect-timeout 3 "https://127.0.0.1:8443/" >/dev/null && log "   OK" || { log "   FAIL"; exit 1; }
+log "5. Curl https://127.0.0.1:8443/ (localhost, verified)?"
+curl -s --cacert "$CERTS/ca.pem" --connect-timeout 3 "https://127.0.0.1:8443/" >/dev/null && log "   OK" || { log "   FAIL"; exit 1; }
 
-log "6. Curl https://${H}:8443/ (hostname)?"
-curl -sk --connect-timeout 3 "https://${H}:8443/" >/dev/null && log "   OK" || log "   WARN: hostname may not be in cert"
+log "6. Curl https://${H}:8443/ (hostname, verified)?"
+curl -s --cacert "$CERTS/ca.pem" --connect-timeout 3 "https://${H}:8443/" >/dev/null && log "   OK" || log "   WARN: hostname may not be in cert (re-run setup-certs.sh with this hostname)"
 
 log "7. From other machine: Trust certs/ca.pem on client. See docs/tls.md"
