@@ -28,6 +28,12 @@ services:
     #   - DB_POSTGRESDB_USER=n8n
     #   - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5678/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # postgres:
   #   image: docker.io/library/postgres:15-alpine
