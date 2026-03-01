@@ -58,6 +58,9 @@ command -v openssl &>/dev/null || { log "Install openssl"; exit 1; }
 mkdir -p "$CERTS_DIR"
 cd "$CERTS_DIR"
 
+OPENSSL_CNF="$(mktemp)"
+trap "rm -f '$OPENSSL_CNF'" EXIT
+
 SAN=""
 for h in "${HOSTNAMES[@]}"; do
   if [[ "$h" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -67,7 +70,7 @@ for h in "${HOSTNAMES[@]}"; do
   fi
 done
 
-cat > openssl.cnf << EOF
+cat > "$OPENSSL_CNF" << EOF
 [req]
 distinguished_name = dn
 req_extensions = ext
@@ -87,9 +90,9 @@ fi
 
 log "Creating server cert..."
 openssl genrsa -out "$SERVER_KEY" 2048
-openssl req -new -key "$SERVER_KEY" -out server.csr -subj "/O=Localserver/CN=${CN}" -config openssl.cnf
+openssl req -new -key "$SERVER_KEY" -out server.csr -subj "/O=Localserver/CN=${CN}" -config "$OPENSSL_CNF"
 openssl x509 -req -in server.csr -CA "$CA_CERT" -CAkey "$CA_KEY" -CAcreateserial \
-  -out "$SERVER_CERT" -days 825 -sha256 -extensions ext -extfile openssl.cnf
+  -out "$SERVER_CERT" -days 825 -sha256 -extensions ext -extfile "$OPENSSL_CNF"
 rm -f server.csr ca.srl
 chmod 600 "$CA_KEY" "$SERVER_KEY"
 
