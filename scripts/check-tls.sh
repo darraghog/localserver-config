@@ -39,25 +39,18 @@ else
   # --- Remote mode ---
   log "Remote TLS check against $HOST"
 
-  # Locate ca.pem: prefer local copy, fall back to fetching from server
-  CA_PEM="$REPO_ROOT/certs/ca.pem"
-  TMPDIR_CLEANUP=""
-  if [[ ! -f "$CA_PEM" ]]; then
-    log "   ca.pem not found locally, fetching from $HOST..."
-    TMP_DIR="$(mktemp -d)"
-    TMPDIR_CLEANUP="$TMP_DIR"
-    CA_PEM="$TMP_DIR/ca.pem"
-    if ! scp "$HOST:~/localserver-config/certs/ca.pem" "$CA_PEM" 2>/dev/null; then
-      log "   FAIL: could not fetch ca.pem from $HOST:~/localserver-config/certs/ca.pem"
-      log "         Run scripts/setup-certs.sh on the server first, or copy ca.pem locally."
-      rm -rf "$TMP_DIR"
-      exit 1
-    fi
-    log "   Fetched ca.pem from $HOST"
+  # Always fetch ca.pem from the remote (local certs/ belongs to this machine's deployment)
+  TMP_DIR="$(mktemp -d)"
+  CA_PEM="$TMP_DIR/ca.pem"
+  log "   Fetching ca.pem from $HOST..."
+  if ! scp "$HOST:~/localserver-config/certs/ca.pem" "$CA_PEM" 2>/dev/null; then
+    log "   FAIL: could not fetch ca.pem from $HOST:~/localserver-config/certs/ca.pem"
+    log "         Run scripts/setup-certs.sh on the server first."
+    rm -rf "$TMP_DIR"
+    exit 1
   fi
 
-  cleanup() { [[ -n "$TMPDIR_CLEANUP" ]] && rm -rf "$TMPDIR_CLEANUP"; }
-  trap cleanup EXIT
+  trap 'rm -rf "$TMP_DIR"' EXIT
 
   log "1. Curl http://$HOST:8080/ (hello-world plain HTTP)?"
   curl -s --connect-timeout 3 "http://$HOST:8080/" >/dev/null && log "   OK" || log "   WARN: hello-world may not be running"
