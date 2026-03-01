@@ -88,6 +88,10 @@ deploy_stacks() {
     log "ERROR: N8N_BASIC_AUTH_PASSWORD is not set. Copy .env.example to .env and set a password."
     exit 1
   }
+  [[ -z "${N8N_ENCRYPTION_KEY:-}" ]] && {
+    log "ERROR: N8N_ENCRYPTION_KEY is not set. Generate one with: openssl rand -hex 32"
+    exit 1
+  }
 
   export N8N_HOST="$(hostname)"
   export N8N_EDITOR_BASE_URL="https://${N8N_HOST}:8444"
