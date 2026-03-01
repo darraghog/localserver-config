@@ -79,6 +79,9 @@ prompt = no
 CN = localserver
 [ext]
 subjectAltName = ${SAN}
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
 EOF
 
 if [[ ! -f "$CA_KEY" ]]; then
