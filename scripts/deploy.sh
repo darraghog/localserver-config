@@ -73,8 +73,9 @@ deploy_stacks() {
   export N8N_HOST="$(hostname)"
   export N8N_EDITOR_BASE_URL="https://${N8N_HOST}:8444"
 
-  # Ensure external volumes exist before compose up
-  podman volume create postgres-data 2>/dev/null && log "Created volume: postgres-data" || log "Volume exists: postgres-data"
+  if [[ "${N8N_DATABASE:-}" == "postgres" ]]; then
+    podman volume create postgres-data 2>/dev/null && log "Created volume: postgres-data" || log "Volume exists: postgres-data"
+  fi
 
   for name in hello-world n8n tls-proxy; do
     [[ "$name" == "tls-proxy" && ! -f "$REPO_ROOT/certs/server.pem" ]] && {
@@ -90,8 +91,10 @@ deploy_stacks() {
       log "Removing legacy container $(podman inspect -f '{{.Name}}' "$cid" 2>/dev/null)"
       podman rm -f "$cid" 2>/dev/null || true
     done
-    log "Deploying $name..."
-    (cd "$dir" && "${COMPOSE_CMD[@]}" -f "$compose" up -d)
+    compose_files=(-f "$compose")
+    [[ "$name" == "n8n" && "${N8N_DATABASE:-}" == "postgres" ]] && compose_files+=(-f "$dir/compose.postgres.yaml")
+    log "Deploying $name${N8N_DATABASE:+ (db: $N8N_DATABASE)}..."
+    (cd "$dir" && "${COMPOSE_CMD[@]}" "${compose_files[@]}" up -d)
   done
 
   H="$(hostname)"
