@@ -38,12 +38,12 @@ install_compose() {
 
   # Prefer podman-compose (avoids Docker Compose "conmon failed" with podman compose)
   if [[ -x "$COMPOSE_BIN" ]]; then
-    COMPOSE_CMD="$COMPOSE_BIN"
+    COMPOSE_CMD=("$COMPOSE_BIN")
     log "Using podman-compose (venv)"
     return 0
   fi
   if installed podman-compose; then
-    COMPOSE_CMD="podman-compose"
+    COMPOSE_CMD=("podman-compose")
     log "Using podman-compose"
     return 0
   fi
@@ -52,7 +52,7 @@ install_compose() {
     log "Compose not found, installing podman-compose (venv)..."
     mkdir -p "$(dirname "$COMPOSE_VENV")"
     if python3 -m venv "$COMPOSE_VENV" 2>/dev/null && "$COMPOSE_VENV/bin/pip" install -q podman-compose 2>/dev/null; then
-      COMPOSE_CMD="$COMPOSE_BIN"
+      COMPOSE_CMD=("$COMPOSE_BIN")
       log "Installed podman-compose"
       return 0
     fi
@@ -62,7 +62,7 @@ install_compose() {
   log "Installing podman-compose (venv, no sudo)..."
   mkdir -p "$(dirname "$COMPOSE_VENV")"
   python3 -m venv "$COMPOSE_VENV" && "$COMPOSE_VENV/bin/pip" install -q podman-compose
-  COMPOSE_CMD="$COMPOSE_BIN"
+  COMPOSE_CMD=("$COMPOSE_BIN")
   log "Installed podman-compose"
 }
 
@@ -73,14 +73,6 @@ verify_podman() {
 
 deploy_stacks() {
   export PATH="${HOME:-/root}/.local/bin:$PATH"
-  # podman-compose uses podman CLI directly; podman compose needs the API service
-  if [[ "$COMPOSE_CMD" == "podman compose" ]]; then
-    pgrep -f "podman system service" &>/dev/null || {
-      log "Starting Podman system service..."
-      podman system service --time=0 &
-      sleep 2
-    }
-  fi
 
   [[ -f "$REPO_ROOT/.env" ]] && set -a && source "$REPO_ROOT/.env" && set +a
 
@@ -111,7 +103,7 @@ deploy_stacks() {
       podman rm -f "$cid" 2>/dev/null || true
     done
     log "Deploying $name..."
-    (cd "$dir" && $COMPOSE_CMD -f "$compose" up -d)
+    (cd "$dir" && "${COMPOSE_CMD[@]}" -f "$compose" up -d)
   done
 
   H="$(hostname)"
