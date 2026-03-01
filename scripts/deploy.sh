@@ -73,6 +73,9 @@ deploy_stacks() {
   export N8N_HOST="$(hostname)"
   export N8N_EDITOR_BASE_URL="https://${N8N_HOST}:8444"
 
+  # Ensure external volumes exist before compose up
+  podman volume create postgres-data 2>/dev/null && log "Created volume: postgres-data" || log "Volume exists: postgres-data"
+
   for name in hello-world n8n tls-proxy; do
     [[ "$name" == "tls-proxy" && ! -f "$REPO_ROOT/certs/server.pem" ]] && {
       log "Skip tls-proxy: no certs (run scripts/setup-certs.sh first)"
