@@ -33,37 +33,22 @@ install_podman() {
 
 install_compose() {
   export PATH="${HOME:-/root}/.local/bin:$PATH"
-  COMPOSE_VENV="${HOME:-/root}/.local/share/podman-compose-venv"
-  COMPOSE_BIN="${COMPOSE_VENV}/bin/podman-compose"
 
   # Prefer podman-compose (avoids Docker Compose "conmon failed" with podman compose)
-  if [[ -x "$COMPOSE_BIN" ]]; then
-    COMPOSE_CMD=("$COMPOSE_BIN")
-    log "Using podman-compose (venv)"
-    return 0
-  fi
   if installed podman-compose; then
     COMPOSE_CMD=("podman-compose")
-    log "Using podman-compose"
+    log "Using podman-compose ($(podman-compose --version 2>/dev/null | head -1))"
     return 0
   fi
-  # In compose-only mode, try installing venv without sudo (no apt)
-  if [[ "$COMPOSE_ONLY" == true ]]; then
-    log "Compose not found, installing podman-compose (venv)..."
-    mkdir -p "$(dirname "$COMPOSE_VENV")"
-    if python3 -m venv "$COMPOSE_VENV" 2>/dev/null && "$COMPOSE_VENV/bin/pip" install -q podman-compose 2>/dev/null; then
-      COMPOSE_CMD=("$COMPOSE_BIN")
-      log "Installed podman-compose"
-      return 0
-    fi
-    log "Compose not found. Run scripts/deploy.sh once interactively (with sudo for apt)."
-    exit 1
+  if installed uv; then
+    log "Installing podman-compose via uv..."
+    uv tool install podman-compose -q
+    COMPOSE_CMD=("podman-compose")
+    log "Installed podman-compose"
+    return 0
   fi
-  log "Installing podman-compose (venv, no sudo)..."
-  mkdir -p "$(dirname "$COMPOSE_VENV")"
-  python3 -m venv "$COMPOSE_VENV" && "$COMPOSE_VENV/bin/pip" install -q podman-compose
-  COMPOSE_CMD=("$COMPOSE_BIN")
-  log "Installed podman-compose"
+  log "ERROR: podman-compose not found. Install uv (https://docs.astral.sh/uv/) or podman-compose."
+  exit 1
 }
 
 verify_podman() {
