@@ -33,24 +33,37 @@ install_podman() {
 
 install_compose() {
   export PATH="${HOME:-/root}/.local/bin:$PATH"
+  COMPOSE_VENV="${HOME:-/root}/.local/share/podman-compose-venv"
+  COMPOSE_BIN="${COMPOSE_VENV}/bin/podman-compose"
+
+  # Prefer podman-compose (avoids Docker Compose "conmon failed" with podman compose)
+  if [[ -x "$COMPOSE_BIN" ]]; then
+    COMPOSE_CMD="$COMPOSE_BIN"
+    log "Using podman-compose (venv)"
+    return 0
+  fi
   if installed podman-compose; then
     COMPOSE_CMD="podman-compose"
     log "Using podman-compose"
     return 0
   fi
-  if podman compose version &>/dev/null; then
-    COMPOSE_CMD="podman compose"
-    log "Using podman compose"
-    return 0
-  fi
+  # In compose-only mode, try installing venv without sudo (no apt)
   if [[ "$COMPOSE_ONLY" == true ]]; then
-    log "Compose not found. Run scripts/deploy.sh once interactively."
+    log "Compose not found, installing podman-compose (venv)..."
+    mkdir -p "$(dirname "$COMPOSE_VENV")"
+    if python3 -m venv "$COMPOSE_VENV" 2>/dev/null && "$COMPOSE_VENV/bin/pip" install -q podman-compose 2>/dev/null; then
+      COMPOSE_CMD="$COMPOSE_BIN"
+      log "Installed podman-compose"
+      return 0
+    fi
+    log "Compose not found. Run scripts/deploy.sh once interactively (with sudo for apt)."
     exit 1
   fi
-  log "Installing podman-compose..."
-  sudo apt-get install -y python3-pip 2>/dev/null || true
-  pip3 install --user podman-compose
-  COMPOSE_CMD="podman-compose"
+  log "Installing podman-compose (venv, no sudo)..."
+  mkdir -p "$(dirname "$COMPOSE_VENV")"
+  python3 -m venv "$COMPOSE_VENV" && "$COMPOSE_VENV/bin/pip" install -q podman-compose
+  COMPOSE_CMD="$COMPOSE_BIN"
+  log "Installed podman-compose"
 }
 
 verify_podman() {
@@ -60,6 +73,7 @@ verify_podman() {
 
 deploy_stacks() {
   export PATH="${HOME:-/root}/.local/bin:$PATH"
+  # podman-compose uses podman CLI directly; podman compose needs the API service
   if [[ "$COMPOSE_CMD" == "podman compose" ]]; then
     pgrep -f "podman system service" &>/dev/null || {
       log "Starting Podman system service..."
@@ -67,6 +81,13 @@ deploy_stacks() {
       sleep 2
     }
   fi
+
+  [[ -f "$REPO_ROOT/.env" ]] && set -a && source "$REPO_ROOT/.env" && set +a
+
+  [[ -z "${N8N_BASIC_AUTH_PASSWORD:-}" ]] && {
+    log "ERROR: N8N_BASIC_AUTH_PASSWORD is not set. Copy .env.example to .env and set a password."
+    exit 1
+  }
 
   export N8N_HOST="$(hostname)"
   export N8N_EDITOR_BASE_URL="https://${N8N_HOST}:8444"
@@ -80,6 +101,11 @@ deploy_stacks() {
     compose="$dir/compose.yaml"
     [[ ! -f "$compose" ]] && compose="$dir/docker-compose.yaml"
     [[ ! -f "$compose" ]] && { log "Skip $name: no compose"; continue; }
+    # Stop and remove legacy Docker Compose-style containers (hyphenated) that conflict with podman-compose
+    for cid in $(podman ps -a -q --filter "name=${name}-" 2>/dev/null); do
+      log "Removing legacy container $(podman inspect -f '{{.Name}}' "$cid" 2>/dev/null)"
+      podman rm -f "$cid" 2>/dev/null || true
+    done
     log "Deploying $name..."
     (cd "$dir" && $COMPOSE_CMD -f "$compose" up -d)
   done
