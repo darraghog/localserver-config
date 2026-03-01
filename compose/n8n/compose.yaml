@@ -2,7 +2,7 @@
 # For Postgres, uncomment the postgres service and DB_* env vars, and add depends_on.
 services:
   n8n:
-    image: docker.io/n8nio/n8n:latest
+    image: docker.io/n8nio/n8n:2.9.4
     ports:
       - "5678:5678"
     volumes:
