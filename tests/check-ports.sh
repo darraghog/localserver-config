@@ -7,9 +7,10 @@ set -e
 
 HOST="${1:-}"
 
-# Expected: hello-world :8080, n8n :5678, Caddy :8443 :8444
-PORTS=(8080 5678 8443 8444)
-NAMES=("hello-world" "n8n" "tls-proxy:8443" "tls-proxy:8444")
+# Expected: hello-world :8080, n8n :5678, Caddy :8443 :8444 :9443
+# Note: 9090 requires Cockpit to be installed (scripts/setup-cockpit.sh)
+PORTS=(8080 5678 8443 8444 9090 9443)
+NAMES=("hello-world" "n8n" "tls-proxy:8443" "tls-proxy:8444" "cockpit" "cockpit-tls")
 
 check_port_local() {
   local port="$1"

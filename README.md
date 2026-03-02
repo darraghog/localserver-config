@@ -31,10 +31,11 @@ Syncs repo and runs `deploy.sh --compose-only` on the server (no package install
 | Script | Purpose |
 |--------|---------|
 | `scripts/setup-certs.sh` | Generate TLS certs (run separately, before tls-proxy) |
+| `scripts/setup-cockpit.sh` | Install Cockpit + cockpit-podman on the server (one-time) |
 | `scripts/deploy.sh` | Deploy stacks on this machine |
 | `scripts/deploy-to-server.sh` | Sync to remote host and deploy |
 | `scripts/check-tls.sh` | TLS diagnostic |
-| `tests/check-ports.sh` | Assert ports 8080, 5678, 8443, 8444 are listening (run on server) |
+| `tests/check-ports.sh` | Assert ports 8080, 5678, 8443, 8444, 9090, 9443 are listening (run on server) |
 | `scripts/setup-windows-hosts.ps1` | Add darragh-pc, darragh-pc.thelearningcto.com → 127.0.0.1 (run as Admin; same-machine access) |
 | `scripts/setup-windows-port-forward.ps1` | Forward Windows 8443/8444 → WSL (alternative to hosts; run as Admin) |
 
@@ -44,10 +45,27 @@ Syncs repo and runs `deploy.sh --compose-only` on the server (no package install
 |-------|-------|-------------|
 | hello-world | 8080, 8443 | nginx test |
 | n8n | 5678, 8444 | Workflow automation (SQLite) |
-| tls-proxy | 8443, 8444 | Caddy HTTPS reverse proxy |
+| tls-proxy | 8443, 8444, 9443 | Caddy HTTPS reverse proxy |
+| Cockpit | 9090 (internal), 9443 (TLS) | Podman container/pod management UI |
+
 ## URLs
 
 - http://&lt;host&gt;:8080, https://&lt;host&gt;:8443 — hello-world
 - http://&lt;host&gt;:5678, https://&lt;host&gt;:8444 — n8n (admin / changeme)
+- https://&lt;host&gt;:9443 — Cockpit (login with Linux system user credentials)
 
 Examples: `https://darragh-pc:8443`, `https://darragh-pc.thelearningcto.com:8443` (Route53 → 192.168.86.237)
+
+## Cockpit
+
+Cockpit is installed as a system package (not a container) because it needs D-Bus, systemd, and PAM access.
+`deploy-to-server.sh` installs it automatically on first deploy. To install manually:
+
+```bash
+ssh darragh-pc "cd ~/localserver-config && sudo ./scripts/setup-cockpit.sh"
+```
+
+**Windows Firewall (one-time, on darragh-pc — Admin PowerShell):**
+```powershell
+New-NetFirewallRule -DisplayName "Cockpit TLS" -Direction Inbound -Protocol TCP -LocalPort 9443 -Action Allow
+```

@@ -61,5 +61,8 @@ else
   log "3. Curl https://$HOST:8444/ (verified with ca.pem)?"
   curl -s --cacert "$CA_PEM" --connect-timeout 3 "https://$HOST:8444/" >/dev/null && log "   OK" || { log "   FAIL"; exit 1; }
 
+  log "4. Curl https://$HOST:9443/ (Cockpit, verified with ca.pem)?"
+  curl -s --cacert "$CA_PEM" --connect-timeout 3 "https://$HOST:9443/" >/dev/null && log "   OK" || log "   WARN: Cockpit may not be installed (run scripts/setup-cockpit.sh on server)"
+
   log "All remote TLS checks passed."
 fi

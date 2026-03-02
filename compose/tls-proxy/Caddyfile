@@ -13,3 +13,7 @@
   tls /certs/server.pem /certs/server-key.pem
   reverse_proxy 127.0.0.1:5678
 }
+:9443 {
+  tls /certs/server.pem /certs/server-key.pem
+  reverse_proxy 127.0.0.1:9090
+}
