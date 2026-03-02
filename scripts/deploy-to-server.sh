@@ -65,8 +65,16 @@ else
   scp "$ENV_FILE" "$TARGET:$REMOTE_PATH/.env"
 
   echo ""
+  echo "[deploy] Regenerating server cert (ensuring .local hostname in SANs)..."
+  ssh "$TARGET" "cd $REMOTE_PATH && ./scripts/setup-certs.sh \$(hostname) \$(hostname).local \$(hostname -I | awk '{print \$1}')"
+
+  echo ""
   echo "[deploy] Running deploy on $TARGET..."
   ssh "$TARGET" "cd $REMOTE_PATH && chmod +x scripts/*.sh && ./scripts/deploy.sh --compose-only"
+
+  echo ""
+  echo "[deploy] Applying Cockpit configuration on $TARGET..."
+  ssh -t "$TARGET" "cd $REMOTE_PATH && sudo ./scripts/setup-cockpit.sh"
 
   echo ""
   echo "[deploy] Running port checks on $TARGET..."
@@ -80,4 +88,5 @@ else
   echo "[deploy] Done."
   echo "  Hello-world:  https://$TARGET:8443"
   echo "  n8n:          https://$TARGET:8444"
+  echo "  Cockpit:      https://$TARGET:9443"
 fi
