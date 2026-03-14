@@ -2,7 +2,7 @@
 # For Postgres, set N8N_DATABASE=postgres in your env file.
 services:
   n8n:
-    image: docker.io/n8nio/n8n:2.9.4
+    image: docker.io/n8nio/n8n:2.11.4
     ports:
       - "5678:5678"
     volumes:
