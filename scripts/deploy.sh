@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Idempotent deploy: Podman + compose stacks (hello-world, n8n, tls-proxy).
 # Usage: ./scripts/deploy.sh [--compose-only]
-# --compose-only: skip package install (for remote SSH, no sudo)
+# --compose-only: skip package install and systemd setup (for remote SSH, no sudo)
 
 set -e
 
@@ -105,6 +105,33 @@ deploy_stacks() {
   echo ""
 }
 
+setup_systemd() {
+  local unit_src="$REPO_ROOT/systemd/user"
+  local unit_dst="${HOME}/.config/systemd/user"
+  local units=(localserver-hello-world localserver-n8n localserver-tls-proxy)
+
+  log "Installing systemd user units..."
+  mkdir -p "$unit_dst"
+
+  for unit in "${units[@]}"; do
+    sed \
+      -e "s|__REPO_ROOT__|${REPO_ROOT}|g" \
+      -e "s|__HOME__|${HOME}|g" \
+      "$unit_src/${unit}.service" > "$unit_dst/${unit}.service"
+    log "  Installed ${unit}.service"
+  done
+
+  systemctl --user daemon-reload
+  systemctl --user enable "${units[@]/%/.service}"
+  log "Systemd units enabled"
+
+  if sudo loginctl enable-linger "$(whoami)" 2>/dev/null; then
+    log "Lingering enabled (user services start at boot)"
+  else
+    log "WARNING: Could not enable lingering (run: sudo loginctl enable-linger $(whoami))"
+  fi
+}
+
 main() {
   log "Deploy (repo: $REPO_ROOT)"
   if [[ "$COMPOSE_ONLY" == true ]]; then
@@ -114,6 +141,7 @@ main() {
     install_base
     install_podman
     install_compose
+    setup_systemd
   fi
   verify_podman
   deploy_stacks

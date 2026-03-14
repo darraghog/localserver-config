@@ -1,0 +1,17 @@
+[Unit]
+Description=Caddy TLS proxy compose stack
+Documentation=https://github.com/darraghog/localserver-config
+Wants=network-online.target localserver-n8n.service localserver-hello-world.service
+After=network-online.target localserver-n8n.service localserver-hello-world.service
+ConditionPathExists=__REPO_ROOT__/certs/server.pem
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=__REPO_ROOT__/compose/tls-proxy
+Environment=PATH=__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=__HOME__/.local/bin/podman-compose up -d
+ExecStop=__HOME__/.local/bin/podman-compose down
+
+[Install]
+WantedBy=default.target
