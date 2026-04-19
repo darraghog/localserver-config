@@ -4,6 +4,20 @@ This repo uses **Caddy in `network_mode: host`** (`compose/tls-proxy`) so TLS te
 
 Use this checklist so the service is reachable from **other containers on the same host** and from **other PCs on your home LAN** (including through **WSL2 + Podman on Windows** if that is your setup).
 
+### Automated scaffold (recommended)
+
+```bash
+./scripts/add-service.sh myapp --port 8090 --image docker.io/library/nginx:alpine
+./scripts/sudo/bootstrap-host.sh   # installs new systemd/user/localserver-myapp.service if not done yet
+./scripts/deploy-stack.sh myapp
+```
+
+Then add a Caddy `:<https-port> { ... reverse_proxy 127.0.0.1:8090 }` block in `compose/tls-proxy/Caddyfile` and run `./scripts/deploy-stack.sh tls-proxy`.
+
+- **Full ordered deploy** (everything in [compose/stack-order](../compose/stack-order)): `./scripts/deploy.sh`
+- **One or more stacks only**: `./scripts/deploy-stack.sh <name> [<name> ...]`
+- **Boot orchestration**: stacks listed in `compose/stack-order`; systemd units `systemd/user/localserver-*.service` call [scripts/start-stack.sh](../scripts/start-stack.sh).
+
 ---
 
 ## 1. Choose ports and names
@@ -31,21 +45,27 @@ curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:<backend-host-port>/
 
 ---
 
-## 3. Register the stack in `deploy.sh` (optional but recommended)
+## 3. Register the stack for `./scripts/deploy.sh`
 
-In [scripts/deploy.sh](../scripts/deploy.sh), add `<service-name>` to the `for name in hello-world n8n tls-proxy` loop **before** `tls-proxy` if the new stack does not depend on certs, or in dependency order if it does.
+Add the stack name to [compose/stack-order](../compose/stack-order) (one name per line), **before** `tls-proxy` if the app should come up before the proxy in a full deploy. `add-service.sh` does this automatically.
 
-Redeploy:
+Redeploy everything in order:
 
 ```bash
-./scripts/deploy.sh --compose-only
+./scripts/deploy.sh
+```
+
+Or only specific stacks:
+
+```bash
+./scripts/deploy-stack.sh myapp tls-proxy
 ```
 
 ---
 
 ## 4. Optional: systemd user unit
 
-To match hello-world / n8n, copy [systemd/user/localserver-hello-world.service](../systemd/user/localserver-hello-world.service) to `systemd/user/localserver-<service-name>.service`, set `WorkingDirectory` to `__REPO_ROOT__/compose/<service-name>`, then extend the `units=(...)` array and the `for unit in` loop in `deploy.sh` → `setup_systemd()` so `deploy.sh` installs and enables the new unit.
+`add-service.sh` writes `systemd/user/localserver-<service-name>.service` from [systemd/templates/localserver-stack.service.in](../systemd/templates/localserver-stack.service.in). [scripts/sudo/bootstrap-host.sh](../scripts/sudo/bootstrap-host.sh) installs every `localserver-*.service` into `~/.config/systemd/user/`.
 
 ---
 
@@ -137,7 +157,9 @@ podman run --rm --add-host=darragh-pc:host-gateway curlimages/curl \
 |------|----------------|
 | Run the app | `compose/<name>/compose.yaml`, `podman-compose up -d` |
 | HTTPS URL on LAN | `compose/tls-proxy/Caddyfile` (`:PORT { ... reverse_proxy 127.0.0.1:... }`) |
-| Deploy with `./scripts/deploy.sh` | `scripts/deploy.sh` stack list (+ optional systemd unit) |
+| Deploy all (ordered) | `compose/stack-order` + `./scripts/deploy.sh` |
+| Deploy one stack | `./scripts/deploy-stack.sh <name>` |
+| Scaffold + unit file | `./scripts/add-service.sh <name>` |
 | New hostname in cert | `scripts/setup-certs.sh` + restart tls-proxy |
 | WSL2 / Windows LAN | `scripts/setup-windows-podman-lan-ports.ps1` + `compose/windows-lan-extra-ports.txt` if needed |
 | Container → Caddy | `host-gateway` / LAN IP / `host.containers.internal`, not `127.0.0.1` |

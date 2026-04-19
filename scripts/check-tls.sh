@@ -1,12 +1,27 @@
 #!/usr/bin/env bash
-# TLS diagnostic
-# Usage: ./scripts/check-tls.sh              # local (on darragh-pc)
-#        ./scripts/check-tls.sh darragh-pc   # remote (from darragh-laptop)
+# TLS / Caddy diagnostic (requires certs/server.pem and working tls-proxy).
+# Usage: ./scripts/check-tls.sh              # local
+#        ./scripts/check-tls.sh <scp-host> [<curl-host>]
+#   <scp-host>  — scp(1) destination for certs/ca.pem (e.g. SSH config Host name)
+#   <curl-host> — optional; host or IP for http/https curls (default: same as <scp-host>).
+#                 Use the LAN IP when DNS resolves to a path that does not reach Caddy on 8443/8444
+#                 (typical WSL + Windows: HTTP :8080 works by hostname but HTTPS must use the LAN IP).
+#   Env: CHECK_TLS_CURL_HOST overrides <curl-host> when set.
 set -e
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 log() { echo "[check] $*"; }
 
-HOST="${1:-}"
+trim_arg() {
+  local x="$1"
+  x="${x//$'\r'/}"
+  x="${x#"${x%%[![:space:]]*}"}"
+  x="${x%"${x##*[![:space:]]}"}"
+  printf '%s' "$x"
+}
+
+HOST="$(trim_arg "${1:-}")"
+CURL_HOST="$(trim_arg "${CHECK_TLS_CURL_HOST:-${2:-}}")"
+[[ -n "$HOST" ]] && [[ -z "$CURL_HOST" ]] && CURL_HOST="$HOST"
 
 if [[ -z "$HOST" ]]; then
   # --- Local mode ---
@@ -37,9 +52,8 @@ if [[ -z "$HOST" ]]; then
 
 else
   # --- Remote mode ---
-  log "Remote TLS check against $HOST"
+  log "Remote TLS check (scp: $HOST, curl: $CURL_HOST)"
 
-  # Always fetch ca.pem from the remote (local certs/ belongs to this machine's deployment)
   TMP_DIR="$(mktemp -d)"
   CA_PEM="$TMP_DIR/ca.pem"
   log "   Fetching ca.pem from $HOST..."
@@ -52,17 +66,43 @@ else
 
   trap 'rm -rf "$TMP_DIR"' EXIT
 
-  log "1. Curl http://$HOST:8080/ (hello-world plain HTTP)?"
-  curl -s --connect-timeout 3 "http://$HOST:8080/" >/dev/null && log "   OK" || log "   WARN: hello-world may not be running"
+  curl_https() {
+    local url="$1"
+    local label="$2"
+    set +e
+    err="$(curl -sS --cacert "$CA_PEM" --connect-timeout 8 "$url" -o /dev/null 2>&1)"
+    rc=$?
+    set -e
+    if [[ "$rc" -eq 0 ]]; then
+      log "   OK"
+      return 0
+    fi
+    log "   FAIL"
+    [[ -n "$err" ]] && log "         $err"
+    if echo "$err" | grep -qiE 'timed out|connection refused|Failed to connect|Could not resolve'; then
+      log "         TCP: nothing accepted HTTPS (or blocked). WSL+Windows: open/forward 8443 from LAN — docs/NETWORK-CONFIG.md"
+      log "         Retry with LAN IP: ./scripts/check-tls.sh $HOST <lan-ip>  (or CHECK_TLS_CURL_HOST=<ip>)"
+    elif echo "$err" | grep -qiE 'SSL certificate|certificate verify|unable to get local issuer'; then
+      log "         TLS: trust ca.pem or fix cert SANs (include $CURL_HOST); re-run deploy with DEPLOY_CERT_EXTRA_SANS"
+    fi
+    return "$rc"
+  }
 
-  log "2. Curl https://$HOST:8443/ (verified with ca.pem)?"
-  curl -s --cacert "$CA_PEM" --connect-timeout 3 "https://$HOST:8443/" >/dev/null && log "   OK" || { log "   FAIL"; exit 1; }
+  log "1. Curl http://${CURL_HOST}:8080/ (hello-world plain HTTP)?"
+  curl -s --connect-timeout 5 "http://${CURL_HOST}:8080/" >/dev/null && log "   OK" || log "   WARN: hello-world may not be running"
 
-  log "3. Curl https://$HOST:8444/ (verified with ca.pem)?"
-  curl -s --cacert "$CA_PEM" --connect-timeout 3 "https://$HOST:8444/" >/dev/null && log "   OK" || { log "   FAIL"; exit 1; }
+  log "2. Curl https://${CURL_HOST}:8443/ (verified with ca.pem)?"
+  curl_https "https://${CURL_HOST}:8443/" "8443" || exit 1
 
-  log "4. Curl https://$HOST:9443/ (Cockpit, verified with ca.pem)?"
-  curl -s --cacert "$CA_PEM" --connect-timeout 3 "https://$HOST:9443/" >/dev/null && log "   OK" || log "   WARN: Cockpit may not be installed (run scripts/setup-cockpit.sh on server)"
+  log "3. Curl https://${CURL_HOST}:8444/ (verified with ca.pem)?"
+  curl_https "https://${CURL_HOST}:8444/" "8444" || exit 1
+
+  log "4. Curl https://${CURL_HOST}:9443/ (Cockpit, verified with ca.pem)?"
+  if curl_https "https://${CURL_HOST}:9443/" "9443"; then
+    :
+  else
+    log "   WARN: Cockpit may not be installed (run scripts/sudo/setup-cockpit.sh on server)"
+  fi
 
   log "All remote TLS checks passed."
 fi

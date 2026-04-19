@@ -1,25 +1,24 @@
 #!/usr/bin/env bash
-# Diagnose connectivity from darragh-laptop (192.168.86.236) to darragh-pc (192.168.86.237).
-# Usage: ./scripts/check-connectivity.sh [HOST] [SSH_PORT]
-#   HOST defaults to 192.168.86.237 (darragh-pc)
-#   SSH_PORT defaults to 2222
-
+# Diagnose basic connectivity to a server (ping, TCP ports, optional DNS).
+# Usage: ./scripts/check-connectivity.sh <server-ip> [ssh-port] [probe-domain]
+#   ssh-port defaults to 22
+#   probe-domain: optional; dig @$HOST <probe-domain> — pass arg3 or set LOCALSERVER_PROBE_DOMAIN
 set -e
 
-HOST="${1:-192.168.86.237}"
-SSH_PORT="${2:-2222}"
-echo "=== Connectivity check: darragh-laptop -> $HOST (darragh-pc) ==="
+HOST="${1:?pass server LAN IP as first argument}"
+SSH_PORT="${2:-22}"
+PROBE_DOMAIN="${3:-${LOCALSERVER_PROBE_DOMAIN:-}}"
 
-# 1. Ping
+echo "=== Connectivity check -> $HOST ==="
+
 echo -n "Ping $HOST: "
 if ping -c 1 -W 2 "$HOST" &>/dev/null; then
   echo "OK"
 else
   echo "FAIL (no reply or timeout)"
-  echo "  -> Check: same WiFi/LAN? darragh-pc powered on? Correct IP?"
+  echo "  -> Check: same WiFi/LAN? Server powered on? Correct IP?"
 fi
 
-# 2. TCP ports
 for port in "$SSH_PORT" 8443 8444 53; do
   echo -n "TCP $port: "
   if timeout 2 bash -c "echo >/dev/tcp/$HOST/$port" 2>/dev/null; then
@@ -29,34 +28,34 @@ for port in "$SSH_PORT" 8443 8444 53; do
   fi
 done
 
-# 3. DNS (UDP 53)
-echo -n "DNS (UDP 53, dig): "
-if command -v dig &>/dev/null; then
-  if dig +short +time=2 +tries=1 @$HOST darragh-pc.thelearningcto.com 2>/dev/null | grep -q .; then
-    echo "OK"
+if [[ -n "$PROBE_DOMAIN" ]]; then
+  echo -n "DNS (UDP 53, dig @$HOST $PROBE_DOMAIN): "
+  if command -v dig &>/dev/null; then
+    if dig +short +time=2 +tries=1 "@$HOST" "$PROBE_DOMAIN" 2>/dev/null | grep -q .; then
+      echo "OK"
+    else
+      echo "FAIL (no response)"
+    fi
   else
-    echo "FAIL (no response)"
+    echo "SKIP (dig not installed)"
   fi
 else
-  echo "SKIP (dig not installed)"
+  echo "DNS dig: SKIP (pass probe-domain as arg3 or set LOCALSERVER_PROBE_DOMAIN)"
 fi
 
-# 4. Summary / next steps
 echo ""
 echo "--- If ping FAILs ---"
-echo "  - Same network? Both on 192.168.86.x?"
-echo "  - darragh-pc: ip addr (check LAN IP)"
-echo "  - Windows Firewall on darragh-pc: allow ICMP (ping)"
+echo "  - Same network? Firewall allows ICMP?"
 echo ""
 echo "--- If TCP $SSH_PORT (SSH) FAIL ---"
-echo "  - darragh-pc: systemctl status ssh"
-echo "  - Windows Firewall: allow port $SSH_PORT inbound"
+echo "  - sshd listening? systemctl status ssh (Linux) / Windows OpenSSH Server"
+echo "  - Firewall: allow port $SSH_PORT inbound"
 echo ""
 echo "--- If TCP 8443/8444 FAIL ---"
-echo "  - darragh-pc: run ./tests/check-ports.sh"
-echo "  - Windows Firewall: allow 8443, 8444 inbound"
+echo "  - On server: ./tests/check-ports.sh"
+echo "  - Windows: firewall / portproxy for WSL — see docs/NETWORK-CONFIG.md"
 echo ""
 echo "--- If DNS FAIL but TCP 53 OK ---"
-echo "  - Windows Firewall: add rule for UDP 53 inbound"
-echo "  - WSL: .wslconfig needs networkingMode=mirrored"
+echo "  - Windows Firewall: UDP 53 inbound"
+echo "  - WSL: mirrored networking may be required for UDP from LAN"
 echo ""

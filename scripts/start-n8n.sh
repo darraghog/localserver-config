@@ -10,6 +10,10 @@ COMPOSE_CMD="${HOME}/.local/bin/podman-compose"
 # Load secrets
 [[ -f "$REPO_ROOT/.env" ]] && set -a && source "$REPO_ROOT/.env" && set +a
 
+if [[ "${N8N_DATABASE:-}" == "postgres" ]]; then
+  podman volume create postgres-data 2>/dev/null || true
+fi
+
 export N8N_HOST="$(hostname)"
 export N8N_EDITOR_BASE_URL="https://${N8N_HOST}:8444"
 

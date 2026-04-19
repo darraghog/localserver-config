@@ -397,9 +397,9 @@ These rules **do not survive a reboot**. On **darragh-pc**, use [scripts/setup-w
 | Device | Add to hosts |
 |--------|--------------|
 | Desktop (Windows) | `127.0.0.1 darragh-pc darragh-pc.thelearningcto.com thelearningcto.com` |
-| Desktop (WSL) | `127.0.0.1 darragh-pc darragh-pc.thelearningcto.com thelearningcto.com` — use `sudo ./scripts/setup-wsl-hosts.sh` |
-| Laptop / other WSL | `192.168.86.237 darragh-pc darragh-pc.thelearningcto.com thelearningcto.com` — use `sudo ./scripts/setup-wsl-hosts.sh 192.168.86.237` |
-| Other LAN devices | `192.168.86.237 darragh-pc thelearningcto.com` |
+| Desktop (WSL) | Add your names to `/etc/hosts` — use `sudo ./scripts/sudo/setup-wsl-hosts.sh` or set `LOCALSERVER_HOSTS_ENTRY` |
+| Laptop / other WSL | Point at the server LAN IP — `sudo ./scripts/sudo/setup-wsl-hosts.sh <server-ip>` or `LOCALSERVER_HOSTS_ENTRY` |
+| Other LAN devices | Server IP + hostnames your apps use |
 
 Use the desktop’s **actual** LAN IP (e.g. DHCP reservation at `192.168.86.237`).
 

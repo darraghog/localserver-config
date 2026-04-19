@@ -1,0 +1,5 @@
+# One stack name per line (directory under compose/). Order is used by scripts/deploy.sh.
+# New application stacks should be listed before tls-proxy so a full deploy brings apps up first.
+hello-world
+n8n
+tls-proxy

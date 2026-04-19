@@ -38,4 +38,4 @@ foreach ($port in $ports) {
 netsh advfirewall firewall delete rule name="WSL HTTPS" 2>$null | Out-Null
 netsh advfirewall firewall add rule name="WSL HTTPS" dir=in action=allow protocol=TCP localport=8443,8444 | Out-Null
 Write-Host "Firewall: allowed 8443, 8444"
-Write-Host "Done. HTTPS: https://darragh-pc:8443"
+Write-Host "Done. Try HTTPS on this PC at https://localhost:8443 (or your hosts name for WSL)."

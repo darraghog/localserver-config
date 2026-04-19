@@ -138,4 +138,4 @@ Point LAN devices to use 192.168.86.237 as DNS:
 
 ## WSL on Windows note
 
-If darragh-pc is WSL on Windows, the host's LAN IP 192.168.86.237 may be on the Windows side. With **mirrored networking** (WSL 2.0+), WSL shares the host IP—dnsmasq binding to 192.168.86.237 should be reachable from the LAN. Without mirrored mode, you'd need the desktop to be native Linux for this to work from other devices. For same-machine (WSL) resolution, use `scripts/setup-wsl-hosts.sh` instead.
+If the Podman host is WSL on Windows, the host's LAN IP (e.g. 192.168.1.10) may be on the Windows side. With **mirrored networking** (WSL 2.0+), WSL shares the host IP—dnsmasq binding to 192.168.86.237 should be reachable from the LAN. Without mirrored mode, you'd need the desktop to be native Linux for this to work from other devices. For same-machine (WSL) resolution, use `scripts/sudo/setup-wsl-hosts.sh` instead.

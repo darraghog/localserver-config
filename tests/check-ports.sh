@@ -1,16 +1,29 @@
 #!/usr/bin/env bash
-# Assert all expected ports are listening.
-# Usage: ./tests/check-ports.sh              # local (on darragh-pc)
-#        ./tests/check-ports.sh darragh-pc   # remote (from darragh-laptop)
-
+# Assert expected TCP ports are listening (local ss) or reachable (remote /dev/tcp).
+# Usage:
+#   ./tests/check-ports.sh [--core-only] [remote-host]
+#   --core-only  only hello-world and n8n (8080, 5678)
+#   (default)    all stacks including Caddy TLS and Cockpit ports
+# Remote: pass hostname or IP as last argument (not --core-only).
 set -e
 
-HOST="${1:-}"
+CORE_ONLY=false
+HOST=""
+for arg in "$@"; do
+  if [[ "$arg" == "--core-only" ]]; then
+    CORE_ONLY=true
+  else
+    HOST="$arg"
+  fi
+done
 
-# Expected: hello-world :8080, n8n :5678, Caddy :8443 :8444 :9443
-# Note: 9090 requires Cockpit to be installed (scripts/setup-cockpit.sh)
-PORTS=(8080 5678 8443 8444 9090 9443)
-NAMES=("hello-world" "n8n" "tls-proxy:8443" "tls-proxy:8444" "cockpit" "cockpit-tls")
+if [[ "$CORE_ONLY" == true ]]; then
+  PORTS=(8080 5678)
+  NAMES=("hello-world" "n8n")
+else
+  PORTS=(8080 5678 8443 8444 9090 9443)
+  NAMES=("hello-world" "n8n" "tls-proxy:8443" "tls-proxy:8444" "cockpit" "cockpit-tls")
+fi
 
 check_port_local() {
   local port="$1"

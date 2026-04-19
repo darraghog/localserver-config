@@ -17,19 +17,31 @@ log() { echo "[bootstrap-tls] $*"; }
 
 is_ip() { [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; }
 
+# Strip CR/whitespace so "192.168.1.1\r" is still classified as IP (IP: SAN), not DNS: (browsers/curl require IP: when using https://<ip>).
+normalize_san_token() {
+  local x="$1"
+  x="${x//$'\r'/}"
+  x="${x#"${x%%[![:space:]]*}"}"
+  x="${x%"${x##*[![:space:]]}"}"
+  printf '%s' "$x"
+}
+
 HOSTNAMES=()
 if [[ $# -gt 0 ]]; then
-  HOSTNAMES=("$@")
+  for _arg in "$@"; do
+    _t="$(normalize_san_token "$_arg")"
+    [[ -n "$_t" ]] && HOSTNAMES+=("$_t")
+  done
   # Ensure localhost + 127.0.0.1 for local access
   for need in localhost 127.0.0.1; do
     [[ " ${HOSTNAMES[*]} " == *" $need "* ]] || HOSTNAMES+=("$need")
   done
   log "Using: ${HOSTNAMES[*]}"
 else
-  HOSTNAMES=("$(hostname)" "localhost" "127.0.0.1")
+  HOSTNAMES=("$(normalize_san_token "$(hostname)")" "localhost" "127.0.0.1")
   while true; do
     read -rp "Server IP address (for cert SAN): " SERVER_IP
-    SERVER_IP="${SERVER_IP// /}"
+    SERVER_IP="$(normalize_san_token "$SERVER_IP")"
     if [[ -z "$SERVER_IP" ]]; then
       log "IP required"
       continue
@@ -63,7 +75,7 @@ trap "rm -f '$OPENSSL_CNF'" EXIT
 
 SAN=""
 for h in "${HOSTNAMES[@]}"; do
-  if [[ "$h" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  if is_ip "$h"; then
     SAN="${SAN}${SAN:+,}IP:${h}"
   else
     SAN="${SAN}${SAN:+,}DNS:${h}"
