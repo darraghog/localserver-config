@@ -346,6 +346,41 @@ ip -br addr
 # In PowerShell (Admin): New-NetFirewallRule -DisplayName "ICMP" -Protocol ICMPv4 -IcmpType 8 -Action Allow
 ```
 
+### WSL2 Podman: ports bound to IPv6 localhost only
+
+Podman in WSL2 may bind published container ports to **IPv6 loopback only** (`[::1]`), so they are reachable from Windows on that host but **not** from other machines on the LAN until Windows accepts traffic and forwards **IPv4** to **IPv6 localhost**.
+
+For **each** exposed port, run **Administrator PowerShell** on the Windows side:
+
+**1. Windows Firewall (inbound TCP)**
+
+```powershell
+New-NetFirewallRule -DisplayName "<service> <port>" -Direction Inbound -Protocol TCP -LocalPort <port> -Action Allow
+```
+
+**2. Port proxy (IPv4 → IPv6 loopback)**
+
+```powershell
+netsh interface portproxy add v4tov6 listenport=<port> listenaddress=0.0.0.0 connectport=<port> connectaddress=::1
+```
+
+These rules **do not survive a reboot**. On **darragh-pc**, use [scripts/setup-windows-podman-lan-ports.ps1](../scripts/setup-windows-podman-lan-ports.ps1) (run as Administrator). It **reads listener ports** from `compose/tls-proxy/Caddyfile` (any line like `:8443 {` or `host:8443 {`) and merges [compose/windows-lan-extra-ports.txt](../compose/windows-lan-extra-ports.txt) for host-published ports that are not Caddy front doors (for example plain `8080` from hello-world). Re-run after editing Caddy or extras, or schedule **At startup** in Task Scheduler with **Run with highest privileges** (see script comment block). A small state file under `%LOCALAPPDATA%\localserver-config\` drops **removed** ports from `netsh` portproxy on the next run.
+
+**Ports that commonly need this in this stack** (adjust names to taste):
+
+| Port | Typical use |
+|------|-------------|
+| 8080 | hello-world (nginx) |
+| 8444 | Caddy / n8n TLS |
+| 9443 | Cockpit TLS |
+
+**Diagnostics (Windows CMD or PowerShell)**
+
+- `netstat -an | findstr <port>` — confirm the listening address. `[::1]:<port>` means IPv6 localhost only (LAN clients need the **v4tov6** proxy above). `0.0.0.0:<port>` means IPv4 is already listening broadly (no v4tov6 proxy needed for that symptom).
+- `netsh interface portproxy show all` — list active portproxy rules.
+
+**Note:** If you use **mirrored** WSL networking (`.wslconfig`: `networkingMode=mirrored`), see also [scripts/setup-windows-port-forward.ps1](../scripts/setup-windows-port-forward.ps1): it uses **v4tov4** to the WSL IP for 8443/8444 and deliberately **does not** add rules in mirrored mode. The **v4tov6 → ::1** pattern above is for the case where services are only listening on `[::1]` and you need IPv4 LAN access into that listener.
+
 ### Common causes
 
 | Symptom | Cause | Fix |

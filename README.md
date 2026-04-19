@@ -18,13 +18,21 @@ cd ~/localserver-config
 ```
 Installs Podman, podman-compose, and brings up stacks.
 
+**Adding a new service (Podman + Caddy + LAN):** [docs/ADD-SERVICE.md](docs/ADD-SERVICE.md).
+
 ## Deploy (updates)
 
 **From your PC:**
 ```bash
-./scripts/deploy-to-server.sh darragh-pc
+./scripts/deploy-to-server.sh prod darragh-pc
 ```
-Syncs repo and runs `deploy.sh --compose-only` on the server (no package install).
+Syncs repo, copies `envs/prod.env` as `.env`, and runs `deploy.sh --compose-only` on the server (no package install).
+
+**Locally:**
+```bash
+./scripts/deploy-to-server.sh local local
+```
+Uses `envs/local.env` and deploys on this machine.
 
 ## Scripts
 
@@ -33,11 +41,12 @@ Syncs repo and runs `deploy.sh --compose-only` on the server (no package install
 | `scripts/setup-certs.sh` | Generate TLS certs (run separately, before tls-proxy) |
 | `scripts/setup-cockpit.sh` | Install Cockpit + cockpit-podman on the server (one-time) |
 | `scripts/deploy.sh` | Deploy stacks on this machine |
-| `scripts/deploy-to-server.sh` | Sync to remote host and deploy |
+| `scripts/deploy-to-server.sh` | `<env> <target>` — sync to remote host and deploy (env selects `envs/<env>.env`) |
 | `scripts/check-tls.sh` | TLS diagnostic |
 | `tests/check-ports.sh` | Assert ports 8080, 5678, 8443, 8444, 9090, 9443 are listening (run on server) |
 | `scripts/setup-windows-hosts.ps1` | Add darragh-pc, darragh-pc.thelearningcto.com → 127.0.0.1 (run as Admin; same-machine access) |
 | `scripts/setup-windows-port-forward.ps1` | Forward Windows 8443/8444 → WSL (alternative to hosts; run as Admin) |
+| `scripts/setup-windows-podman-lan-ports.ps1` | Firewall + IPv4→IPv6 portproxy: ports from `compose/tls-proxy/Caddyfile` + `compose/windows-lan-extra-ports.txt`; schedule at startup (Admin) |
 
 ## Stacks
 
@@ -69,3 +78,5 @@ ssh darragh-pc "cd ~/localserver-config && sudo ./scripts/setup-cockpit.sh"
 ```powershell
 New-NetFirewallRule -DisplayName "Cockpit TLS" -Direction Inbound -Protocol TCP -LocalPort 9443 -Action Allow
 ```
+
+If Podman binds ports to `[::1]` only, LAN clients also need **IPv4→IPv6** portproxy rules (and similar firewall rules per port). See [WSL2 Podman / IPv6 localhost](docs/NETWORK-CONFIG.md#wsl2-podman-ports-bound-to-ipv6-localhost-only).

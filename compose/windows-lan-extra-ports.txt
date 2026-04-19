@@ -1,0 +1,4 @@
+# TCP ports published on the Windows/WSL host that are NOT Caddy listener addresses
+# in compose/tls-proxy/Caddyfile. One port per line; lines starting with # are ignored.
+# hello-world nginx (compose/hello-world)
+8080

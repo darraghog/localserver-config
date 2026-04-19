@@ -70,8 +70,8 @@ deploy_stacks() {
     exit 1
   }
 
-  export N8N_HOST="$(hostname)"
-  export N8N_EDITOR_BASE_URL="https://${N8N_HOST}:8444"
+  export N8N_HOST="${N8N_HOST:-$(hostname)}"
+  export N8N_EDITOR_BASE_URL="${N8N_EDITOR_BASE_URL:-https://${N8N_HOST}:8444}"
 
   if [[ "${N8N_DATABASE:-}" == "postgres" ]]; then
     podman volume create postgres-data 2>/dev/null && log "Created volume: postgres-data" || log "Volume exists: postgres-data"

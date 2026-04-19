@@ -7,9 +7,10 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
     restart: unless-stopped
+    init: true
     network_mode: host
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- --spider --no-check-certificate https://127.0.0.1:8443 || exit 1"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
       interval: 30s
       timeout: 5s
       retries: 3
