@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Darragh's tic-tac-toe game</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0a1628;
+      --panel: #0f2744;
+      --accent: #38bdf8;
+      --text: #e8f4ff;
+      --muted: #7cb8f0;
+      --cell: #1e4a7a;
+      --win: #fde047;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #e8f2ff;
+        --panel: #ffffff;
+        --accent: #0284c7;
+        --text: #0c4a6e;
+        --muted: #0369a1;
+        --cell: #bae6fd;
+        --win: #ca8a04;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(1200px 600px at 50% -10%, #38bdf833, transparent), var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    main {
+      width: min(420px, 100%);
+      background: var(--panel);
+      border-radius: 16px;
+      padding: 1.5rem;
+      box-shadow: 0 20px 50px #0003;
+      border: 1px solid #38bdf855;
+    }
+    h1 {
+      margin: 0 0 0.25rem;
+      font-size: clamp(1.1rem, 4vw, 1.45rem);
+      letter-spacing: 0.02em;
+      line-height: 1.25;
+      color: var(--accent);
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.25rem;
+    }
+    #status {
+      min-height: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--accent);
+    }
+    #status.done { color: var(--win); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 1.25rem;
+    }
+    button.cell {
+      aspect-ratio: 1;
+      font-size: clamp(1.8rem, 8vw, 2.6rem);
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      background: var(--cell);
+      color: var(--text);
+      cursor: pointer;
+      transition: transform 0.08s ease, background 0.15s ease;
+    }
+    button.cell:disabled {
+      cursor: default;
+      opacity: 0.85;
+    }
+    button.cell:not(:disabled):hover { transform: translateY(-1px); }
+    button.cell.win { background: color-mix(in oklab, var(--win) 40%, var(--cell)); }
+    .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    button.ghost {
+      padding: 0.55rem 1rem;
+      border-radius: 10px;
+      border: 1px solid var(--accent);
+      background: color-mix(in oklab, var(--accent) 18%, transparent);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.ghost:hover { background: color-mix(in oklab, var(--accent) 32%, transparent); }
+    .err { color: #f87171; font-size: 0.85rem; margin-top: 0.5rem; min-height: 1.2rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Darragh's tic-tac-toe game</h1>
+    <p class="sub">Two players on this device. Moves are checked on the server.</p>
+    <div id="status" aria-live="polite">Loading…</div>
+    <div class="grid" id="grid" role="grid" aria-label="Board"></div>
+    <div class="actions">
+      <button type="button" class="ghost" id="reset">New game</button>
+    </div>
+    <div class="err" id="err"></div>
+  </main>
+  <script>
+    const statusEl = document.getElementById("status");
+    const gridEl = document.getElementById("grid");
+    const errEl = document.getElementById("err");
+    const resetBtn = document.getElementById("reset");
+
+    function setStatus(s, done) {
+      statusEl.textContent = s;
+      statusEl.classList.toggle("done", !!done);
+    }
+
+    function render(state) {
+      errEl.textContent = "";
+      gridEl.innerHTML = "";
+      const winSet = new Set(state.line || []);
+      for (let i = 0; i < 9; i++) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "cell" + (winSet.has(i) ? " win" : "");
+        b.dataset.idx = String(i);
+        b.textContent = state.board[i] || "";
+        b.disabled = state.done || state.board[i];
+        b.addEventListener("click", () => move(i));
+        gridEl.appendChild(b);
+      }
+      if (state.winner) setStatus(`${state.winner} wins`, true);
+      else if (state.draw) setStatus("Draw", true);
+      else setStatus(`${state.turn} to play`, false);
+    }
+
+    async function api(path, opts) {
+      const r = await fetch(path, {
+        ...opts,
+        headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+        credentials: "same-origin",
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || r.statusText);
+      return data;
+    }
+
+    async function load() {
+      try {
+        const data = await api("/api/reset", { method: "POST", body: "{}" });
+        render(data);
+      } catch (e) {
+        setStatus("Could not start game", true);
+        errEl.textContent = String(e.message || e);
+      }
+    }
+
+    async function move(i) {
+      try {
+        const data = await api("/api/move", { method: "POST", body: JSON.stringify({ cell: i }) });
+        render(data);
+      } catch (e) {
+        errEl.textContent = String(e.message || e);
+      }
+    }
+
+    resetBtn.addEventListener("click", load);
+    load();
+  </script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+services:
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:8091:8091"
+    # Mount templates from the host so edits show without rebuilding the image (recreate once if you add this later).
+    volumes:
+      - ./templates:/app/templates:ro
+    environment:
+      - PORT=8091
+      # Override in compose.local.yaml for production-ish installs
+      - SECRET_KEY=dev-tic-tac-toe-change-me
+      - TEMPLATES_AUTO_RELOAD=true
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=2)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

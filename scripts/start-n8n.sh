@@ -21,8 +21,21 @@ COMPOSE_FILES=(-f "$DIR/compose.yaml")
 [[ "${N8N_DATABASE:-}" == "postgres" ]] && COMPOSE_FILES+=(-f "$DIR/compose.postgres.yaml")
 
 ACTION="${1:-up}"
-if [[ "$ACTION" == "up" ]]; then
-  (cd "$DIR" && "$COMPOSE_CMD" "${COMPOSE_FILES[@]}" up -d)
-else
-  (cd "$DIR" && "$COMPOSE_CMD" "${COMPOSE_FILES[@]}" down)
-fi
+case "$ACTION" in
+  up)
+    (cd "$DIR" && "$COMPOSE_CMD" "${COMPOSE_FILES[@]}" up -d)
+    ;;
+  restart)
+    if ! (cd "$DIR" && "$COMPOSE_CMD" "${COMPOSE_FILES[@]}" restart); then
+      echo "[start-n8n] restart failed; running up -d..." >&2
+      (cd "$DIR" && "$COMPOSE_CMD" "${COMPOSE_FILES[@]}" up -d)
+    fi
+    ;;
+  down)
+    (cd "$DIR" && "$COMPOSE_CMD" "${COMPOSE_FILES[@]}" down)
+    ;;
+  *)
+    echo "ERROR: Action must be up, down, or restart (got: $ACTION)" >&2
+    exit 1
+    ;;
+esac

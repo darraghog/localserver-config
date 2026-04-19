@@ -1,0 +1,15 @@
+[Unit]
+Description=Tic-tac-toe compose stack
+Documentation=https://github.com/darraghog/localserver-config
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=PATH=__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=__REPO_ROOT__/scripts/start-stack.sh tic-tac-toe up
+ExecStop=__REPO_ROOT__/scripts/start-stack.sh tic-tac-toe down
+
+[Install]
+WantedBy=default.target

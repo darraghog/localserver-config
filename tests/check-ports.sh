@@ -3,7 +3,7 @@
 # Usage:
 #   ./tests/check-ports.sh [--core-only] [remote-host]
 #   --core-only  only hello-world and n8n (8080, 5678)
-#   (default)    all stacks including Caddy TLS and Cockpit ports
+#   (default)    all stacks including tic-tac-toe, Caddy TLS, and Cockpit ports
 # Remote: pass hostname or IP as last argument (not --core-only).
 set -e
 
@@ -21,8 +21,8 @@ if [[ "$CORE_ONLY" == true ]]; then
   PORTS=(8080 5678)
   NAMES=("hello-world" "n8n")
 else
-  PORTS=(8080 5678 8443 8444 9090 9443)
-  NAMES=("hello-world" "n8n" "tls-proxy:8443" "tls-proxy:8444" "cockpit" "cockpit-tls")
+  PORTS=(8080 5678 8091 8443 8444 8445 9090 9443)
+  NAMES=("hello-world" "n8n" "tic-tac-toe" "tls-proxy:8443" "tls-proxy:8444" "tls-proxy:8445" "cockpit" "cockpit-tls")
 fi
 
 check_port_local() {

@@ -51,12 +51,24 @@ main() {
   export N8N_HOST="${N8N_HOST:-$(hostname)}"
   export N8N_EDITOR_BASE_URL="${N8N_EDITOR_BASE_URL:-https://${N8N_HOST}:8444}"
 
+  if [[ "${DEPLOY_SKIP_BUILD:-}" != "1" ]]; then
+    log "Building stacks..."
+    "$REPO_ROOT/scripts/build-stack.sh" "${stacks[@]}"
+  else
+    log "Skipping build (DEPLOY_SKIP_BUILD=1)"
+  fi
+
   local s
   for s in "${stacks[@]}"; do
     assert_stack_compose_exists "$s" || exit 1
     log "Deploying $s..."
     "$REPO_ROOT/scripts/start-stack.sh" "$s" up
   done
+
+  # shellcheck source=scripts/lib/post-deploy-caddy.sh
+  source "$REPO_ROOT/scripts/lib/post-deploy-caddy.sh"
+  reload_tls_proxy_if_possible "${stacks[@]}"
+  verify_deployed_stacks_via_caddy "${stacks[@]}"
 
   H="$(hostname)"
   log "Done."

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Start/stop a single compose stack by directory name (used by systemd and deploy scripts).
-# Usage: ./scripts/start-stack.sh <stack-name> up|down
+# Start/stop/restart a single compose stack by directory name (used by systemd and deploy scripts).
+# Usage: ./scripts/start-stack.sh <stack-name> up|down|restart
 set -e
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -27,23 +27,44 @@ compose="$DIR/compose.yaml"
   exit 1
 }
 
-if [[ "$SERVICE" == "tls-proxy" && "$ACTION" == "up" && ! -f "$REPO_ROOT/certs/server.pem" ]]; then
-  echo "[start-stack] Skip tls-proxy: no certs/server.pem (run scripts/setup-certs.sh)" >&2
-  exit 0
+if [[ "$SERVICE" == "tls-proxy" && ! -f "$REPO_ROOT/certs/server.pem" ]]; then
+  if [[ "$ACTION" == "up" || "$ACTION" == "restart" ]]; then
+    echo "[start-stack] Skip tls-proxy: no certs/server.pem (run scripts/setup-certs.sh)" >&2
+    exit 0
+  fi
 fi
 
 compose_files=(-f "$compose")
 [[ -f "$DIR/compose.local.yaml" ]] && compose_files+=(-f "$DIR/compose.local.yaml")
 
-if [[ "$ACTION" == "up" ]]; then
+run_up() {
   for cid in $(podman ps -a -q --filter "name=${SERVICE}-" 2>/dev/null); do
     echo "[start-stack] Removing legacy container $(podman inspect -f '{{.Name}}' "$cid" 2>/dev/null)"
     podman rm -f "$cid" 2>/dev/null || true
   done
   (cd "$DIR" && "$COMPOSE_CMD" "${compose_files[@]}" up -d)
+}
+
+run_restart() {
+  if ! (cd "$DIR" && "$COMPOSE_CMD" "${compose_files[@]}" restart); then
+    echo "[start-stack] restart failed for $SERVICE; running up -d..." >&2
+    (cd "$DIR" && "$COMPOSE_CMD" "${compose_files[@]}" up -d)
+  fi
+}
+
+if [[ "$ACTION" == "up" ]]; then
+  run_up
+  if [[ "$SERVICE" == "tls-proxy" ]]; then
+    echo "[start-stack] Reloading Caddy in-process (caddy reload)..."
+    "$REPO_ROOT/scripts/reload-tls-proxy-caddy.sh" || {
+      echo "[start-stack] WARN: caddy reload failed; try: ./scripts/start-stack.sh tls-proxy restart" >&2
+    }
+  fi
 elif [[ "$ACTION" == "down" ]]; then
   (cd "$DIR" && "$COMPOSE_CMD" "${compose_files[@]}" down)
+elif [[ "$ACTION" == "restart" ]]; then
+  run_restart
 else
-  echo "ERROR: Action must be up or down (got: $ACTION)" >&2
+  echo "ERROR: Action must be up, down, or restart (got: $ACTION)" >&2
   exit 1
 fi

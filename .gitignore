@@ -2,3 +2,7 @@ certs/
 .env
 envs/
 libpod/
+# Ephemeral venv for compose/*/build.sh (e.g. tic-tac-toe tests)
+compose/*/.build/
+__pycache__/
+*.py[cod]
