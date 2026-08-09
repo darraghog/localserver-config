@@ -1,102 +1,113 @@
 # Project Improvements: Configuration & n8n Reliability
 
+*Status as of 2026-08-08. Items below were written before several rounds of hardening; each now carries a status.*
+
 ## 1. Configuration Simplification
 
 ### 1.1 Single env file for host-specific values
-**Current:** `N8N_HOST` and `N8N_EDITOR_BASE_URL` are set in deploy.sh; cert hostnames are prompted or passed to bootstrap-tls.
-**Improvement:** Add `.env.example` with `HOST=darragh-pc`, `LAN_IP=192.168.86.237`. Source it from deploy.sh and bootstrap-tls. One place to edit per host.
+**Status:** ✅ Resolved (partially by design change, not literally as proposed)
+**Current:** `deploy.sh` auto-detects `N8N_HOST` via `$(hostname)` and derives `N8N_EDITOR_BASE_URL` from it if not set — no per-host edit needed for the common case. `.env`/`envs/<env>.env` still holds secrets (password, encryption key).
+**Remaining:** No explicit `HOST`/`LAN_IP` vars as originally proposed; auto-detection covers most cases but doesn't help when LAN IP must be pinned (e.g. cert SANs) — that's handled separately via `DEPLOY_CERT_EXTRA_SANS`.
 
 ### 1.2 Consolidate compose file names
-**Current:** Both `compose.yaml` and `docker-compose.yaml` (symlinks) in each stack.
-**Improvement:** Use only `compose.yaml` and remove symlinks, or document why both exist.
+**Status:** ⚠️ Partial
+**Current:** The `docker-compose.yaml` symlink was removed from `tls-proxy` (commit `967841f`) but still exists in `compose/n8n/`.
+**Improvement:** Remove the remaining `compose/n8n/docker-compose.yaml` symlink or document why n8n keeps it.
 
 ### 1.3 Hardcoded hostname in deploy-to-server
-**Current:** Default target is `darragh-pc`; README and docs reference it throughout.
-**Improvement:** Add `HOST` or `TARGET` in `.env` and use it in deploy-to-server, README templates, and Windows scripts.
+**Status:** ✅ Mostly resolved
+**Current:** `deploy-to-server.sh` no longer defaults to `darragh-pc` — target is a required positional arg, and "is this machine" detection is generic (hostname match, loopback, or LAN IP). `scripts/deploy-litellm.sh` still hardcodes `PROD_HOST="darragh-pc"` as its prod default.
+**Remaining:** Generalize `deploy-litellm.sh`'s `PROD_HOST` the same way, or fold it into `deploy-service.sh`.
 
 ### 1.4 Cert setup: reduce prompts
-**Current:** Interactive IP prompt when no args.
-**Improvement:** Auto-detect LAN IP as default; `--non-interactive` for CI/scripts.
+**Status:** ✅ Resolved
+**Current:** `setup-certs.sh` takes hostnames/IPs as positional args (no interactive prompt); `deploy-to-server.sh` auto-fills SANs (hostname, `.local`, first LAN IP, deploy target) when regenerating certs remotely.
 
 ---
 
 ## 2. n8n Reliability (Production-Ready)
 
 ### 2.1 Security: N8N_ENCRYPTION_KEY **[High]**
-**Current:** Not set; n8n generates one on first run and stores in volume.
-**Risk:** If the volume is lost/corrupted, credentials cannot be decrypted. Key is tied to the single instance.
-**Improvement:** Generate a persistent key and pass via env:
-```yaml
-- N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-```
-Add to `.env.example`: `N8N_ENCRYPTION_KEY= # generate with: openssl rand -hex 32`
+**Status:** ✅ Resolved (commit `e3ad8f5`)
+**Current:** `N8N_ENCRYPTION_KEY` is required via env, no default; `.env.example` documents generation with `openssl rand -hex 32` and warns credentials become unrecoverable if lost.
 
 ### 2.2 Change default password **[High]**
-**Current:** `N8N_BASIC_AUTH_PASSWORD=changeme` is documented.
-**Improvement:** Require `N8N_BASIC_AUTH_PASSWORD` from env (no default); fail deploy if unset. Or at minimum: document that it MUST be changed.
+**Status:** ✅ Resolved (commit `8d10266`)
+**Current:** `N8N_BASIC_AUTH_PASSWORD` is required via env, no hardcoded `changeme` default; `deploy.sh` validates required n8n env vars before deploying (`validate_n8n_env_for_stacks`).
 
 ### 2.3 Database: Postgres for production **[Medium]**
-**Current:** SQLite (commented Postgres due to image pull I/O issues on darragh-pc).
-**Risk:** SQLite can corrupt under concurrent load; not recommended for production.
-**Improvement:** Re-enable Postgres when storage is stable; or document SQLite as "dev/single-user only". Add optional `compose.n8n-postgres.yaml` override.
+**Status:** ✅ Resolved as optional overlay (commit `508a67d`)
+**Current:** `compose/n8n/compose.postgres.yaml` is an overlay applied when `N8N_DATABASE=postgres`, with a healthcheck-gated Postgres service. SQLite remains the default.
+**Remaining:** SQLite is still the default and isn't documented as "dev/single-user only" in the README — worth a one-line callout.
 
 ### 2.4 Image tag: avoid `latest` **[Medium]**
-**Current:** `n8n:latest`
-**Risk:** Unpredictable upgrades; breakage on pull.
-**Improvement:** Pin to a version, e.g. `n8nio/n8n:1.62.0`, and document upgrade process.
+**Status:** ✅ Resolved (commit `455068a`)
+**Current:** Pinned to `n8nio/n8n:2.19.5`.
 
 ### 2.5 EXECUTIONS_MODE for concurrency **[Low]**
-**Current:** Default `regular`.
-**Improvement:** For multiple concurrent workflows, `EXECUTIONS_MODE=queue` with Redis. Optional for small setups; document when to enable.
+**Status:** ⏳ Open
+**Current:** Default `regular`, unchanged. Still low priority for a single-user/small setup.
 
 ---
 
 ## 3. Operational Reliability
 
 ### 3.1 Health checks in compose
-**Current:** No healthcheck for n8n or Caddy.
-**Improvement:** Add healthcheck to n8n (HTTP GET :5678/healthz or similar) and Caddy; `restart: unless-stopped` is good but healthcheck helps orchestrators.
+**Status:** ✅ Resolved
+**Current:** All stacks (hello-world, n8n, litellm, tic-tac-toe, tls-proxy) have healthchecks in their `compose.yaml`.
 
 ### 3.2 Caddy: cert reload on change
-**Current:** Caddy loads certs at start; no reload on file change.
-**Improvement:** Document that after `setup-certs.sh`, `podman compose restart` in tls-proxy is required. Or add a `reload-certs.sh` that restarts Caddy.
+**Status:** ✅ Resolved (commit `ba48679`)
+**Current:** `scripts/reload-tls-proxy-caddy.sh` reloads Caddy without a container restart; `deploy.sh` and `deploy-to-server.sh` call it automatically post-deploy via `scripts/lib/post-deploy-caddy.sh`.
 
 ### 3.3 Backup n8n data
-**Current:** No backup strategy.
-**Improvement:** Add `scripts/backup-n8n.sh` that tars the n8n-data volume (or dumps SQLite) to a timestamped file. Document retention and off-site copy.
+**Status:** ⏳ Open
+**Current:** No backup script exists yet. Still needed: `scripts/backup-n8n.sh` to tar the `n8n-data` volume (or dump SQLite/Postgres) to a timestamped file, plus a retention/off-site note.
 
 ### 3.4 Deploy order / dependencies
-**Current:** Stacks deployed in fixed order; no explicit depends_on between tls-proxy and backends.
-**Improvement:** Ensure hello-world and n8n start before tls-proxy (or Caddy fails gracefully). Currently Caddy might start first and return 502 until backends are up—document or add retry in Caddy config.
+**Status:** ✅ Resolved
+**Current:** `compose/stack-order` lists app stacks before `tls-proxy`. `scripts/lib/post-deploy-caddy.sh` polls each backend's health path before verifying it through Caddy (`wait_for_stack_backend`), and reloads Caddy after new stacks come up — avoids the 502-before-backend-ready race the original item flagged.
 
 ---
 
 ## 4. Testing & Validation
 
 ### 4.1 Add n8n-specific test
-**Current:** check-ports verifies 5678 listening; check-tls doesn’t hit n8n.
-**Improvement:** Add `curl -s http://127.0.0.1:5678/healthz` (or equivalent) in check-tls or a new `tests/check-n8n.sh`.
+**Status:** ⏳ Open
+**Current:** `post-deploy-caddy.sh` curls n8n's `/healthz` through Caddy as part of deploy verification, but there's still no standalone `tests/check-n8n.sh` or n8n check in `check-tls.sh` for use outside a deploy run.
 
 ### 4.2 Run tests in deploy
-**Improvement:** After deploy, optionally run `tests/check-ports.sh` and `scripts/check-tls.sh`; fail deploy if they fail.
+**Status:** ✅ Resolved
+**Current:** `deploy-to-server.sh` always runs `tests/check-ports.sh --core-only` post-deploy, and runs full port checks + `check-tls.sh` when `env=prod` and `certs/server.pem` exists. `deploy.sh` (local) verifies stacks via Caddy automatically.
 
 ---
 
 ## 5. Documentation
 
 ### 5.1 Quick start vs full setup
-**Improvement:** Split README: "Quick start (localhost)" vs "Full setup (LAN, HTTPS, darragh-pc)".
+**Status:** ⏳ Open
+**Current:** README is a single flow (setup → deploy → stacks → URLs). No separate "quick start (localhost)" vs "full setup (LAN/HTTPS)" split.
 
 ### 5.2 Architecture diagram
-**Improvement:** Add simple diagram: Browser → Caddy (8443/8444) → hello-world (8080) / n8n (5678).
+**Status:** ✅ Resolved, different doc
+**Current:** `docs/NETWORK-CONFIG.md` has an ASCII architecture diagram (LAN → router → internet tunnel options), covering more than the original Browser→Caddy→backend sketch. Nothing in README itself.
 
 ---
 
 ## Priority Summary
 
-| Priority | Item |
-|----------|------|
-| **P0** | Set N8N_ENCRYPTION_KEY; require/changed default password |
-| **P1** | Pin n8n image; add .env.example; document backup |
-| **P2** | Re-enable Postgres when viable; healthchecks; n8n health test |
-| **P3** | Consolidate config; cert reload doc; deploy test run |
+| Priority | Item | Status |
+|----------|------|--------|
+| P0 | Set N8N_ENCRYPTION_KEY; require/change default password | ✅ Done |
+| P1 | Pin n8n image; add `.env.example`; document backup | ⚠️ 2/3 — backup script still missing |
+| P2 | Re-enable Postgres when viable; healthchecks; n8n health test | ⚠️ 2/3 — standalone n8n health test still missing |
+| P3 | Consolidate config; cert reload doc; deploy test run | ⚠️ Mostly done — n8n symlink and `deploy-litellm.sh` hostname remain |
+
+## Still Open (actionable)
+
+1. `scripts/backup-n8n.sh` — tar/dump n8n data on a schedule, with retention.
+2. `tests/check-n8n.sh` (or extend `check-tls.sh`) — standalone n8n health check, independent of a deploy run.
+3. Remove `compose/n8n/docker-compose.yaml` symlink.
+4. Generalize `PROD_HOST="darragh-pc"` in `scripts/deploy-litellm.sh`.
+5. README: note SQLite is dev/single-user only; consider a quick-start/full-setup split.
+6. `EXECUTIONS_MODE=queue` + Redis — low priority, only if concurrent workflow load becomes an issue.
