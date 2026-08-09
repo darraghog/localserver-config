@@ -381,6 +381,25 @@ These rules **do not survive a reboot**. On **darragh-pc**, use [scripts/setup-w
 
 **Note:** If you use **mirrored** WSL networking (`.wslconfig`: `networkingMode=mirrored`), see also [scripts/setup-windows-port-forward.ps1](../scripts/setup-windows-port-forward.ps1): it uses **v4tov4** to the WSL IP for 8443/8444 and deliberately **does not** add rules in mirrored mode. The **v4tov6 → ::1** pattern above is for the case where services are only listening on `[::1]` and you need IPv4 LAN access into that listener.
 
+### Mirrored WSL networking: Hyper-V firewall (separate from Windows Firewall)
+
+When `networkingMode=mirrored`, WSL's shared ports are bridged onto Windows through a **Hyper-V vSwitch**, which has its own firewall layer independent of the classic Windows Defender Firewall (`Get-NetFirewallRule`). A classic inbound Allow rule (e.g. from `setup-windows-podman-lan-ports.ps1`) is **not sufficient by itself** in mirrored mode — LAN clients also need a matching rule in the **Hyper-V firewall**:
+
+```powershell
+# Diagnose: classic rules only cover one layer
+Get-NetFirewallRule -Group 'localserver-config-podman-lan' | Select DisplayName, Enabled
+Get-NetFirewallHyperVRule | Where DisplayName -match 'localserver-config'   # likely empty until added
+
+# Fix (Admin PowerShell), per port:
+New-NetFirewallHyperVRule -DisplayName "localserver-config HyperV TCP <port>" -Direction Inbound -Protocol TCP -LocalPorts <port> -Action Allow
+```
+
+Symptom: `Test-NetConnection -ComputerName <LAN-IP> -Port <port>` shows `PingSucceeded: True` (ICMP has a default-allow Hyper-V rule) but `TcpTestSucceeded: False` — that split is the signature of a missing Hyper-V firewall rule, not a classic-firewall or Caddy problem.
+
+**Self-connect limitation (separate issue, not fixable via firewall):** even with both firewall layers correctly configured, the **Windows host cannot reliably connect to its own LAN IP/hostname** for a WSL-mirrored-mode listener (e.g. browsing `https://<hostname>:8443` or `https://<own-LAN-IP>:8443` *from that same machine* times out). `https://localhost:<port>` works fine locally, and other real LAN devices connecting in work fine too — only the host's self-hairpin path is affected. When testing:
+- **On the WSL host itself:** use `https://localhost:<port>`.
+- **From another device on the LAN:** use the hostname or LAN IP — that's the real test of LAN reachability.
+
 ### Common causes
 
 | Symptom | Cause | Fix |
@@ -389,6 +408,8 @@ These rules **do not survive a reboot**. On **darragh-pc**, use [scripts/setup-w
 | TCP 8443/8444 fails | Port forward not set, or Caddy down | `setup-windows-port-forward.ps1`; `./tests/check-ports.sh` |
 | DNS (UDP 53) fails, TCP 53 OK | Windows Firewall blocks UDP | `New-NetFirewallRule -Protocol UDP -LocalPort 53 -Action Allow` |
 | Connection refused | Traffic hits Windows, not WSL | `.wslconfig`: `networkingMode=mirrored` + `wsl --shutdown` |
+| Mirrored mode: ping OK, TCP times out from LAN client | Missing Hyper-V firewall rule (classic Allow rule alone isn't enough) | Add matching `New-NetFirewallHyperVRule` per port (above) |
+| Mirrored mode: TCP times out from the WSL host's own hostname/LAN IP, but works from another LAN device | Self-connect/hairpin limitation, not a firewall bug | Use `https://localhost:<port>` when testing on the host itself |
 
 ---
 

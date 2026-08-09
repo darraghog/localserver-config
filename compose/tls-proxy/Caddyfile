@@ -2,7 +2,7 @@
 	# off = no ACME, no HTTP redirect (avoids bind :80)
 	auto_https off
 }
-# TLS reverse proxy - :8443 (hello-world), :8444 (n8n), :8445 (tic-tac-toe)
+# TLS reverse proxy - :8443 (hello-world), :8444 (n8n), :8445 (tic-tac-toe), :8447 (litellm)
 # New ":PORT {" sites here are picked up by scripts/setup-windows-podman-lan-ports.ps1 on Windows.
 :8443 {
   bind 0.0.0.0
@@ -18,6 +18,20 @@
   bind 0.0.0.0
   tls /certs/server.pem /certs/server-key.pem
   reverse_proxy 127.0.0.1:8091
+}
+:8447 {
+  bind 0.0.0.0
+  tls /certs/server.pem /certs/server-key.pem
+  reverse_proxy 127.0.0.1:4000 {
+    header_up X-Forwarded-Proto {scheme}
+    header_up X-Forwarded-Host {hostport}
+    header_up Host {hostport}
+    # LiteLLM may redirect to http://127.0.0.1:4000 or omit the TLS port
+    header_down Location http:// https://
+    header_down Location "http://127.0.0.1:4000" "https://{hostport}"
+    header_down Location "https://127.0.0.1/" "https://127.0.0.1:8447/"
+    header_down Location "https://localhost/" "https://localhost:8447/"
+  }
 }
 :9443 {
   bind 0.0.0.0

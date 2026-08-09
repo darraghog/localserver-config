@@ -83,10 +83,10 @@ Uses `envs/local.env` and deploys on this machine.
 | `compose/stack-order` | Lines = stack directory names; order used by `deploy.sh` |
 | `scripts/deploy-to-server.sh` | `<env> <target> [<ssh-port>]` — remote sync+deploy, or **local** if target is this host; `DEPLOY_SSH_DEST`, `DEPLOY_SSH_PORT` |
 | `scripts/check-tls.sh` | TLS diagnostic |
-| `tests/check-ports.sh` | Port checks; use `--core-only` for 8080/5678 only; full list includes Caddy TLS + Cockpit |
+| `tests/check-ports.sh` | Port checks (WSL-side only — does not test Windows LAN reachability); use `--core-only` for 8080/5678 only; full list includes Caddy TLS + Cockpit |
 | `scripts/setup-windows-hosts.ps1` | Windows hosts file (requires `LOCALSERVER_HOST_PRIMARY`; optional `LOCALSERVER_HOST_SECONDARY`; Admin) |
 | `scripts/setup-windows-port-forward.ps1` | Forward Windows 8443/8444 → WSL (alternative to hosts; run as Admin) |
-| `scripts/setup-windows-podman-lan-ports.ps1` | Firewall + IPv4→IPv6 portproxy: ports from `compose/tls-proxy/Caddyfile` + `compose/windows-lan-extra-ports.txt`; schedule at startup (Admin) |
+| `scripts/setup-windows-podman-lan-ports.ps1` | Classic Windows Firewall + IPv4→IPv6 portproxy: ports from `compose/tls-proxy/Caddyfile` + `compose/windows-lan-extra-ports.txt`; schedule at startup (Admin). **Mirrored networking also needs a Hyper-V firewall rule per port** — not covered by this script yet, see [docs/NETWORK-CONFIG.md](docs/NETWORK-CONFIG.md#mirrored-wsl-networking-hyper-v-firewall-separate-from-windows-firewall) |
 
 ## Stacks
 
@@ -129,3 +129,5 @@ New-NetFirewallRule -DisplayName "Cockpit TLS" -Direction Inbound -Protocol TCP 
 ```
 
 If Podman binds ports to `[::1]` only, LAN clients also need **IPv4→IPv6** portproxy rules (and similar firewall rules per port). See [WSL2 Podman / IPv6 localhost](docs/NETWORK-CONFIG.md#wsl2-podman-ports-bound-to-ipv6-localhost-only).
+
+**Mirrored WSL networking (`.wslconfig`: `networkingMode=mirrored`):** classic Windows Firewall rules alone are not enough — LAN clients also need a matching **Hyper-V firewall** rule per port (`New-NetFirewallHyperVRule`), and the WSL host can never reach its own hostname/LAN IP (use `localhost` there; test LAN reachability from another device). See [Mirrored WSL networking: Hyper-V firewall](docs/NETWORK-CONFIG.md#mirrored-wsl-networking-hyper-v-firewall-separate-from-windows-firewall).

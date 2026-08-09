@@ -42,7 +42,10 @@ run_up() {
     echo "[start-stack] Removing legacy container $(podman inspect -f '{{.Name}}' "$cid" 2>/dev/null)"
     podman rm -f "$cid" 2>/dev/null || true
   done
-  (cd "$DIR" && "$COMPOSE_CMD" "${compose_files[@]}" up -d)
+  up_args=(-d)
+  # env_file keys (API keys) are not applied on a plain `up` when the container already exists
+  [[ "$SERVICE" == "litellm" ]] && up_args+=(--force-recreate)
+  (cd "$DIR" && "$COMPOSE_CMD" "${compose_files[@]}" up "${up_args[@]}")
 }
 
 run_restart() {
