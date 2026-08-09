@@ -198,6 +198,16 @@ else
   echo "[deploy] Remote server.pem subjectAltName:"
   ssh "${SSH_PORT_ARGS[@]}" "$SSH_DEST" "cd $REMOTE_PATH && openssl x509 -in certs/server.pem -noout -ext subjectAltName 2>/dev/null || true"
 
+  # `caddy reload` (used later in deploy.sh) diffs the Caddyfile text, not the cert files it
+  # points at — if the Caddyfile itself is unchanged, Caddy keeps serving the already-loaded
+  # (now stale) cert from memory even though server.pem/server-key.pem changed on disk. Force
+  # a restart here so a regenerated cert always takes effect. No-op if tls-proxy isn't up yet
+  # (e.g. first deploy) — it'll load the cert fresh when deploy.sh brings it up below.
+  echo ""
+  echo "[deploy] Restarting tls-proxy (if already running) so Caddy picks up the regenerated cert..."
+  # shellcheck disable=SC2029
+  ssh "${SSH_PORT_ARGS[@]}" "$SSH_DEST" "cd $REMOTE_PATH && if podman ps -q --filter label=io.podman.compose.project=tls-proxy --filter name=caddy 2>/dev/null | grep -q .; then ./scripts/start-stack.sh tls-proxy restart; fi"
+
   echo ""
   echo "[deploy] Running deploy on $SSH_DEST..."
   ssh "${SSH_PORT_ARGS[@]}" "$SSH_DEST" "cd $REMOTE_PATH && chmod +x scripts/*.sh scripts/sudo/*.sh && ./scripts/deploy.sh"

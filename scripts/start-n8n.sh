@@ -14,8 +14,8 @@ if [[ "${N8N_DATABASE:-}" == "postgres" ]]; then
   podman volume create postgres-data 2>/dev/null || true
 fi
 
-export N8N_HOST="$(hostname)"
-export N8N_EDITOR_BASE_URL="https://${N8N_HOST}:8444"
+export N8N_HOST="${N8N_HOST:-$(hostname)}"
+export N8N_EDITOR_BASE_URL="${N8N_EDITOR_BASE_URL:-https://${N8N_HOST}:8444}"
 
 COMPOSE_FILES=(-f "$DIR/compose.yaml")
 [[ "${N8N_DATABASE:-}" == "postgres" ]] && COMPOSE_FILES+=(-f "$DIR/compose.postgres.yaml")
