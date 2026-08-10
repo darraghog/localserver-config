@@ -48,6 +48,11 @@
 **Status:** ⏳ Open
 **Current:** Default `regular`, unchanged. Still low priority for a single-user/small setup.
 
+### 2.6 Native Python task runner for Code node **[Low]**
+**Status:** ⏳ Open
+**Current:** Code node only has JS and Pyodide-sandboxed Python (no stdlib/third-party package access). Native Python (n8n 1.111.0+; deployed version 2.33.7 supports it) requires a separate `n8nio/runners` container.
+**Remaining:** Add a `task-runners` service to `compose/n8n/compose.yaml` (`N8N_RUNNERS_MODE=external`, `N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0`, `N8N_NATIVE_PYTHON_RUNNER=true` on the `n8n` service; shared `N8N_RUNNERS_AUTH_TOKEN` secret on both), plus explicit `N8N_RUNNERS_STDLIB_ALLOW`/`N8N_RUNNERS_EXTERNAL_ALLOW` import allowlists (everything is blocked by default). Note: switching to native Python is a breaking change for any existing Python Code nodes — it only exposes `_items`/`_item`, not the full set of n8n built-ins Pyodide mode supports.
+
 ---
 
 ## 3. Operational Reliability
@@ -111,3 +116,4 @@
 4. Generalize `PROD_HOST="darragh-pc"` in `scripts/deploy-litellm.sh`.
 5. README: note SQLite is dev/single-user only; consider a quick-start/full-setup split.
 6. `EXECUTIONS_MODE=queue` + Redis — low priority, only if concurrent workflow load becomes an issue.
+7. Native Python task runner for n8n's Code node — new `task-runners` service (`n8nio/runners`) + `N8N_RUNNERS_AUTH_TOKEN` secret; see §2.6.
