@@ -94,16 +94,23 @@ Uses `envs/local.env` and deploys on this machine.
 |-------|-------|-------------|
 | hello-world | 8080, 8443 | nginx test |
 | n8n | 5678, 8444 | Workflow automation (SQLite) |
-| tls-proxy | 8443, 8444, 9443 | Caddy HTTPS reverse proxy |
+| tls-proxy | 8443, 8444, 9443, 8090 (tailnet path router, loopback-only) | Caddy HTTPS reverse proxy |
 | Cockpit | 9090 (internal), 9443 (TLS) | Podman container/pod management UI |
 
 ## URLs
 
 - http://&lt;host&gt;:8080, https://&lt;host&gt;:8443 — hello-world
 - http://&lt;host&gt;:5678, https://&lt;host&gt;:8444 — n8n (admin / changeme)
-- https://&lt;host&gt;:9443 — Cockpit (login with Linux system user credentials)
+- https://&lt;host&gt;:9443/cockpit/ — Cockpit (login with Linux system user credentials)
 
 Examples: `https://myserver:8443`, `https://myserver.example.com:8443` (after DNS or `/etc/hosts` points at the Podman host).
+
+## Tailnet URLs (beeblebox)
+
+Path names instead of a port per service — see [docs/NETWORK-CONFIG.md](docs/NETWORK-CONFIG.md#tailnet-path-routing) and [docs/ADD-SERVICE.md](docs/ADD-SERVICE.md#9-tailnet-path-routing-tailscale-beeblebox).
+
+- **Public** (Tailscale Funnel, no port): `https://beeblebox.taile98462.ts.net/tictactoe`, `/helloworld`, `/` (n8n)
+- **Tailnet-only** (Tailscale serve, `:8090`): `https://beeblebox.taile98462.ts.net:8090/cockpit`, `/litellm`
 
 ## Cockpit
 

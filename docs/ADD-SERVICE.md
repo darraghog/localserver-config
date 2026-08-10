@@ -7,7 +7,7 @@ Use this checklist so the service is reachable from **other containers on the sa
 ### Automated scaffold (recommended)
 
 ```bash
-./scripts/add-service.sh myapp --port 8090 --image docker.io/library/nginx:alpine
+./scripts/add-service.sh myapp --port 8099 --image docker.io/library/nginx:alpine
 ./scripts/sudo/bootstrap-host.sh   # installs new systemd/user/localserver-myapp.service if not done yet
 ./scripts/deploy-stack.sh myapp
 ```
@@ -129,7 +129,23 @@ For **service-to-service without TLS** on a private user network, you can instea
 
 ---
 
-## 9. Verify end-to-end
+## 9. Tailnet path routing (Tailscale, beeblebox)
+
+Beyond the LAN Caddy ports above, beeblebox exposes services over Tailscale by **path name instead of port number**, on one of two tiers — pick based on whether the service is safe to expose to the public internet:
+
+- **Public, low-risk services** (no real data or credentials, e.g. `hello-world`, `tic-tac-toe`): mount directly on the existing public Funnel, no Caddy involved —
+  ```bash
+  ssh beeblebox tailscale serve --bg --set-path=/<name> http://127.0.0.1:<backend-port>
+  ```
+  This strips the `/<name>` prefix before forwarding, so the backend sees plain `/...` paths. That's correct for stateless/simple apps, but if the frontend makes API calls with **absolute root paths** (`fetch("/api/...")`), fix it to use `location.pathname`-relative paths first — see `compose/tic-tac-toe/templates/index.html`'s `BASE` constant for the pattern. Confirm with `tailscale funnel status` that the existing root mount (n8n) is untouched before and after.
+
+- **Sensitive/admin services** (system access, credentials, e.g. Cockpit, LiteLLM): add a `handle_path /<name>/*` (prefix-stripped) or `handle /<name>/*` (prefix-preserved — use this if the backend has its own hardcoded path convention, like Cockpit's `/cockpit/...` asset scheme) block to the **`:8090` tailnet-only path router** in `compose/tls-proxy/Caddyfile`, then redeploy `tls-proxy`. No new Tailscale mount needed — `:8090` is already mounted tailnet-only via `tailscale serve --bg --https=8090 http://127.0.0.1:8090`.
+
+Full rationale, the exposure-tiering decision, and why `--set-path` stripping is safe for some backends but broke n8n's webhook routing: see [docs/NETWORK-CONFIG.md](NETWORK-CONFIG.md#tailnet-path-routing).
+
+---
+
+## 10. Verify end-to-end
 
 On the server:
 
@@ -163,3 +179,5 @@ podman run --rm --add-host=darragh-pc:host-gateway curlimages/curl \
 | New hostname in cert | `scripts/setup-certs.sh` + restart tls-proxy |
 | WSL2 / Windows LAN | `scripts/setup-windows-podman-lan-ports.ps1` + `compose/windows-lan-extra-ports.txt` if needed |
 | Container → Caddy | `host-gateway` / LAN IP / `host.containers.internal`, not `127.0.0.1` |
+| Tailnet URL, public/low-risk | `tailscale serve --set-path=/<name> http://127.0.0.1:<port>` |
+| Tailnet URL, sensitive/admin | `handle`/`handle_path /<name>/*` block in the `:8090` router (`compose/tls-proxy/Caddyfile`) |

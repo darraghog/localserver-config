@@ -2,7 +2,8 @@
 	# off = no ACME, no HTTP redirect (avoids bind :80)
 	auto_https off
 }
-# TLS reverse proxy - :8443 (hello-world), :8444 (n8n), :8445 (tic-tac-toe), :8447 (litellm)
+# TLS reverse proxy - :8443 (hello-world), :8444 (n8n), :8445 (tic-tac-toe), :8447 (litellm), :9443 (cockpit)
+# :8090 is a loopback-only, plain-HTTP tailnet path router (cockpit/litellm) — see docs/NETWORK-CONFIG.md.
 # New ":PORT {" sites here are picked up by scripts/setup-windows-podman-lan-ports.ps1 on Windows.
 :8443 {
   bind 0.0.0.0
@@ -37,4 +38,31 @@
   bind 0.0.0.0
   tls /certs/server.pem /certs/server-key.pem
   reverse_proxy 127.0.0.1:9090
+}
+
+# Tailnet-only path router (sensitive/admin services). Loopback-only — not a LAN front
+# door. Mounted at the tailnet leg via: tailscale serve --bg --https=8090 http://127.0.0.1:8090
+# Plain HTTP by design: Tailscale terminates TLS for tailnet clients.
+# tictactoe/helloworld are NOT here — they're low-risk and go straight on the public
+# Tailscale Funnel (:443, `tailscale serve --set-path=/...`), bypassing Caddy entirely.
+:8090 {
+  bind 127.0.0.1
+
+  redir /litellm /litellm/
+  redir /cockpit /cockpit/
+
+  handle_path /litellm/* {
+    reverse_proxy 127.0.0.1:4000
+  }
+  # No strip: Cockpit's own asset scheme uses "/cockpit/$checksum/..." as an internal
+  # path convention — stripping the prefix here would break it. Requires UrlRoot=/cockpit
+  # in /etc/cockpit/cockpit.conf (see scripts/sudo/setup-cockpit.sh).
+  handle /cockpit/* {
+    reverse_proxy 127.0.0.1:9090
+  }
+
+  handle {
+    root * /srv/router
+    file_server
+  }
 }

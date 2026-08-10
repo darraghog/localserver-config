@@ -5,6 +5,7 @@ services:
     volumes:
       - ../../certs:/certs:ro
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./router-static:/srv/router:ro
     command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
     restart: unless-stopped
     init: true

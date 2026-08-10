@@ -30,16 +30,22 @@ log "Configuring cockpit.conf (reverse proxy origins)..."
 ORIGINS="https://${H}:9443 https://${H}.local:9443 https://localhost:9443 https://127.0.0.1:9443"
 # COCKPIT_EXTRA_ORIGINS: space-separated full origins (scheme://host:port) for names
 # not covered above, e.g. a Tailscale MagicDNS FQDN:
-#   COCKPIT_EXTRA_ORIGINS="https://beeblebox.taile98462.ts.net:9443" ./scripts/sudo/setup-cockpit.sh
+#   COCKPIT_EXTRA_ORIGINS="https://beeblebox.taile98462.ts.net:9443 https://beeblebox.taile98462.ts.net:8090" ./scripts/sudo/setup-cockpit.sh
 [[ -n "${COCKPIT_EXTRA_ORIGINS:-}" ]] && ORIGINS="${ORIGINS} ${COCKPIT_EXTRA_ORIGINS}"
 sudo mkdir -p /etc/cockpit
 sudo tee /etc/cockpit/cockpit.conf > /dev/null << EOF
 [WebService]
 Origins = ${ORIGINS}
+# Served behind the :8090 tailnet path router (compose/tls-proxy/Caddyfile) at /cockpit —
+# see docs/NETWORK-CONFIG.md. This is process-wide, so direct :9443 access moves to
+# https://<host>:9443/cockpit/ too (verify after changing; Cockpit should redirect
+# bare "/" to "/cockpit/" automatically, but confirm on this Cockpit version).
+UrlRoot = /cockpit
 EOF
 
 log "Restarting cockpit.socket..."
 sudo systemctl restart cockpit.socket
 
 log "Done. Cockpit listening on :9090"
-log "Login at https://${H}:9443 or https://${H}.local:9443 with your Linux username and password."
+log "Login at https://${H}:9443/cockpit/ or https://${H}.local:9443/cockpit/ with your Linux username and password."
+log "Also reachable tailnet-only via the path router: https://<tailnet-name>:8090/cockpit/ (see docs/NETWORK-CONFIG.md)."

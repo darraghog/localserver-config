@@ -194,6 +194,58 @@ This disables Tailscale's DNS management. Your `resolv.conf` stays under your co
 
 ---
 
+## Tailnet path routing
+
+On beeblebox, Tailscale URLs use **path names instead of a port per service** (`/tictactoe` instead of remembering `:8445`). Services split into two exposure tiers, chosen by whether the service is safe to expose to the public internet — do not default everything to tailnet-only, and do not default everything to public.
+
+### Public tier: low-risk services on the existing Funnel (no port number)
+
+`hello-world` and `tic-tac-toe` hold no real data or credentials, so they're mounted directly on Tailscale's existing public Funnel (port 443), alongside n8n's existing root mount — no Caddy involved:
+
+```bash
+ssh beeblebox tailscale serve --bg --set-path=/tictactoe http://127.0.0.1:8091
+ssh beeblebox tailscale serve --bg --set-path=/helloworld http://127.0.0.1:8080
+```
+
+Because `:443` is the one port a browser omits, these URLs need **no port number at all**:
+
+```
+https://beeblebox.taile98462.ts.net/tictactoe
+https://beeblebox.taile98462.ts.net/helloworld
+```
+
+**`--set-path` strips the mount prefix before forwarding to the backend** — a request to `/tictactoe/api/reset` arrives at `127.0.0.1:8091` as `/api/reset`. That's correct/expected for backends that don't need to know their own mount prefix (nginx's default page, or Flask apps whose frontend derives its API base from `location.pathname` — see `compose/tic-tac-toe/templates/index.html`'s `BASE` constant). It is a real footgun for backends that *do* need the full path preserved: n8n's MCP webhook was once mounted this way and silently broke, because the stripped path no longer matched the webhook's registered ID — see the project's Tailscale funnel history for that incident. **Before `--set-path`-mounting a new service, check whether its frontend/backend makes any absolute-root-path requests or otherwise depends on seeing its own mount prefix** — if so, either fix the app (preferred, see the `BASE` pattern) or give it its own dedicated root mount/port instead of a path mount.
+
+Since `:443` is already Funneled (public), any new mount added to that same port is public too — Tailscale's funnel/serve toggle is per-port, not per-path. Only add low-risk services here.
+
+### Tailnet-only tier: sensitive/admin services behind a Caddy path router
+
+Cockpit (system/container access) and LiteLLM (admin UI with API keys) stay off the public internet. A dedicated, loopback-only Caddy site (`:8090` in `compose/tls-proxy/Caddyfile`) does path-based dispatch, and a single `tailscale serve` mount exposes that whole router tailnet-only:
+
+```bash
+ssh beeblebox tailscale serve --bg --https=8090 http://127.0.0.1:8090
+```
+
+```
+https://beeblebox.taile98462.ts.net:8090/cockpit
+https://beeblebox.taile98462.ts.net:8090/litellm
+```
+
+This is a separate, independent Tailscale-serve entry — it doesn't touch the `:443` funnel entries above (Tailscale keys its serve/funnel config per port). Per-service Caddy directive choice:
+
+| Service | Directive | Why |
+|---|---|---|
+| litellm | `handle_path /litellm/*` (strip) | Best-effort — external SPA image, may have root-absolute asset paths; verify in-browser (devtools Network tab) before trusting it |
+| cockpit | `handle /cockpit/*` (no strip) | Cockpit's own asset scheme already uses `/cockpit/$checksum/...` as an internal convention — stripping breaks it. Also requires `UrlRoot = /cockpit` in `/etc/cockpit/cockpit.conf` (set by `scripts/sudo/setup-cockpit.sh`) |
+
+### n8n: intentionally excluded
+
+n8n keeps its current root-mounted public URL, unchanged. Its `N8N_PATH` env var *can* move the whole app to a subpath, but it's a single whole-process setting — it would move n8n's UI, REST API, and **already-registered external webhook URLs** together, breaking any external caller hitting today's root-mounted `N8N_WEBHOOK_URL`. A true isolated `/n8n` editor-only mount would need a second n8n process (own `N8N_PATH`) against the same Postgres DB, which risks double-firing schedule/cron triggers without proper `N8N_EXECUTIONS_MODE=queue` + Redis (not set up today) — a larger follow-up, not part of this pattern.
+
+### Verifying a change didn't break the existing public funnel
+
+Before and after any change here, diff `tailscale serve status` / `tailscale funnel status` against a recorded baseline — the `:443` root (n8n) entry must stay byte-identical unless you're intentionally changing it. From outside the tailnet, confirm an existing n8n webhook/health URL still responds correctly. This must never regress.
+
 ### "Endpoint not reachable" troubleshooting
 
 When `tailscale status` shows a peer as unreachable, try these in order:
