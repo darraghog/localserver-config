@@ -40,16 +40,18 @@
   reverse_proxy 127.0.0.1:9090
 }
 
-# Tailnet-only path router (sensitive/admin services). Loopback-only — not a LAN front
-# door. Mounted at the tailnet leg via: tailscale serve --bg --https=8090 http://127.0.0.1:8090
+# Tailnet-only path router. Loopback-only — not a LAN front door. Mounted at the
+# tailnet leg via: tailscale serve --bg --https=8090 http://127.0.0.1:8090
 # Plain HTTP by design: Tailscale terminates TLS for tailnet clients.
-# tictactoe/helloworld are NOT here — they're low-risk and go straight on the public
-# Tailscale Funnel (:443, `tailscale serve --set-path=/...`), bypassing Caddy entirely.
+# The public :443 Funnel has been torn down (VPN-only access now) — tictactoe was
+# moved here from its old Funnel path mount; see docs/NETWORK-CONFIG.md.
 :8090 {
   bind 127.0.0.1
 
   redir /litellm /litellm/
   redir /cockpit /cockpit/
+  redir /tictactoe /tictactoe/
+  redir /helloworld /helloworld/
 
   handle_path /litellm/* {
     reverse_proxy 127.0.0.1:4000
@@ -60,6 +62,21 @@
   handle /cockpit/* {
     reverse_proxy 127.0.0.1:9090
   }
+  # Strip is fine here: tic-tac-toe's frontend derives its API base from
+  # location.pathname (see compose/tic-tac-toe/templates/index.html's BASE constant).
+  handle_path /tictactoe/* {
+    reverse_proxy 127.0.0.1:8091
+  }
+  # Strip is fine here: hello-world serves nginx's stock default page (no root-absolute
+  # asset paths to break).
+  handle_path /helloworld/* {
+    reverse_proxy 127.0.0.1:8080
+  }
+  # n8n is NOT here — its registered webhook/MCP URLs (e.g. /mcp/<id>, /webhook/<id>) must
+  # keep their exact path, and N8N_PATH is a whole-process setting (see "n8n: intentionally
+  # excluded" below) — a prefix strip or redirect would break already-registered callers.
+  # It gets its own dedicated tailnet-only port instead: tailscale serve --bg --https=10000
+  # http://127.0.0.1:5678 (root-mounted, no path rewriting). See docs/NETWORK-CONFIG.md.
 
   handle {
     root * /srv/router

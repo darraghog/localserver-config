@@ -196,55 +196,57 @@ This disables Tailscale's DNS management. Your `resolv.conf` stays under your co
 
 ## Tailnet path routing
 
-On beeblebox, Tailscale URLs use **path names instead of a port per service** (`/tictactoe` instead of remembering `:8445`). Services split into two exposure tiers, chosen by whether the service is safe to expose to the public internet — do not default everything to tailnet-only, and do not default everything to public.
+**As of 2026-08-13:** tic-tac-toe, hello-world, cockpit, and LiteLLM are tailnet-only (VPN required) via the `:8090` path router below. n8n is back on the public Funnel at root `:443` — same as its original setup, just reached via a fresh teardown/rebuild that day. n8n briefly sat on a dedicated public port (`:10000`) instead; that was reverted after claude.ai's MCP connector infrastructure repeatedly failed to connect to it there ("Couldn't register with N8N's sign-in service", `ofid_7b98ce3c2d189e3c`) while working immediately once moved back to standard `:443` — externally confirmed via a real outside-the-tailnet client, not just locally. No official Anthropic doc confirms a hard port-443 requirement for MCP connectors, but the evidence points that way; treat this as a strong empirical lesson, not confirmed spec: **prefer `:443` for any public MCP/webhook endpoint that Claude (or similar hosted connector infra) needs to reach.**
 
-### Public tier: low-risk services on the existing Funnel (no port number)
+On beeblebox, most Tailscale URLs use **path names instead of a port per service** (`/tictactoe` instead of remembering `:8445`) via a shared router; n8n is the exception and stays root-mounted on `:443` (see below) rather than joining the router.
 
-`hello-world` and `tic-tac-toe` hold no real data or credentials, so they're mounted directly on Tailscale's existing public Funnel (port 443), alongside n8n's existing root mount — no Caddy involved:
+### Tailnet-only path router (`:8090`)
 
-```bash
-ssh beeblebox tailscale serve --bg --set-path=/tictactoe http://127.0.0.1:8091
-ssh beeblebox tailscale serve --bg --set-path=/helloworld http://127.0.0.1:8080
-```
-
-Because `:443` is the one port a browser omits, these URLs need **no port number at all**:
-
-```
-https://beeblebox.taile98462.ts.net/tictactoe
-https://beeblebox.taile98462.ts.net/helloworld
-```
-
-**`--set-path` strips the mount prefix before forwarding to the backend** — a request to `/tictactoe/api/reset` arrives at `127.0.0.1:8091` as `/api/reset`. That's correct/expected for backends that don't need to know their own mount prefix (nginx's default page, or Flask apps whose frontend derives its API base from `location.pathname` — see `compose/tic-tac-toe/templates/index.html`'s `BASE` constant). It is a real footgun for backends that *do* need the full path preserved: n8n's MCP webhook was once mounted this way and silently broke, because the stripped path no longer matched the webhook's registered ID — see the project's Tailscale funnel history for that incident. **Before `--set-path`-mounting a new service, check whether its frontend/backend makes any absolute-root-path requests or otherwise depends on seeing its own mount prefix** — if so, either fix the app (preferred, see the `BASE` pattern) or give it its own dedicated root mount/port instead of a path mount.
-
-Since `:443` is already Funneled (public), any new mount added to that same port is public too — Tailscale's funnel/serve toggle is per-port, not per-path. Only add low-risk services here.
-
-### Tailnet-only tier: sensitive/admin services behind a Caddy path router
-
-Cockpit (system/container access) and LiteLLM (admin UI with API keys) stay off the public internet. A dedicated, loopback-only Caddy site (`:8090` in `compose/tls-proxy/Caddyfile`) does path-based dispatch, and a single `tailscale serve` mount exposes that whole router tailnet-only:
+A loopback-only Caddy site (`:8090` in `compose/tls-proxy/Caddyfile`) does path-based dispatch for tic-tac-toe, hello-world, cockpit, and LiteLLM. A single `tailscale serve` mount exposes that whole router tailnet-only:
 
 ```bash
 ssh beeblebox tailscale serve --bg --https=8090 http://127.0.0.1:8090
 ```
 
 ```
+https://beeblebox.taile98462.ts.net:8090/tictactoe
+https://beeblebox.taile98462.ts.net:8090/helloworld
 https://beeblebox.taile98462.ts.net:8090/cockpit
 https://beeblebox.taile98462.ts.net:8090/litellm
 ```
 
-This is a separate, independent Tailscale-serve entry — it doesn't touch the `:443` funnel entries above (Tailscale keys its serve/funnel config per port). Per-service Caddy directive choice:
+Per-service Caddy directive choice:
 
 | Service | Directive | Why |
 |---|---|---|
+| tictactoe | `handle_path /tictactoe/*` (strip) | Its frontend derives the API base from `location.pathname` (see `compose/tic-tac-toe/templates/index.html`'s `BASE` constant), so it doesn't care about the stripped prefix |
+| helloworld | `handle_path /helloworld/*` (strip) | Serves nginx's stock default page — no root-absolute asset paths to break |
 | litellm | `handle_path /litellm/*` (strip) | Best-effort — external SPA image, may have root-absolute asset paths; verify in-browser (devtools Network tab) before trusting it |
 | cockpit | `handle /cockpit/*` (no strip) | Cockpit's own asset scheme already uses `/cockpit/$checksum/...` as an internal convention — stripping breaks it. Also requires `UrlRoot = /cockpit` in `/etc/cockpit/cockpit.conf` (set by `scripts/sudo/setup-cockpit.sh`) |
 
-### n8n: intentionally excluded
+**Path-stripping footgun:** `handle_path` (and the old Funnel-era `tailscale serve --set-path`) strips the mount prefix before forwarding to the backend — a request to `/tictactoe/api/reset` arrives at the backend as `/api/reset`. That's fine for backends that don't need to know their own mount prefix, but a real footgun for ones that *do*: n8n's MCP webhook was once path-mounted this way and silently broke, because the stripped path no longer matched the webhook's registered ID (see n8n section below). **Before path-mounting a new service, check whether its frontend/backend makes any absolute-root-path requests or otherwise depends on seeing its own mount prefix** — if so, either fix the app (preferred, see the tictactoe `BASE` pattern) or give it its own dedicated root mount/port instead.
 
-n8n keeps its current root-mounted public URL, unchanged. Its `N8N_PATH` env var *can* move the whole app to a subpath, but it's a single whole-process setting — it would move n8n's UI, REST API, and **already-registered external webhook URLs** together, breaking any external caller hitting today's root-mounted `N8N_WEBHOOK_URL`. A true isolated `/n8n` editor-only mount would need a second n8n process (own `N8N_PATH`) against the same Postgres DB, which risks double-firing schedule/cron triggers without proper `N8N_EXECUTIONS_MODE=queue` + Redis (not set up today) — a larger follow-up, not part of this pattern.
+### n8n: root-mounted on public `:443`, not the path router
 
-### Verifying a change didn't break the existing public funnel
+n8n is deliberately **not** in the `:8090` router, and not on a path mount of any kind. Its `N8N_PATH` env var *can* move the whole app to a subpath, but it's a single whole-process setting — it would move n8n's UI, REST API, and **already-registered webhook/MCP URLs** (e.g. `/mcp/<id>`, `/webhook/<id>`) together, breaking any caller hitting today's root-mounted `N8N_WEBHOOK_URL`. A `handle_path`/redirect prefix-strip in Caddy has the same effect for the same reason. A true isolated `/n8n` editor-only mount would need a second n8n process (own `N8N_PATH`) against the same Postgres DB, which risks double-firing schedule/cron triggers without proper `N8N_EXECUTIONS_MODE=queue` + Redis (not set up today) — a larger follow-up, not part of this pattern.
 
-Before and after any change here, diff `tailscale serve status` / `tailscale funnel status` against a recorded baseline — the `:443` root (n8n) entry must stay byte-identical unless you're intentionally changing it. From outside the tailnet, confirm an existing n8n webhook/health URL still responds correctly. This must never regress.
+n8n is root-funneled on the standard public port instead:
+
+```bash
+ssh beeblebox tailscale funnel --bg --https=443 http://127.0.0.1:5678
+```
+
+```
+https://beeblebox.taile98462.ts.net/
+```
+
+`N8N_EDITOR_BASE_URL` / `N8N_WEBHOOK_URL` in `envs/prod.env` must match this exactly (currently the no-port root URL) — n8n bakes these into every production URL it displays (including MCP trigger URLs), and a mismatch here is what caused the confusing "n8n's UI shows a URL that doesn't actually work" bug on 2026-08-13. Changing either requires redeploying `.env` to beeblebox and recreating the n8n container (`./scripts/start-stack.sh n8n up`) to pick up the new env — a plain `restart` does not re-read `.env`.
+
+**Do not move n8n off `:443` to a non-standard port for public access** — see the port-443 note at the top of this section. `:8090` is fine for the *tailnet-only* router since Claude/Slack-style hosted connectors never need to reach it.
+
+### Verifying a change didn't break n8n
+
+Before and after any change here, diff `tailscale funnel status` against a recorded baseline — the `:443` root (n8n) entry must stay byte-identical unless you're intentionally changing it. Confirm an existing n8n webhook/health URL still responds correctly, ideally from a genuinely external network (not the tailnet) since that's the vantage point that actually matters for public callers. This must never regress.
 
 ### "Endpoint not reachable" troubleshooting
 
