@@ -3,7 +3,9 @@
 	auto_https off
 }
 # TLS reverse proxy - :8443 (hello-world), :8444 (n8n), :8445 (tic-tac-toe), :8447 (litellm), :9443 (cockpit)
-# :8090 is a loopback-only, plain-HTTP tailnet path router (cockpit/litellm) — see docs/NETWORK-CONFIG.md.
+# :8090 is a loopback-only, plain-HTTP tailnet path router (cockpit/tictactoe/helloworld).
+# :8092 is litellm's dedicated tailnet-only port (root-mounted — see the :8092 block below
+# for why it can't be path-mounted on :8090). See docs/NETWORK-CONFIG.md.
 # New ":PORT {" sites here are picked up by scripts/setup-windows-podman-lan-ports.ps1 on Windows.
 :8443 {
   bind 0.0.0.0
@@ -48,14 +50,10 @@
 :8090 {
   bind 127.0.0.1
 
-  redir /litellm /litellm/
   redir /cockpit /cockpit/
   redir /tictactoe /tictactoe/
   redir /helloworld /helloworld/
 
-  handle_path /litellm/* {
-    reverse_proxy 127.0.0.1:4000
-  }
   # No strip: Cockpit's own asset scheme uses "/cockpit/$checksum/..." as an internal
   # path convention — stripping the prefix here would break it. Requires UrlRoot=/cockpit
   # in /etc/cockpit/cockpit.conf (see scripts/sudo/setup-cockpit.sh).
@@ -74,12 +72,35 @@
   }
   # n8n is NOT here — its registered webhook/MCP URLs (e.g. /mcp/<id>, /webhook/<id>) must
   # keep their exact path, and N8N_PATH is a whole-process setting (see "n8n: intentionally
-  # excluded" below) — a prefix strip or redirect would break already-registered callers.
-  # It gets its own dedicated tailnet-only port instead: tailscale serve --bg --https=10000
-  # http://127.0.0.1:5678 (root-mounted, no path rewriting). See docs/NETWORK-CONFIG.md.
+  # excluded" in docs/NETWORK-CONFIG.md) — a prefix strip or redirect would break
+  # already-registered callers. It's root-funneled on the public :443 port instead
+  # (also required for external MCP connector infra to reach it — see docs).
+  # litellm is NOT here either — its admin UI is a Next.js SPA whose API calls
+  # (/key/list, /global/activity, etc.) are hardcoded root-relative with no configurable
+  # base path, so a /litellm sub-path mount can serve the shell but never load real data.
+  # It gets its own dedicated tailnet-only port instead: see the :8092 block below.
 
   handle {
     root * /srv/router
     file_server
+  }
+}
+
+# litellm admin UI: dedicated tailnet-only port, root-mounted (see the note in the :8090
+# block above for why litellm can't be path-mounted). Mirrors the LAN :8447 site's
+# Location-header rewriting, adjusted for this port. Mounted at the tailnet leg via:
+# tailscale serve --bg --https=8092 http://127.0.0.1:8092
+# Plain HTTP by design: Tailscale terminates TLS for tailnet clients (same as :8090).
+:8092 {
+  bind 127.0.0.1
+  reverse_proxy 127.0.0.1:4000 {
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-Host {hostport}
+    header_up Host {hostport}
+    # LiteLLM may redirect to http://127.0.0.1:4000 or omit the TLS port
+    header_down Location http:// https://
+    header_down Location "http://127.0.0.1:4000" "https://beeblebox.taile98462.ts.net:8092"
+    header_down Location "https://127.0.0.1/" "https://beeblebox.taile98462.ts.net:8092/"
+    header_down Location "https://localhost/" "https://beeblebox.taile98462.ts.net:8092/"
   }
 }

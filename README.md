@@ -109,7 +109,8 @@ Examples: `https://myserver:8443`, `https://myserver.example.com:8443` (after DN
 
 Path names instead of a port per service — see [docs/NETWORK-CONFIG.md](docs/NETWORK-CONFIG.md#tailnet-path-routing) and [docs/ADD-SERVICE.md](docs/ADD-SERVICE.md#9-tailnet-path-routing-tailscale-beeblebox).
 
-- **Tailnet-only** (VPN required), path router `:8090`: `https://beeblebox.taile98462.ts.net:8090/tictactoe`, `/helloworld`, `/cockpit`, `/litellm`
+- **Tailnet-only** (VPN required), path router `:8090`: `https://beeblebox.taile98462.ts.net:8090/tictactoe`, `/helloworld`, `/cockpit`
+- **Tailnet-only** (VPN required), dedicated port (can't be path-mounted, see NETWORK-CONFIG.md): `https://beeblebox.taile98462.ts.net:8092/ui/` — litellm
 - **Public** (Tailscale Funnel, no port — own `N8N_PATH` constraints, see NETWORK-CONFIG.md): `https://beeblebox.taile98462.ts.net/` — n8n. Keep this on `:443`, not a dedicated port — hosted MCP connector infra (e.g. claude.ai) has been observed failing to reach non-standard ports.
 
 ## Cockpit
