@@ -46,6 +46,11 @@ run_up() {
   local force_recreate=false
   # env_file keys (API keys) are not applied on a plain `up` when the container already exists
   [[ "$SERVICE" == "litellm" ]] && force_recreate=true
+  # The Caddyfile is bind-mounted as a *file*. rsync (and most editors) replace a file by
+  # writing a temp copy and renaming it, which leaves the container bound to the old inode:
+  # `caddy reload` then re-reads the stale config and reports success. Recreating is the
+  # only way a changed Caddyfile actually reaches the running proxy.
+  [[ "$SERVICE" == "tls-proxy" ]] && force_recreate=true
 
   # Self-heal image staleness: pull registry images (skip localhost/* = custom-built,
   # e.g. tic-tac-toe) and recreate only if a running container's bound image actually
