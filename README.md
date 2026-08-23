@@ -94,7 +94,8 @@ Uses `envs/local.env` and deploys on this machine.
 |-------|-------|-------------|
 | hello-world | 8080, 8443 | nginx test |
 | n8n | 5678, 8444 | Workflow automation (SQLite) |
-| tls-proxy | 8443, 8444, 9443, 8090 (tailnet path router, loopback-only) | Caddy HTTPS reverse proxy |
+| claude-mock-test | 8093 (loopback), 8446 | Static Claude Professional Architect mock test (nginx) |
+| tls-proxy | 8443, 8444, 8446, 9443, 8090 (tailnet path router, loopback-only) | Caddy HTTPS reverse proxy |
 | Cockpit | 9090 (internal), 9443 (TLS) | Podman container/pod management UI |
 
 ## URLs
@@ -109,7 +110,7 @@ Examples: `https://myserver:8443`, `https://myserver.example.com:8443` (after DN
 
 Path names instead of a port per service — see [docs/NETWORK-CONFIG.md](docs/NETWORK-CONFIG.md#tailnet-path-routing) and [docs/ADD-SERVICE.md](docs/ADD-SERVICE.md#9-tailnet-path-routing-tailscale-beeblebox).
 
-- **Tailnet-only** (VPN required), path router `:8090`: `https://beeblebox.taile98462.ts.net:8090/tictactoe`, `/helloworld`, `/cockpit`
+- **Tailnet-only** (VPN required), path router `:8090`: `https://beeblebox.taile98462.ts.net:8090/tictactoe`, `/claudemock`, `/helloworld`, `/cockpit`
 - **Tailnet-only** (VPN required), dedicated port (can't be path-mounted, see NETWORK-CONFIG.md): `https://beeblebox.taile98462.ts.net:8092/ui/` — litellm
 - **Public** (Tailscale Funnel, no port — own `N8N_PATH` constraints, see NETWORK-CONFIG.md): `https://beeblebox.taile98462.ts.net/` — n8n. Keep this on `:443`, not a dedicated port — hosted MCP connector infra (e.g. claude.ai) has been observed failing to reach non-standard ports.
 

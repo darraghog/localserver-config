@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Claude Professional Architect — Mock Test</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Claude Professional Architect</h1>
+      <p class="sub">Mock test — <span id="bank-size"></span> questions across 21 domains</p>
+    </header>
+
+    <main>
+      <section id="home" class="screen">
+        <div class="card">
+          <h2>Practice</h2>
+          <p>Immediate feedback, explanations, and a page reference into your notes. No timer.</p>
+          <fieldset id="domain-picker"><legend>Domains</legend></fieldset>
+          <div class="row">
+            <button type="button" id="select-all">Select all</button>
+            <button type="button" id="select-none">Select none</button>
+          </div>
+          <button type="button" id="start-practice" class="primary">Start practice</button>
+        </div>
+
+        <div class="card">
+          <h2>Exam</h2>
+          <p>A sampled paper weighted across all domains. No feedback until you submit.</p>
+          <label for="exam-length">Length</label>
+          <select id="exam-length">
+            <option value="30">30 questions</option>
+            <option value="60" selected>60 questions</option>
+            <option value="120">120 questions</option>
+          </select>
+          <button type="button" id="start-exam" class="primary">Start exam</button>
+          <p id="last-exam" class="muted"></p>
+        </div>
+      </section>
+
+      <section id="practice" class="screen" hidden></section>
+      <section id="exam" class="screen" hidden></section>
+      <section id="results" class="screen" hidden></section>
+    </main>
+
+    <script src="bank.js"></script>
+    <script src="engine.js"></script>
+    <script src="questions/01-ai-fluency.js"></script>
+    <script src="questions/02-models-context.js"></script>
+    <script src="questions/03-prompting.js"></script>
+    <script src="questions/04-entry-points.js"></script>
+    <script src="questions/05-evals.js"></script>
+    <script src="questions/06-poc-to-prod.js"></script>
+    <script src="questions/07-sizing-roi.js"></script>
+    <script src="questions/08-enterprise-integration.js"></script>
+    <script src="questions/09-ab-testing.js"></script>
+    <script src="questions/10-responsible-ai.js"></script>
+    <script src="questions/11-stakeholder-gtm.js"></script>
+    <script src="questions/12-config-knowledge.js"></script>
+    <script src="questions/13-governance-risk.js"></script>
+    <script src="questions/14-troubleshooting.js"></script>
+    <script src="questions/15-mso-foundations.js"></script>
+    <script src="questions/16-prod-prompting-tools.js"></script>
+    <script src="questions/17-context-memory-skills.js"></script>
+    <script src="questions/18-multimodal-batch.js"></script>
+    <script src="questions/19-claude-code-mcp.js"></script>
+    <script src="questions/20-prod-engineering.js"></script>
+    <script src="questions/21-accelerators-deployment.js"></script>
+    <script src="ui.js"></script>
+  </body>
+</html>

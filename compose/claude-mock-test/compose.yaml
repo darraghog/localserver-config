@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    # Loopback only: reached through Caddy (:8446 LAN TLS, /claudemock on the :8090
+    # tailnet router), never directly.
+    ports:
+      - "127.0.0.1:8093:80"
+    restart: unless-stopped
+    healthcheck:
+      test: "wget -qO- http://127.0.0.1/ || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

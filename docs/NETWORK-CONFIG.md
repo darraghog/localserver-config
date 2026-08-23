@@ -202,7 +202,7 @@ On beeblebox, most Tailscale URLs use **path names instead of a port per service
 
 ### Tailnet-only path router (`:8090`)
 
-A loopback-only Caddy site (`:8090` in `compose/tls-proxy/Caddyfile`) does path-based dispatch for tic-tac-toe, hello-world, and cockpit. A single `tailscale serve` mount exposes that whole router tailnet-only:
+A loopback-only Caddy site (`:8090` in `compose/tls-proxy/Caddyfile`) does path-based dispatch for tic-tac-toe, claude-mock-test, hello-world, and cockpit. A single `tailscale serve` mount exposes that whole router tailnet-only:
 
 ```bash
 ssh beeblebox tailscale serve --bg --https=8090 http://127.0.0.1:8090
@@ -210,6 +210,7 @@ ssh beeblebox tailscale serve --bg --https=8090 http://127.0.0.1:8090
 
 ```
 https://beeblebox.taile98462.ts.net:8090/tictactoe
+https://beeblebox.taile98462.ts.net:8090/claudemock
 https://beeblebox.taile98462.ts.net:8090/helloworld
 https://beeblebox.taile98462.ts.net:8090/cockpit
 ```
@@ -220,6 +221,7 @@ Per-service Caddy directive choice:
 |---|---|---|
 | tictactoe | `handle_path /tictactoe/*` (strip) | Its frontend derives the API base from `location.pathname` (see `compose/tic-tac-toe/templates/index.html`'s `BASE` constant), so it doesn't care about the stripped prefix |
 | helloworld | `handle_path /helloworld/*` (strip) | Serves nginx's stock default page — no root-absolute asset paths to break |
+| claudemock | `handle_path /claudemock/*` (strip) | Static nginx bundle (`compose/claude-mock-test`); every asset reference is relative and the app makes no HTTP calls at all — all state is in `localStorage` |
 | cockpit | `handle /cockpit/*` (no strip) | Cockpit's own asset scheme already uses `/cockpit/$checksum/...` as an internal convention — stripping breaks it. Also requires `UrlRoot = /cockpit` in `/etc/cockpit/cockpit.conf` (set by `scripts/sudo/setup-cockpit.sh`) |
 
 litellm is deliberately **not** in this router — see its own section below.
