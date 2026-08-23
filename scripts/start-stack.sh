@@ -52,9 +52,13 @@ run_up() {
   # only way a changed Caddyfile actually reaches the running proxy.
   [[ "$SERVICE" == "tls-proxy" ]] && force_recreate=true
 
-  # Self-heal image staleness: pull registry images (skip localhost/* = custom-built,
-  # e.g. tic-tac-toe) and recreate only if a running container's bound image actually
-  # changed, instead of force-recreating (and restarting) every stack on every deploy.
+  # Self-heal image staleness: pull registry images, then recreate only if a running
+  # container's bound image actually changed, instead of force-recreating (and restarting)
+  # every stack on every deploy.
+  # localhost/* images (custom-built, e.g. tic-tac-toe, claude-mock-test) can't be pulled,
+  # but they DO go stale: build-stack.sh rebuilding the image leaves the existing container
+  # bound to the old image ID, so a plain `up -d` keeps serving the previous build. They are
+  # skipped by the pull and still compared by ID below.
   local existing_cids
   existing_cids=$(podman ps -a -q --filter "label=io.podman.compose.project=${SERVICE}" 2>/dev/null)
   if [[ -n "$existing_cids" ]]; then
@@ -65,22 +69,19 @@ run_up() {
     done
     if $has_remote_image; then
       echo "[start-stack] Pulling image(s) for $SERVICE..."
-      if (cd "$DIR" && "$COMPOSE_CMD" "${compose_files[@]}" pull); then
-        local old_id new_id
-        for cid in $existing_cids; do
-          image_name=$(podman inspect -f '{{.ImageName}}' "$cid" 2>/dev/null) || continue
-          [[ "$image_name" == localhost/* ]] && continue
-          old_id=$(podman inspect -f '{{.Image}}' "$cid" 2>/dev/null) || old_id=""
-          new_id=$(podman image inspect -f '{{.Id}}' "$image_name" 2>/dev/null) || new_id=""
-          if [[ -n "$new_id" && "$old_id" != "$new_id" ]]; then
-            echo "[start-stack] $image_name updated; recreating $SERVICE"
-            force_recreate=true
-          fi
-        done
-      else
+      (cd "$DIR" && "$COMPOSE_CMD" "${compose_files[@]}" pull) ||
         echo "[start-stack] WARN: pull failed for $SERVICE; continuing with cached image(s)" >&2
-      fi
     fi
+    local old_id new_id
+    for cid in $existing_cids; do
+      image_name=$(podman inspect -f '{{.ImageName}}' "$cid" 2>/dev/null) || continue
+      old_id=$(podman inspect -f '{{.Image}}' "$cid" 2>/dev/null) || old_id=""
+      new_id=$(podman image inspect -f '{{.Id}}' "$image_name" 2>/dev/null) || new_id=""
+      if [[ -n "$new_id" && "$old_id" != "$new_id" ]]; then
+        echo "[start-stack] $image_name updated; recreating $SERVICE"
+        force_recreate=true
+      fi
+    done
   fi
 
   up_args=(-d)
