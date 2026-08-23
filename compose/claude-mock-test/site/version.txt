@@ -1,5 +1,5 @@
 source: /home/darraghog/dev/claude/mock-test
-commit: 8062494
+commit: 001cae7
 branch: feat/mock-test
-synced: 2026-08-23T18:32:15Z
+synced: 2026-08-23T18:40:37Z
 questions: 21 domain files
