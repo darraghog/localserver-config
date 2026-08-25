@@ -2,6 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <script>
+      // Relative asset URLs (styles.css, bank.js, ...) resolve wrong when this bundle is
+      // reached without a trailing slash on its mount path (e.g. Tailscale Funnel's
+      // --set-path, which has no redirect step to add the slash — the backend receives an
+      // identical stripped request either way, so it can't add the redirect itself). Must
+      // run before any relative stylesheet/script tag below.
+      //
+      // Only a directory-style path is missing a slash. A last segment containing a dot is
+      // a file (index.html, or any file:// open — see the zero-dependency/file:// rule in
+      // CLAUDE.md), and appending a slash there would resolve every asset *under* that file.
+      if (!location.pathname.endsWith('/') && !/\.[^/]*$/.test(location.pathname)) {
+        var base = document.createElement('base');
+        base.href = location.pathname + '/';
+        document.head.insertBefore(base, document.head.firstChild);
+      }
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Claude Professional Architect — Mock Test</title>
     <link rel="stylesheet" href="styles.css" />
