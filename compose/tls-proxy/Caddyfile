@@ -3,7 +3,7 @@
 	auto_https off
 }
 # TLS reverse proxy - :8443 (hello-world), :8444 (n8n), :8445 (tic-tac-toe), :8446 (claude-mock-test),
-# :8447 (litellm), :9443 (cockpit)
+# :8447 (litellm), :8448 (weather-mcp), :9443 (cockpit)
 # :8090 is a loopback-only, plain-HTTP tailnet path router (cockpit/tictactoe/helloworld).
 # :8092 is litellm's dedicated tailnet-only port (root-mounted — see the :8092 block below
 # for why it can't be path-mounted on :8090). See docs/NETWORK-CONFIG.md.
@@ -41,6 +41,11 @@
     header_down Location "https://127.0.0.1/" "https://127.0.0.1:8447/"
     header_down Location "https://localhost/" "https://localhost:8447/"
   }
+}
+:8448 {
+  bind 0.0.0.0
+  tls /certs/server.pem /certs/server-key.pem
+  reverse_proxy 127.0.0.1:8094
 }
 :9443 {
   bind 0.0.0.0
@@ -115,5 +120,30 @@
     header_down Location "http://127.0.0.1:4000" "https://beeblebox.taile98462.ts.net:8092"
     header_down Location "https://127.0.0.1/" "https://beeblebox.taile98462.ts.net:8092/"
     header_down Location "https://localhost/" "https://beeblebox.taile98462.ts.net:8092/"
+  }
+}
+
+# Public front for the weather MCP server. The Tailscale Funnel mounts
+# :443/weather here, NOT straight at 127.0.0.1:8094, because only part of the app
+# is safe to publish: the app's bearer/OAuth check wraps only the /mcp mount, so
+# the Flask GUI and its /api/* routes are unauthenticated - and
+# /api/city-coordinates proxies to nominatim.openstreetmap.org, whose usage policy
+# bans abusive IPs. Publishing them would make this host an open geocoding proxy.
+# The GUI stays reachable on the LAN via the :8448 site above.
+# Plain HTTP by design: Tailscale terminates TLS for funnel clients (same as :8090).
+# Mounted at the public leg via:
+#   tailscale funnel --bg --https=443 --set-path=/weather http://127.0.0.1:8095
+:8095 {
+  bind 127.0.0.1
+
+  # MCP transport, the OAuth 2.1 authorization-server endpoints, the /login hop
+  # that completes the flow, RFC 8414/9728 discovery, and the health probe.
+  @published path /mcp /mcp/* /health /login /authorize /token /register /revoke /.well-known/*
+  handle @published {
+    reverse_proxy 127.0.0.1:8094
+  }
+
+  handle {
+    respond 404
   }
 }

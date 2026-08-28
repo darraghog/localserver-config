@@ -1,0 +1,5 @@
+source:  /home/darraghog/dev/claude/weather
+commit:  964efac696964ae98a04829fa9766d7bb43b06cc
+branch:  feat/podman-deploy
+synced:  2026-08-28T19:40:38Z
+files:   22

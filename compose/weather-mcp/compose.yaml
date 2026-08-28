@@ -1,0 +1,46 @@
+# Weather MCP server (NWS + Open-Meteo tools over MCP Streamable HTTP, plus a
+# small Flask GUI). HTTP: :8094 | LAN HTTPS: :8448 | public: :443/weather
+#
+# Loopback only. Two front doors, deliberately different:
+#   - Caddy :8448  — LAN TLS, serves the whole app including the web GUI.
+#   - Caddy :8095  — what the public Tailscale Funnel mount points at; passes
+#                    only MCP + OAuth paths. The Flask GUI and its /api/* routes
+#                    are unauthenticated by design (the app's bearer check wraps
+#                    only the /mcp mount), and /api/city-coordinates proxies to
+#                    Nominatim, so they must not be published to the internet.
+services:
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:8094:8094"
+    volumes:
+      # Registered OAuth clients + refresh tokens. A named volume, not a bind:
+      # deploy-service.sh rsyncs with --delete, which would wipe a bind under the
+      # stack dir on every deploy. Losing it forces a fresh /login in Claude.
+      - oauth-store:/data
+    environment:
+      - WEATHER_MCP_HOST=0.0.0.0
+      - WEATHER_MCP_PORT=8094
+      - WEATHER_MCP_OAUTH_STORE_PATH=/data/oauth_store.json
+      # Refuse to start rather than publish an unauthenticated /mcp.
+      - WEATHER_MCP_REQUIRE_TOKEN=1
+      - WEATHER_MCP_TOKEN=${WEATHER_MCP_TOKEN:?WEATHER_MCP_TOKEN must be set in .env}
+      # Must byte-for-byte match the public mount path: the OAuth issuer, the
+      # protected-resource metadata and the /login redirect are all derived from it.
+      - WEATHER_MCP_ISSUER_URL=${WEATHER_MCP_ISSUER_URL:?WEATHER_MCP_ISSUER_URL must be set in .env}
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8094/health', timeout=2)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  oauth-store: {}

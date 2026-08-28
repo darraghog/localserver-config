@@ -6,3 +6,6 @@ libpod/
 compose/*/.build/
 __pycache__/
 *.py[cod]
+
+# Stale worktree snapshots from agent sessions - never track these.
+.claude/worktrees/

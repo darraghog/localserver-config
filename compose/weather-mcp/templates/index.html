@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather MCP Server GUI</title>
+    <script>
+        // Applied before first paint to avoid a light-mode flash on load
+        (function () {
+            var theme = localStorage.getItem('theme');
+            if (theme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-gradient-start: #667eea;
+            --bg-gradient-end: #764ba2;
+            --card-bg: #ffffff;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --text-tertiary: #555555;
+            --border-color: #e1e5e9;
+            --accent: #667eea;
+            --result-bg: #f8f9fa;
+            --error-text: #dc3545;
+            --error-bg: #f8d7da;
+            --error-border: #f5c6cb;
+            --success-text: #155724;
+            --success-accent: #28a745;
+            --success-bg: #d4edda;
+            --success-border: #28a745;
+            --dropdown-item-border: #f0f0f0;
+            --dropdown-hover-bg: #f8f9ff;
+            --dropdown-highlight-bg: #e7f3ff;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+            --location-info-bg: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+        }
+
+        :root[data-theme="dark"] {
+            --bg-gradient-start: #2b2d55;
+            --bg-gradient-end: #3d2a52;
+            --card-bg: #1e1e2e;
+            --text-primary: #e8e8ed;
+            --text-secondary: #a0a0b0;
+            --text-tertiary: #a0a0b0;
+            --border-color: #3a3a4a;
+            --accent: #8b9bff;
+            --result-bg: #16161f;
+            --error-text: #ff8a94;
+            --error-bg: #3a1e22;
+            --error-border: #6b2c33;
+            --success-text: #8fdca0;
+            --success-accent: #4cbb6a;
+            --success-bg: #1c3324;
+            --success-border: #2f6b41;
+            --dropdown-item-border: #33333f;
+            --dropdown-hover-bg: #26263a;
+            --dropdown-highlight-bg: #2c2f4a;
+            --shadow-color: rgba(0, 0, 0, 0.4);
+            --location-info-bg: linear-gradient(135deg, #667eea22 0%, #764ba222 100%);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            min-height: 100vh;
+            padding: 20px;
+            transition: background 0.2s ease;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            position: relative;
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 0;
+            right: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .theme-toggle-label {
+            color: white;
+            font-size: 1.2rem;
+            line-height: 1;
+        }
+
+        .theme-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+
+        .theme-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .theme-switch-slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 26px;
+            transition: background-color 0.2s ease;
+        }
+
+        .theme-switch-slider::before {
+            content: "";
+            position: absolute;
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            border-radius: 50%;
+            transition: transform 0.2s ease;
+        }
+
+        .theme-switch input:checked + .theme-switch-slider {
+            background-color: rgba(0, 0, 0, 0.35);
+        }
+
+        .theme-switch input:checked + .theme-switch-slider::before {
+            transform: translateX(24px);
+        }
+
+        .theme-switch input:focus-visible + .theme-switch-slider {
+            outline: 2px solid white;
+            outline-offset: 2px;
+        }
+
+        @media (max-width: 600px) {
+            .theme-toggle {
+                position: static;
+                justify-content: center;
+                margin-bottom: 15px;
+            }
+        }
+
+        .tools-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .tool-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px var(--shadow-color);
+            transition: transform 0.2s, background-color 0.2s ease;
+        }
+
+        .tool-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .tool-card h2 {
+            color: var(--text-primary);
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+
+        .tool-card p {
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            background-color: var(--card-bg);
+            color: var(--text-primary);
+            transition: border-color 0.2s, background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            width: 100%;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .result-section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px var(--shadow-color);
+            margin-top: 30px;
+            transition: background-color 0.2s ease;
+        }
+
+        .result-section h3 {
+            color: var(--text-primary);
+            margin-bottom: 15px;
+        }
+
+        .result-content {
+            background: var(--result-bg);
+            color: var(--text-primary);
+            border-radius: 6px;
+            padding: 20px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+        }
+
+        .error {
+            color: var(--error-text);
+            background: var(--error-bg);
+            border: 1px solid var(--error-border);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .coordinates-help {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+
+        .coordinates-help.help-text-success {
+            color: var(--success-accent);
+        }
+
+        .location-info {
+            background: var(--location-info-bg);
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .location-info h4 {
+            margin: 0 0 12px 0;
+            color: var(--accent);
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .location-info .city-name {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+        }
+
+        .location-info .coord-details {
+            font-size: 1rem;
+            color: var(--text-tertiary);
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .location-info .coord-item {
+            background: var(--card-bg);
+            padding: 8px 12px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px var(--shadow-color);
+        }
+
+        .location-info .coord-label {
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .new-city-alert {
+            background: var(--success-bg);
+            border: 1px solid var(--success-border);
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+            color: var(--success-text);
+        }
+
+        .new-city-alert h4 {
+            margin: 0 0 5px 0;
+            color: var(--success-text);
+            font-size: 1rem;
+        }
+
+        .new-city-alert p {
+            margin: 5px 0;
+            font-size: 0.9rem;
+        }
+
+        .cities-refreshed-badge {
+            display: inline-block;
+            background: var(--success-accent);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-left: 10px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s, background-color 0.2s ease, color 0.2s ease;
+            background-color: var(--card-bg);
+            color: var(--text-primary);
+        }
+
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .autocomplete-container {
+            position: relative;
+            width: 100%;
+        }
+
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 300px;
+            overflow-y: auto;
+            background: var(--card-bg);
+            border: 2px solid var(--accent);
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            box-shadow: 0 4px 6px var(--shadow-color);
+            z-index: 1000;
+            display: none;
+        }
+
+        .autocomplete-dropdown.active {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 12px;
+            color: var(--text-primary);
+            cursor: pointer;
+            border-bottom: 1px solid var(--dropdown-item-border);
+            transition: background-color 0.2s;
+        }
+
+        .autocomplete-item:hover {
+            background-color: var(--dropdown-hover-bg);
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item.highlighted {
+            background-color: var(--dropdown-highlight-bg);
+        }
+
+        .autocomplete-no-results {
+            padding: 12px;
+            color: var(--text-secondary);
+            font-style: italic;
+            text-align: center;
+        }
+
+        .autocomplete-count {
+            padding: 8px 12px;
+            background: var(--result-bg);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .tools-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="theme-toggle">
+                <span class="theme-toggle-label">☀️</span>
+                <label class="theme-switch" for="theme-toggle-input">
+                    <input type="checkbox" id="theme-toggle-input" aria-label="Toggle dark mode">
+                    <span class="theme-switch-slider"></span>
+                </label>
+                <span class="theme-toggle-label">🌙</span>
+            </div>
+            <h1>🌦️ Weather MCP Server</h1>
+            <p>Get weather forecasts for any location worldwide and US weather alerts</p>
+        </div>
+
+        <div class="tools-grid">
+            <!-- Weather Alerts Tool -->
+            <div class="tool-card">
+                <h2>🚨 Weather Alerts</h2>
+                <p>Get active weather alerts for any US state</p>
+                
+                <form id="alerts-form">
+                    <div class="form-group">
+                        <label for="state">State Code:</label>
+                        <input type="text" id="state" name="state" placeholder="e.g., CA, NY, TX" maxlength="2" required>
+                        <div class="coordinates-help">Enter 2-letter US state code</div>
+                    </div>
+                    <button type="submit" class="btn">Get Alerts</button>
+                </form>
+            </div>
+
+            <!-- Weather Forecast Tool -->
+            <div class="tool-card">
+                <h2>🌤️ Weather Forecast</h2>
+                <p>Get detailed weather forecast for any location worldwide</p>
+                
+                <form id="forecast-form">
+                    <div class="form-group">
+                        <label for="city-input">City Name:</label>
+                        <div class="autocomplete-container">
+                            <input type="text" id="city-input" name="city" placeholder="e.g., San Francisco, CA or New York City, NY" autocomplete="off">
+                            <div id="city-dropdown" class="autocomplete-dropdown"></div>
+                        </div>
+                        <div class="coordinates-help">Type a city name or select from suggestions</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="latitude">Latitude:</label>
+                        <input type="text" id="latitude" name="latitude" placeholder="e.g., 37.7749" pattern="-?\d+(\.\d+)?" title="Enter a valid latitude (-90 to 90)">
+                    </div>
+                    <div class="form-group">
+                        <label for="longitude">Longitude:</label>
+                        <input type="text" id="longitude" name="longitude" placeholder="e.g., -122.4194" pattern="-?\d+(\.\d+)?" title="Enter a valid longitude (-180 to 180)">
+                        <div class="coordinates-help">Auto-populated from city or enter manually</div>
+                    </div>
+                    <button type="submit" class="btn">Get Forecast</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="result-section" id="results" style="display: none;">
+            <h3>Results</h3>
+            <div class="loading" id="loading">Loading...</div>
+            <div id="location-info-container"></div>
+            <div class="result-content" id="result-content"></div>
+        </div>
+    </div>
+
+    <script>
+        // "" when served at the site root, "/weather" (say) when served behind a
+        // reverse-proxy path mount that strips its prefix - the backend sees "/..."
+        // either way, but the browser must not resolve /api/* against the site root.
+        // Same pattern as compose/tic-tac-toe/templates/index.html in localserver-config.
+        const BASE = location.pathname.replace(/\/$/, "");
+
+        // Handle alerts form submission
+        document.getElementById('alerts-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const state = document.getElementById('state').value.trim().toUpperCase();
+            if (!state || state.length !== 2) {
+                showResult('Please enter a valid 2-letter state code', true);
+                return;
+            }
+
+            await makeRequest('/api/alerts', { state });
+        });
+
+        // Handle forecast form submission
+        document.getElementById('forecast-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const city = document.getElementById('city-input').value.trim();
+            const latitudeStr = document.getElementById('latitude').value.trim();
+            const longitudeStr = document.getElementById('longitude').value.trim();
+
+            // Prefer city name if provided (even if coordinates are auto-populated)
+            // Only use coordinates alone if no city name is given
+            if (city) {
+                // Use city name (will be geocoded on server and return location info)
+                await makeRequest('/api/forecast', { city });
+            } else if (latitudeStr && longitudeStr) {
+                // Use manual coordinates only when no city is provided
+                const latitude = parseFloat(latitudeStr);
+                const longitude = parseFloat(longitudeStr);
+
+                if (isNaN(latitude) || isNaN(longitude)) {
+                    showResult('Please enter valid numeric latitude and longitude values', true);
+                    return;
+                }
+
+                if (latitude < -90 || latitude > 90) {
+                    showResult('Latitude must be between -90 and 90', true);
+                    return;
+                }
+
+                if (longitude < -180 || longitude > 180) {
+                    showResult('Longitude must be between -180 and 180', true);
+                    return;
+                }
+
+                await makeRequest('/api/forecast', { latitude, longitude });
+            } else {
+                showResult('Please enter either a city name or both latitude and longitude', true);
+            }
+        });
+
+        // Make API request
+        async function makeRequest(endpoint, data) {
+            const loading = document.getElementById('loading');
+            const resultContent = document.getElementById('result-content');
+            const results = document.getElementById('results');
+            const locationInfoContainer = document.getElementById('location-info-container');
+
+            // Show loading state
+            results.style.display = 'block';
+            loading.style.display = 'block';
+            resultContent.textContent = '';
+            resultContent.className = 'result-content';
+            locationInfoContainer.innerHTML = '';
+
+            try {
+                const response = await fetch(BASE + endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data),
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Unknown error occurred');
+                }
+
+                // Display location information if available
+                if (result.location) {
+                    displayLocationInfo(result.location);
+
+                    // If a new city was added, refresh the cities list for the dropdown
+                    if (result.location.newly_added) {
+                        console.log(`New city added: ${result.location.city}, refreshing cities list...`);
+                        await loadCities();
+                    }
+                }
+
+                showResult(result.result, false);
+            } catch (error) {
+                showResult(`Error: ${error.message}`, true);
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        // Display location information
+        function displayLocationInfo(location) {
+            const container = document.getElementById('location-info-container');
+
+            if (location.newly_added) {
+                // Show new city notification
+                const newCityAlert = document.createElement('div');
+                newCityAlert.className = 'new-city-alert';
+                newCityAlert.innerHTML = `
+                    <h4>✅ New City Added!</h4>
+                    <p><strong>${location.city || 'Location'}</strong> has been added to the database.</p>
+                    <p>Coordinates: ${location.latitude.toFixed(4)}°, ${location.longitude.toFixed(4)}°</p>
+                    <p style="font-size: 0.85rem; margin-top: 8px;">Please verify these coordinates are correct for your intended location.</p>
+                    <p style="font-size: 0.85rem; margin-top: 8px; font-weight: 600;">
+                        📋 This city is now available in the dropdown search!
+                    </p>
+                `;
+                container.appendChild(newCityAlert);
+            }
+
+            // Show location info
+            const locationInfo = document.createElement('div');
+            locationInfo.className = 'location-info';
+
+            const cityName = location.city || 'Custom Location';
+
+            locationInfo.innerHTML = `
+                <h4>📍 Weather Forecast Location</h4>
+                <div class="city-name">${cityName}</div>
+                <div class="coord-details">
+                    <div class="coord-item">
+                        <span class="coord-label">Latitude:</span> ${location.latitude.toFixed(4)}°
+                    </div>
+                    <div class="coord-item">
+                        <span class="coord-label">Longitude:</span> ${location.longitude.toFixed(4)}°
+                    </div>
+                </div>
+            `;
+            container.appendChild(locationInfo);
+        }
+
+        // Show result in the UI
+        function showResult(content, isError = false) {
+            const results = document.getElementById('results');
+            const resultContent = document.getElementById('result-content');
+            
+            results.style.display = 'block';
+            resultContent.textContent = content;
+            
+            if (isError) {
+                resultContent.className = 'result-content error';
+            } else {
+                resultContent.className = 'result-content';
+            }
+        }
+
+        // Auto-uppercase state input
+        document.getElementById('state').addEventListener('input', (e) => {
+            e.target.value = e.target.value.toUpperCase();
+        });
+        
+        // Global cities array
+        let allCities = [];
+        let selectedCityIndex = -1;
+
+        // Load cities from server
+        async function loadCities() {
+            try {
+                const response = await fetch(BASE + '/api/cities');
+                const data = await response.json();
+
+                if (response.ok && data.cities) {
+                    const previousCount = allCities.length;
+                    allCities = data.cities;
+                    console.log(`Loaded ${allCities.length} cities (previously: ${previousCount})`);
+
+                    // Update the help text to show total cities
+                    const helpText = document.querySelector('.coordinates-help');
+                    if (helpText && helpText.textContent.includes('Type a city name')) {
+                        helpText.textContent = `Type a city name or select from suggestions (${allCities.length} cities available)`;
+                    }
+
+                    return true;
+                }
+            } catch (error) {
+                console.error('Failed to load cities:', error);
+            }
+            return false;
+        }
+
+        // Load cities on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadCities();
+        });
+
+        // Filter cities based on input
+        function filterCities(query) {
+            if (!query || query.trim() === '') {
+                return allCities;
+            }
+            const lowerQuery = query.toLowerCase();
+            return allCities.filter(city => city.toLowerCase().includes(lowerQuery));
+        }
+
+        // Show dropdown with filtered cities
+        function showCityDropdown(filteredCities) {
+            const dropdown = document.getElementById('city-dropdown');
+            const input = document.getElementById('city-input');
+
+            dropdown.innerHTML = '';
+            selectedCityIndex = -1;
+
+            console.log(`Showing dropdown with ${filteredCities.length} filtered cities (out of ${allCities.length} total)`);
+
+            if (filteredCities.length === 0) {
+                const noResults = document.createElement('div');
+                noResults.className = 'autocomplete-no-results';
+                noResults.textContent = 'No cities found. Type to search or enter a new city.';
+                dropdown.appendChild(noResults);
+            } else {
+                // Show count if filtered
+                if (input.value.trim() !== '') {
+                    const countDiv = document.createElement('div');
+                    countDiv.className = 'autocomplete-count';
+                    countDiv.textContent = `${filteredCities.length} ${filteredCities.length === 1 ? 'city' : 'cities'} found`;
+                    dropdown.appendChild(countDiv);
+                }
+
+                // Show max 50 cities to avoid performance issues
+                const citiesToShow = filteredCities.slice(0, 50);
+                citiesToShow.forEach((city, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'autocomplete-item';
+                    item.textContent = city;
+                    item.dataset.index = index;
+
+                    item.addEventListener('click', () => {
+                        selectCity(city);
+                    });
+
+                    dropdown.appendChild(item);
+                });
+
+                if (filteredCities.length > 50) {
+                    const moreDiv = document.createElement('div');
+                    moreDiv.className = 'autocomplete-no-results';
+                    moreDiv.textContent = `... and ${filteredCities.length - 50} more. Keep typing to narrow down.`;
+                    dropdown.appendChild(moreDiv);
+                }
+            }
+
+            dropdown.classList.add('active');
+        }
+
+        // Hide dropdown
+        function hideCityDropdown() {
+            const dropdown = document.getElementById('city-dropdown');
+            dropdown.classList.remove('active');
+            selectedCityIndex = -1;
+        }
+
+        // Select a city from dropdown
+        async function selectCity(cityName) {
+            const input = document.getElementById('city-input');
+            input.value = cityName;
+            hideCityDropdown();
+
+            // Auto-fetch coordinates
+            await fetchCityCoordinates(cityName);
+        }
+
+        // Handle keyboard navigation
+        function handleKeyboardNavigation(e) {
+            const dropdown = document.getElementById('city-dropdown');
+            if (!dropdown.classList.contains('active')) return;
+
+            const items = dropdown.querySelectorAll('.autocomplete-item');
+            if (items.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedCityIndex = Math.min(selectedCityIndex + 1, items.length - 1);
+                updateHighlight(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedCityIndex = Math.max(selectedCityIndex - 1, -1);
+                updateHighlight(items);
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (selectedCityIndex >= 0) {
+                    const selectedCity = items[selectedCityIndex].textContent;
+                    selectCity(selectedCity);
+                }
+            } else if (e.key === 'Escape') {
+                hideCityDropdown();
+            }
+        }
+
+        // Update highlight on keyboard navigation
+        function updateHighlight(items) {
+            items.forEach((item, index) => {
+                if (index === selectedCityIndex) {
+                    item.classList.add('highlighted');
+                    item.scrollIntoView({ block: 'nearest' });
+                } else {
+                    item.classList.remove('highlighted');
+                }
+            });
+        }
+
+        // Fetch coordinates for a city
+        async function fetchCityCoordinates(cityName) {
+            if (!cityName || cityName.trim() === '') return;
+
+            try {
+                const response = await fetch(BASE + '/api/city-coordinates', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ city: cityName }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.latitude && data.longitude) {
+                    document.getElementById('latitude').value = data.latitude;
+                    document.getElementById('longitude').value = data.longitude;
+
+                    // Update help text with coordinates
+                    const helpText = document.querySelectorAll('.coordinates-help')[1];
+                    if (helpText) {
+                        let message = `Coordinates: ${data.latitude.toFixed(4)}°, ${data.longitude.toFixed(4)}°`;
+                        if (data.newly_added) {
+                            message += ' (Newly added - please verify)';
+                        }
+                        helpText.textContent = message;
+                        helpText.classList.toggle('help-text-success', data.newly_added);
+                    }
+
+                    // If a new city was added, refresh the cities list for the dropdown
+                    if (data.newly_added) {
+                        console.log(`New city added: ${cityName}, refreshing cities list...`);
+                        await loadCities();
+                    }
+
+                    return true;
+                }
+            } catch (error) {
+                console.error('Failed to fetch city coordinates:', error);
+            }
+            return false;
+        }
+
+        // Handle city input interactions
+        const cityInput = document.getElementById('city-input');
+        let lastCityValue = '';
+        let debounceTimer;
+
+        // Show dropdown on focus
+        cityInput.addEventListener('focus', () => {
+            const query = cityInput.value.trim();
+            const filtered = filterCities(query);
+            showCityDropdown(filtered);
+        });
+
+        // Filter as user types
+        cityInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            const query = cityInput.value.trim();
+            const filtered = filterCities(query);
+            showCityDropdown(filtered);
+
+            // Debounce coordinate fetching
+            debounceTimer = setTimeout(async () => {
+                if (query && query !== lastCityValue) {
+                    lastCityValue = query;
+                    // Only fetch if it's an exact match from our list or user pressed enter
+                    if (allCities.includes(query)) {
+                        await fetchCityCoordinates(query);
+                    }
+                }
+            }, 500);
+        });
+
+        // Handle keyboard navigation
+        cityInput.addEventListener('keydown', handleKeyboardNavigation);
+
+        // Hide dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.autocomplete-container')) {
+                hideCityDropdown();
+            }
+        });
+
+        // Fetch coordinates when user leaves the field
+        cityInput.addEventListener('blur', async () => {
+            // Small delay to allow click on dropdown items
+            setTimeout(async () => {
+                const cityName = cityInput.value.trim();
+                if (cityName && cityName !== lastCityValue) {
+                    lastCityValue = cityName;
+                    await fetchCityCoordinates(cityName);
+                }
+            }, 200);
+        });
+
+        // Clear city when manual coordinates are entered
+        document.getElementById('latitude').addEventListener('input', () => {
+            if (document.getElementById('latitude').value.trim()) {
+                lastCityValue = '';
+                // Don't clear the city input as user might want to keep it
+            }
+        });
+
+        document.getElementById('longitude').addEventListener('input', () => {
+            if (document.getElementById('longitude').value.trim()) {
+                lastCityValue = '';
+                // Don't clear the city input as user might want to keep it
+            }
+        });
+
+        // Dark mode toggle
+        const themeToggleInput = document.getElementById('theme-toggle-input');
+
+        function applyTheme(isDark) {
+            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+            themeToggleInput.checked = isDark;
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        }
+
+        applyTheme(localStorage.getItem('theme') === 'dark');
+
+        themeToggleInput.addEventListener('change', () => {
+            applyTheme(themeToggleInput.checked);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+[project]
+name = "weather"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.28.1",
+    "mcp[cli]>=1.10,<1.11",
+    "flask>=3.0.0",
+    "asgiref>=3.8.0",
+    "starlette>=0.46.0",
+    "uvicorn>=0.34.0",
+]
+
+[project.optional-dependencies]
+# Client-side Ollama MCP CLI - no server module imports it, so it stays out of
+# the container image (it pulls in ollama, typer, rich, prompt-toolkit, ...).
+tools = [
+    "ollmcp>=0.14.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "respx>=0.21.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

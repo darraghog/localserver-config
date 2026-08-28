@@ -1,0 +1,28 @@
+# Podman reads .containerignore in preference to .dockerignore.
+#
+# .env and .oauth_store.json are the security-critical entries: one holds the
+# live bearer secret, the other holds registered OAuth clients and refresh
+# tokens. Neither may ever be baked into an image layer.
+.env
+.env.local
+.oauth_store.json
+
+.git
+.gitignore
+.github
+.claude
+.venv
+__pycache__
+**/__pycache__
+*.py[oc]
+.pytest_cache
+.coverage
+htmlcov
+
+# Superseded by the container deployment.
+start_server.sh
+mcp.json
+openapi.yaml
+
+*.md
+!README.md

@@ -62,6 +62,9 @@ caddy_verify_path_for_stack() {
   case "$1" in
     litellm) printf '%s' "/health/liveliness" ;;
     n8n) printf '%s' "/healthz" ;;
+    # Not "/": that renders the Flask GUI template on every deploy poll. /health
+    # is a no-I/O JSON probe and stays answerable without a bearer token.
+    weather-mcp) printf '%s' "/health" ;;
     *) printf '%s' "/" ;;
   esac
 }
