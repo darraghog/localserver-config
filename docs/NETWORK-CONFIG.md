@@ -202,7 +202,7 @@ On beeblebox, most Tailscale URLs use **path names instead of a port per service
 
 ### Tailnet-only path router (`:8090`)
 
-A loopback-only Caddy site (`:8090` in `compose/tls-proxy/Caddyfile`) does path-based dispatch for tic-tac-toe, claude-mock-test, hello-world, and cockpit. A single `tailscale serve` mount exposes that whole router tailnet-only:
+A loopback-only Caddy site (`:8090` in `compose/tls-proxy/Caddyfile`) does path-based dispatch for tic-tac-toe, claude-mock-test, hello-world, cockpit, and the weather GUI. A single `tailscale serve` mount exposes that whole router tailnet-only:
 
 ```bash
 ssh beeblebox tailscale serve --bg --https=8090 http://127.0.0.1:8090
@@ -213,7 +213,11 @@ https://beeblebox.taile98462.ts.net:8090/tictactoe
 https://beeblebox.taile98462.ts.net:8090/claudemock
 https://beeblebox.taile98462.ts.net:8090/helloworld
 https://beeblebox.taile98462.ts.net:8090/cockpit
+https://beeblebox.taile98462.ts.net:8090/weather
 ```
+
+An index page listing these lives at `https://beeblebox.taile98462.ts.net:8090/`
+(`compose/tls-proxy/router-static/index.html`) — add new mounts there too.
 
 Per-service Caddy directive choice:
 
@@ -222,6 +226,7 @@ Per-service Caddy directive choice:
 | tictactoe | `handle_path /tictactoe/*` (strip) | Its frontend derives the API base from `location.pathname` (see `compose/tic-tac-toe/templates/index.html`'s `BASE` constant), so it doesn't care about the stripped prefix |
 | helloworld | `handle_path /helloworld/*` (strip) | Serves nginx's stock default page — no root-absolute asset paths to break |
 | claudemock | `handle_path /claudemock/*` (strip) | Static nginx bundle (`compose/claude-mock-test`); every asset reference is relative and the app makes no HTTP calls at all — all state is in `localStorage` |
+| weather | `handle_path /weather/*` (strip) | Same `BASE` pattern as tictactoe (`compose/weather-mcp/templates/index.html`). Tailnet-only on purpose: the GUI and its `/api/*` routes are unauthenticated — see "Why only part of the app is published" below. Shares a path name with the public `:443/weather` funnel mount but not a port: `:443/weather` is MCP-only, `:8090/weather` is the GUI |
 | cockpit | `handle /cockpit/*` (no strip) | Cockpit's own asset scheme already uses `/cockpit/$checksum/...` as an internal convention — stripping breaks it. Also requires `UrlRoot = /cockpit` in `/etc/cockpit/cockpit.conf` (set by `scripts/sudo/setup-cockpit.sh`) |
 
 litellm is deliberately **not** in this router — see its own section below.
@@ -569,7 +574,9 @@ only its `/mcp` mount, so the Flask GUI and `/api/*` routes are unauthenticated,
 and `/api/city-coordinates` proxies to `nominatim.openstreetmap.org`, whose usage
 policy bans abusive IPs. The `:8095` Caddy site the funnel points at passes only
 MCP, the OAuth endpoints, `/login`, the well-known documents and `/health`. The
-GUI stays on the LAN front door at `:8448`.
+GUI stays off the public leg: it is reachable on the LAN front door at `:8448` and
+on the tailnet at `:8090/weather` (the path router above), both of which require
+either the LAN or the VPN to reach.
 
 ### Regression check
 

@@ -4,7 +4,8 @@
 }
 # TLS reverse proxy - :8443 (hello-world), :8444 (n8n), :8445 (tic-tac-toe), :8446 (claude-mock-test),
 # :8447 (litellm), :8448 (weather-mcp), :9443 (cockpit)
-# :8090 is a loopback-only, plain-HTTP tailnet path router (cockpit/tictactoe/helloworld).
+# :8090 is a loopback-only, plain-HTTP tailnet path router
+# (cockpit/tictactoe/helloworld/claudemock/weather).
 # :8092 is litellm's dedicated tailnet-only port (root-mounted — see the :8092 block below
 # for why it can't be path-mounted on :8090). See docs/NETWORK-CONFIG.md.
 # New ":PORT {" sites here are picked up by scripts/setup-windows-podman-lan-ports.ps1 on Windows.
@@ -65,6 +66,7 @@
   redir /tictactoe /tictactoe/
   redir /helloworld /helloworld/
   redir /claudemock /claudemock/
+  redir /weather /weather/
 
   # No strip: Cockpit's own asset scheme uses "/cockpit/$checksum/..." as an internal
   # path convention — stripping the prefix here would break it. Requires UrlRoot=/cockpit
@@ -76,6 +78,16 @@
   # location.pathname (see compose/tic-tac-toe/templates/index.html's BASE constant).
   handle_path /tictactoe/* {
     reverse_proxy 127.0.0.1:8091
+  }
+  # Strip is fine here: the weather GUI derives its API base from location.pathname
+  # the same way (see compose/weather-mcp/templates/index.html's BASE constant).
+  # Tailnet-only on purpose: the GUI and its /api/* routes are unauthenticated and
+  # /api/city-coordinates proxies nominatim.openstreetmap.org, which is why the
+  # public :443/weather Funnel still serves only the :8095 allowlist below. Note the
+  # two mounts share a path name on different ports: :443/weather is MCP-only and
+  # public, :8090/weather is the GUI and tailnet-only.
+  handle_path /weather/* {
+    reverse_proxy 127.0.0.1:8094
   }
   # Strip is fine here: hello-world serves nginx's stock default page (no root-absolute
   # asset paths to break).
@@ -129,7 +141,8 @@
 # the Flask GUI and its /api/* routes are unauthenticated - and
 # /api/city-coordinates proxies to nominatim.openstreetmap.org, whose usage policy
 # bans abusive IPs. Publishing them would make this host an open geocoding proxy.
-# The GUI stays reachable on the LAN via the :8448 site above.
+# The GUI stays reachable on the LAN via the :8448 site above, and on the tailnet
+# via /weather on the :8090 path router.
 # Plain HTTP by design: Tailscale terminates TLS for funnel clients (same as :8090).
 # Mounted at the public leg via:
 #   tailscale funnel --bg --https=443 --set-path=/weather http://127.0.0.1:8095

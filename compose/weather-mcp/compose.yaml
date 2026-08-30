@@ -1,8 +1,12 @@
 # Weather MCP server (NWS + Open-Meteo tools over MCP Streamable HTTP, plus a
-# small Flask GUI). HTTP: :8094 | LAN HTTPS: :8448 | public: :443/weather
+# small Flask GUI). HTTP: :8094 | LAN HTTPS: :8448 | tailnet: :8090/weather |
+# public: :443/weather
 #
-# Loopback only. Two front doors, deliberately different:
+# Loopback only. Three front doors, deliberately different:
 #   - Caddy :8448  — LAN TLS, serves the whole app including the web GUI.
+#   - Caddy :8090  — the tailnet-only path router; /weather serves the whole app
+#                    too (VPN required) — where the GUI is meant to be used from
+#                    when off the LAN.
 #   - Caddy :8095  — what the public Tailscale Funnel mount points at; passes
 #                    only MCP + OAuth paths. The Flask GUI and its /api/* routes
 #                    are unauthenticated by design (the app's bearer check wraps
