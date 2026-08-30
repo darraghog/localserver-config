@@ -1,0 +1,30 @@
+# Cloudflare Tunnel: thelearningcto.com -> the WordPress public front (Caddy :8097).
+#
+# Why a tunnel and not Tailscale Funnel: Funnel can only ever serve
+# beeblebox.taile98462.ts.net — it cannot serve a custom domain. Everything else public
+# on this host (n8n at :443 root, weather at :443/weather) stays on Funnel and is
+# untouched by this. See docs/NETWORK-CONFIG.md.
+#
+# Runs as a *user* systemd unit (systemd/user/localserver-cloudflared.service), matching
+# this repo's rootless-podman + loginctl-linger model. A tunnel dials out, so it needs
+# neither root nor an inbound port — which is the whole point of choosing it over the
+# port-forward option this repo documents as "Option to Avoid".
+tunnel: dfec2c79-9818-4af5-a23e-e69b0f329daf
+
+# Absolute path: this file is copied verbatim (unlike the .service files, which get
+# __HOME__/__REPO_ROOT__ substituted by bootstrap-host.sh). cert.pem lives alongside it
+# and is what `cloudflared tunnel route dns` authenticates with.
+credentials-file: /home/daradoom/.cloudflared/dfec2c79-9818-4af5-a23e-e69b0f329daf.json
+
+# Cloudflare terminates TLS at the edge, so this leg is plain HTTP on loopback — the same
+# convention as the :8090 / :8095 sites where Tailscale terminates instead.
+#
+# Pointing at Caddy :8097 rather than straight at WordPress on :8096 is deliberate: the
+# :8097 site blocks /xmlrpc.php and is where any future public-surface rule belongs.
+ingress:
+  - hostname: thelearningcto.com
+    service: http://127.0.0.1:8097
+  - hostname: www.thelearningcto.com
+    service: http://127.0.0.1:8097
+  # Required catch-all: cloudflared refuses to start without a rule that has no hostname.
+  - service: http_status:404

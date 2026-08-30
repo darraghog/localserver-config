@@ -27,8 +27,8 @@ if [[ "$CORE_ONLY" == true ]]; then
   PORTS=(8080 5678)
   NAMES=("hello-world" "n8n")
 else
-  PORTS=(8080 5678 8091 8093 4000 8094 8443 8444 8445 8446 8447 8448 9090 9443 8090 8095)
-  NAMES=("hello-world" "n8n" "tic-tac-toe" "claude-mock-test" "litellm" "weather-mcp" "tls-proxy:8443" "tls-proxy:8444" "tls-proxy:8445" "tls-proxy:8446" "tls-proxy:8447" "tls-proxy:8448" "cockpit" "cockpit-tls" "tls-proxy:8090-router" "tls-proxy:8095-weather-public")
+  PORTS=(8080 5678 8091 8093 4000 8094 8096 8443 8444 8445 8446 8447 8448 8449 9090 9443 8090 8095 8097)
+  NAMES=("hello-world" "n8n" "tic-tac-toe" "claude-mock-test" "litellm" "weather-mcp" "wordpress" "tls-proxy:8443" "tls-proxy:8444" "tls-proxy:8445" "tls-proxy:8446" "tls-proxy:8447" "tls-proxy:8448" "tls-proxy:8449" "cockpit" "cockpit-tls" "tls-proxy:8090-router" "tls-proxy:8095-weather-public" "tls-proxy:8097-wordpress-public")
 fi
 
 check_port_local() {

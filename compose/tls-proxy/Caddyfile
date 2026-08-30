@@ -3,7 +3,9 @@
 	auto_https off
 }
 # TLS reverse proxy - :8443 (hello-world), :8444 (n8n), :8445 (tic-tac-toe), :8446 (claude-mock-test),
-# :8447 (litellm), :8448 (weather-mcp), :9443 (cockpit)
+# :8447 (litellm), :8448 (weather-mcp), :8449 (wordpress), :9443 (cockpit)
+# :8097 is the loopback-only public front for wordpress, served by Cloudflare Tunnel
+# (NOT Tailscale Funnel — Funnel can't serve a custom domain). See the :8097 block below.
 # :8090 is a loopback-only, plain-HTTP tailnet path router
 # (cockpit/tictactoe/helloworld/claudemock/weather).
 # :8092 is litellm's dedicated tailnet-only port (root-mounted — see the :8092 block below
@@ -47,6 +49,11 @@
   bind 0.0.0.0
   tls /certs/server.pem /certs/server-key.pem
   reverse_proxy 127.0.0.1:8094
+}
+:8449 {
+  bind 0.0.0.0
+  tls /certs/server.pem /certs/server-key.pem
+  reverse_proxy 127.0.0.1:8096
 }
 :9443 {
   bind 0.0.0.0
@@ -158,5 +165,43 @@
 
   handle {
     respond 404
+  }
+}
+
+# Public front for WordPress (thelearningcto.com). Cloudflare Tunnel connects here:
+#   /etc/cloudflared/config.yml ingress -> http://127.0.0.1:8097
+# Plain HTTP by design: Cloudflare terminates TLS at the edge — same convention as :8090
+# and :8095, where Tailscale terminates instead. Cloudflare Tunnel rather than Funnel
+# because Funnel can only ever serve beeblebox.taile98462.ts.net, not a custom domain.
+#
+# Unlike :8095 (weather), this is deliberately NOT an allowlist — a blog is meant to be
+# wholly public. Two carve-outs:
+#   - /xmlrpc.php blocked outright: nothing here uses it, and it's a standing
+#     brute-force and pingback-amplification target.
+#   - /wp-admin and /wp-login.php are deliberately NOT blocked here. They're gated at the
+#     Cloudflare edge by Access (team tight-sun-921f) instead, because WordPress
+#     canonical-redirects every admin URL to WP_SITEURL — serving admin on a different
+#     hostname makes the login form post back to the public URL and fail. Same class of
+#     problem as litellm's hardcoded root paths, but redirects rather than assets.
+:8097 {
+  bind 127.0.0.1
+
+  handle /xmlrpc.php {
+    respond 403
+  }
+
+  # /wp-admin/* and /wp-login.php are intentionally NOT blocked here — they are gated at
+  # the Cloudflare edge by Access (team tight-sun-921f), verified 2026-08-30: both return
+  # 302 to tight-sun-921f.cloudflareaccess.com before ever reaching this origin. Blocking
+  # them here as well would break login for users Access has already authenticated.
+  handle {
+    reverse_proxy 127.0.0.1:8096 {
+      # Hardcoded https, not {scheme}: this site is plain HTTP, so {scheme} would say
+      # "http" and overwrite the header Cloudflare set — and wp-config.php keys its
+      # $_SERVER['HTTPS'] fix off exactly this header. Getting it wrong is an infinite
+      # redirect loop against WP_SITEURL. Same reasoning as the :8092 litellm block.
+      header_up X-Forwarded-Proto https
+      header_up Host {host}
+    }
   }
 }

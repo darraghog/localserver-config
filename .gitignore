@@ -9,3 +9,8 @@ __pycache__/
 
 # Stale worktree snapshots from agent sessions - never track these.
 .claude/worktrees/
+
+# Wordpress downloads
+media-export-72900971-from-0-to-541.tar
+thelearningcto.WordPress.2026-08-30.xml
+ 

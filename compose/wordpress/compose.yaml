@@ -1,0 +1,66 @@
+# WordPress for thelearningcto.com (migrated off WordPress.com).
+#
+# Backend:  127.0.0.1:8096  (loopback only — reached via Caddy, never directly)
+# LAN:      https://<host>:8449          -> Caddy :8449 site
+# Public:   https://thelearningcto.com   -> Cloudflare Tunnel -> Caddy :8097 public front
+#
+# WP_HOME/WP_SITEURL are pinned to the public URL on purpose. WordPress bakes its site URL
+# into every generated link and canonical-redirects to it (same trap as n8n's
+# N8N_EDITOR_BASE_URL — see docs/NETWORK-CONFIG.md "n8n: root-mounted on public :443").
+# Consequence: the LAN :8449 door redirects to the public URL, so it is break-glass access
+# for checking the stack is alive, not a second admin entrance. Admin is gated at the
+# Cloudflare edge by Access instead — see docs/NETWORK-CONFIG.md.
+services:
+  db:
+    image: docker.io/library/mariadb:11.8
+    # No ports: the DB is reachable only over the compose network. Keep it that way —
+    # post-deploy-caddy.sh reads the FIRST published port in this file to find the
+    # backend to verify, so publishing anything here would misdirect that check.
+    volumes:
+      - wordpress-db:/var/lib/mysql
+    environment:
+      - MARIADB_DATABASE=wordpress
+      - MARIADB_USER=wordpress
+      - MARIADB_PASSWORD=${WORDPRESS_DB_PASSWORD}
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  wordpress:
+    image: docker.io/library/wordpress:7.1-php8.3-apache
+    depends_on:
+      - db
+    ports:
+      - "127.0.0.1:8096:80"
+    volumes:
+      - wordpress-data:/var/www/html
+      # Directory, not the single file: a directory bind-mount survives rsync
+      # replacing the file's inode on deploy (see the Caddyfile footgun in
+      # docs/ADD-SERVICE.md).
+      - ./config:/etc/wordpress:ro
+    environment:
+      - WORDPRESS_DB_HOST=db:3306
+      - WORDPRESS_DB_NAME=wordpress
+      - WORDPRESS_DB_USER=wordpress
+      - WORDPRESS_DB_PASSWORD=${WORDPRESS_DB_PASSWORD}
+      # Written into wp-config.php on first run. Kept to a single line with no "$":
+      # Compose would treat $_SERVER as a variable reference and silently blank it,
+      # leaving broken PHP behind. The real settings live in config/config-extra.php.
+      - WORDPRESS_CONFIG_EXTRA=require '/etc/wordpress/config-extra.php';
+    restart: unless-stopped
+    healthcheck:
+      # The image ships neither curl nor wget; php is guaranteed to be present.
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 80) ? 0 : 1);"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  wordpress-data: {}
+  wordpress-db: {}

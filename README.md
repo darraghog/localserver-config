@@ -95,6 +95,7 @@ Uses `envs/local.env` and deploys on this machine.
 | hello-world | 8080, 8443 | nginx test |
 | n8n | 5678, 8444 | Workflow automation (SQLite) |
 | claude-mock-test | 8093 (loopback), 8446 | Static Claude Professional Architect mock test (nginx) |
+| wordpress | 8096 (loopback), 8449, 8097 (public front, loopback) | thelearningcto.com blog — WordPress + MariaDB, public via Cloudflare Tunnel |
 | tls-proxy | 8443, 8444, 8446, 9443, 8090 (tailnet path router, loopback-only) | Caddy HTTPS reverse proxy |
 | Cockpit | 9090 (internal), 9443 (TLS) | Podman container/pod management UI |
 

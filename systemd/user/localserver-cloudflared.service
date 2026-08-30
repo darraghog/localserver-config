@@ -1,0 +1,17 @@
+[Unit]
+Description=Cloudflare Tunnel for thelearningcto.com
+Documentation=https://github.com/darraghog/localserver-config
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# Unlike the localserver-*.service compose stacks (Type=oneshot, they just call
+# start-stack.sh and exit), this is the long-running tunnel process itself.
+Type=simple
+Environment=PATH=__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate --config __REPO_ROOT__/cloudflared/config.yml tunnel run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
