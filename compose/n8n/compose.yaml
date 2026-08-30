@@ -17,6 +17,13 @@ services:
       - N8N_HOST=${N8N_HOST:-localhost}
       - N8N_EDITOR_BASE_URL=${N8N_EDITOR_BASE_URL:-https://localhost:8444}
       - N8N_WEBHOOK_URL=${N8N_EDITOR_BASE_URL:-https://localhost:8444}/
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-}
+      - OPERATOR_EMAIL=${OPERATOR_EMAIL:-}
+      - EMAIL_ALLOWLIST=${EMAIL_ALLOWLIST:-}
+      - EVAL_WEBHOOK_TOKEN=${EVAL_WEBHOOK_TOKEN:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
     extra_hosts:
       - "${N8N_HOST:-localhost}:host-gateway"
       - "host.docker.internal:host-gateway"
