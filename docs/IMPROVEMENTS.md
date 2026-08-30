@@ -66,8 +66,8 @@
 **Current:** `scripts/reload-tls-proxy-caddy.sh` reloads Caddy without a container restart; `deploy.sh` and `deploy-to-server.sh` call it automatically post-deploy via `scripts/lib/post-deploy-caddy.sh`.
 
 ### 3.3 Backup n8n data
-**Status:** ⏳ Open
-**Current:** No backup script exists yet. Still needed: `scripts/backup-n8n.sh` to tar the `n8n-data` volume (or dump SQLite/Postgres) to a timestamped file, plus a retention/off-site note.
+**Status:** ✅ Resolved
+**Current:** `scripts/backup.sh` dumps all three databases (n8n + litellm Postgres, WordPress MariaDB), and backs the dumps up alongside the non-database volumes and the secrets in `.env` to Azure Blob via restic (`scripts/restic.sh`). Weekly via `localserver-backup.timer`, keeping 12 weeks, client-side encrypted. Restore runbook: [docs/BACKUP.md](BACKUP.md). Scope grew beyond n8n because a database dump alone cannot restore these services — without `N8N_ENCRYPTION_KEY` from `.env` the n8n credentials in the dump are undecryptable.
 
 ### 3.4 Deploy order / dependencies
 **Status:** ✅ Resolved
@@ -104,13 +104,13 @@
 | Priority | Item | Status |
 |----------|------|--------|
 | P0 | Set N8N_ENCRYPTION_KEY; require/change default password | ✅ Done |
-| P1 | Pin n8n image; add `.env.example`; document backup | ⚠️ 2/3 — backup script still missing |
+| P1 | Pin n8n image; add `.env.example`; document backup | ✅ Done |
 | P2 | Re-enable Postgres when viable; healthchecks; n8n health test | ⚠️ 2/3 — standalone n8n health test still missing |
 | P3 | Consolidate config; cert reload doc; deploy test run | ⚠️ Mostly done — n8n symlink and `deploy-litellm.sh` hostname remain |
 
 ## Still Open (actionable)
 
-1. `scripts/backup-n8n.sh` — tar/dump n8n data on a schedule, with retention.
+1. ~~`scripts/backup-n8n.sh`~~ — done, as `scripts/backup.sh` (all stacks, off-site, weekly). See §3.3.
 2. `tests/check-n8n.sh` (or extend `check-tls.sh`) — standalone n8n health check, independent of a deploy run.
 3. Remove `compose/n8n/docker-compose.yaml` symlink.
 4. Generalize `PROD_HOST="darragh-pc"` in `scripts/deploy-litellm.sh`.

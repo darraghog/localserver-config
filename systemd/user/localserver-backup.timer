@@ -1,0 +1,14 @@
+[Unit]
+Description=Weekly off-box backup (see localserver-backup.service)
+Documentation=https://github.com/darraghog/localserver-config
+
+[Timer]
+# Weekly, early Sunday. Persistent=true means a run missed while the host was off fires
+# shortly after the next boot rather than being silently skipped for the week.
+OnCalendar=Sun 03:30
+Persistent=true
+RandomizedDelaySec=30m
+Unit=localserver-backup.service
+
+[Install]
+WantedBy=timers.target

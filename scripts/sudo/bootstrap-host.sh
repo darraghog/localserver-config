@@ -75,18 +75,27 @@ setup_systemd() {
   local unit_dst="${HOME}/.config/systemd/user"
   local f unit enabled=()
 
-  log "Installing systemd user units (localserver-*.service)..."
+  log "Installing systemd user units (localserver-*.service, localserver-*.timer)..."
   mkdir -p "$unit_dst"
 
   shopt -s nullglob
-  for f in "$unit_src"/localserver-*.service; do
+  for f in "$unit_src"/localserver-*.service "$unit_src"/localserver-*.timer; do
     unit=$(basename "$f")
     sed \
       -e "s|__REPO_ROOT__|${REPO_ROOT}|g" \
       -e "s|__HOME__|${HOME}|g" \
       "$f" > "$unit_dst/$unit"
-    enabled+=("$unit")
     log "  Installed $unit"
+
+    # Enable the timer, not the service, when a unit is timer-driven. A timer-driven service
+    # has no [Install] section on purpose — enabling it would bind it to default.target and
+    # run the job once on every boot, which for a backup means a full dump-and-upload cycle
+    # each time the host restarts.
+    if [[ "$unit" == *.service && -f "$unit_src/${unit%.service}.timer" ]]; then
+      log "    (driven by ${unit%.service}.timer — not enabling the service itself)"
+      continue
+    fi
+    enabled+=("$unit")
   done
   shopt -u nullglob
 
