@@ -2,7 +2,7 @@ services:
   app:
     build: .
     ports:
-      - "127.0.0.1:8091:8091"
+      - "${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}:8091:8091"
     # Mount templates from the host so edits show without rebuilding the image (recreate once if you add this later).
     volumes:
       - ./templates:/app/templates:ro

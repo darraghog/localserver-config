@@ -46,6 +46,7 @@ if [[ $# -lt 1 ]]; then
   exit 1
 fi
 
+require_conformant_model || exit 1
 install_compose
 verify_podman
 

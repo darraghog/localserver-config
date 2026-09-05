@@ -1,6 +1,8 @@
-# Install dnsmasq Locally on darragh-pc
+# Install dnsmasq Locally on a WSL Deployment Host
 
-Native dnsmasq (not container) so it listens on 192.168.86.237:53 and is reachable from LAN. Use this when darragh-pc runs WSL on Windows—containers can't expose UDP 53 via Windows port forwarding.
+Native dnsmasq (not container) so it listens on the host's LAN IP on port 53 and is reachable from the LAN. Use this when the deployment host runs Podman inside WSL on Windows—containers can't expose UDP 53 via Windows port forwarding.
+
+Throughout, `<hostname>` is the server's LAN hostname and `192.168.86.50` stands in for its LAN IP; substitute your own.
 
 ---
 
@@ -17,14 +19,14 @@ podman compose down
 
 ## 2. Disable systemd-resolved stub (free port 53)
 
-systemd-resolved uses 127.0.0.53:53. We'll configure dnsmasq to listen on 192.168.86.237 only to avoid conflict.
+systemd-resolved uses 127.0.0.53:53. We'll configure dnsmasq to listen on 192.168.86.50 only to avoid conflict.
 
 ```bash
 # Ensure resolv.conf isn't overwritten by resolved (optional, if you use Tailscale)
 # We'll configure dnsmasq to not conflict
 ```
 
-Actually: systemd-resolved binds 127.0.0.53. Binding dnsmasq to 192.168.86.237 only should work without disabling resolved.
+Actually: systemd-resolved binds 127.0.0.53. Binding dnsmasq to 192.168.86.50 only should work without disabling resolved.
 
 ---
 
@@ -43,16 +45,16 @@ sudo apt-get install -y dnsmasq
 sudo tee /etc/dnsmasq.d/thelearningcto.com.conf << 'EOF'
 # Local DNS for thelearningcto.com - split horizon with Route53
 # Listen on LAN IP only (avoid conflict with systemd-resolved 127.0.0.53)
-listen-address=192.168.86.237
+listen-address=192.168.86.50
 bind-interfaces
 port=53
 
 # Local overrides
-address=/darragh-pc.thelearningcto.com/192.168.86.237
-address=/n8n.thelearningcto.com/192.168.86.237
-address=/thelearningcto.com/192.168.86.237
-address=/www.thelearningcto.com/192.168.86.237
-address=/darragh-pc/192.168.86.237
+address=/<hostname>.thelearningcto.com/192.168.86.50
+address=/n8n.thelearningcto.com/192.168.86.50
+address=/thelearningcto.com/192.168.86.50
+address=/www.thelearningcto.com/192.168.86.50
+address=/<hostname>/192.168.86.50
 
 # Upstream
 server=1.1.1.1
@@ -62,7 +64,7 @@ no-poll
 EOF
 ```
 
-Adjust `192.168.86.237` if your LAN IP differs.
+Adjust `192.168.86.50` if your LAN IP differs.
 
 ---
 
@@ -95,7 +97,7 @@ sudo bash -c 'echo -e "[network]\ngenerateResolvConf = false" >> /etc/wsl.conf'
 
 # Set dnsmasq as primary resolver (will start in step 7)
 sudo tee /etc/resolv.conf << 'EOF'
-nameserver 192.168.86.237
+nameserver 192.168.86.50
 nameserver 1.1.1.1
 EOF
 ```
@@ -116,26 +118,26 @@ sudo systemctl enable dnsmasq
 ## 8. Verify
 
 ```bash
-# From darragh-pc
-dig @192.168.86.237 darragh-pc.thelearningcto.com +short
-# Expected: 192.168.86.237
+# From the server
+dig @192.168.86.50 <hostname>.thelearningcto.com +short
+# Expected: 192.168.86.50
 
-# From another LAN device (after setting DNS to 192.168.86.237)
-dig @192.168.86.237 darragh-pc.thelearningcto.com +short
+# From another LAN device (after setting DNS to 192.168.86.50)
+dig @192.168.86.50 <hostname>.thelearningcto.com +short
 ```
 
 ---
 
 ## 9. Configure your network
 
-Point LAN devices to use 192.168.86.237 as DNS:
+Point LAN devices to use 192.168.86.50 as DNS:
 
-- **Google Home / Nest Wifi:** Advanced networking → DNS → Custom → `192.168.86.237`
-- **FIOS router:** DHCP settings → DNS server → `192.168.86.237`
-- **Per-device:** Set DNS to `192.168.86.237` in network settings
+- **Google Home / Nest Wifi:** Advanced networking → DNS → Custom → `192.168.86.50`
+- **FIOS router:** DHCP settings → DNS server → `192.168.86.50`
+- **Per-device:** Set DNS to `192.168.86.50` in network settings
 
 ---
 
 ## WSL on Windows note
 
-If the Podman host is WSL on Windows, the host's LAN IP (e.g. 192.168.1.10) may be on the Windows side. With **mirrored networking** (WSL 2.0+), WSL shares the host IP—dnsmasq binding to 192.168.86.237 should be reachable from the LAN. Without mirrored mode, you'd need the desktop to be native Linux for this to work from other devices. For same-machine (WSL) resolution, use `scripts/sudo/setup-wsl-hosts.sh` instead.
+If the Podman host is WSL on Windows, the host's LAN IP (e.g. 192.168.86.50) may be on the Windows side. With **mirrored networking** (WSL 2.0+), WSL shares the host IP—dnsmasq binding to 192.168.86.50 should be reachable from the LAN. Without mirrored mode, you'd need the desktop to be native Linux for this to work from other devices. For same-machine (WSL) resolution, use `scripts/sudo/setup-wsl-hosts.sh` instead.

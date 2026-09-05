@@ -1,0 +1,239 @@
+# Architecture metamodel for the beeblebox homelab estate.
+#
+# A right-sized subset of the TOGAF Content Metamodel: it borrows TOGAF's layering
+# (Motivation -> Business -> Application -> Data -> Technology) and entity vocabulary,
+# but omits what an estate this size has no honest use for — Contracts, Work Packages,
+# Value Streams, Organisation Units, Measures. Including them would produce impressive
+# empty tables, which is worse than not modelling them at all.
+#
+# Three entity types are declared extensions rather than TOGAF core. TOGAF explicitly
+# permits metamodel extension; each is justified in its `rationale`.
+#
+# This file defines the SCHEMA. Instances live in model.yaml.
+# Conformance is enforced by scripts/arch-validate.py — run it before committing changes.
+
+meta:
+  name: beeblebox-architecture-metamodel
+  version: 1.0.0
+  basis: TOGAF Content Metamodel (subset + 3 extensions)
+  maintained_by: darraghog
+  purpose: >
+    Describe the homelab estate at a level a non-technical reader can follow, while
+    preserving enough traceability that a technical reviewer can verify each claim
+    down to a running container.
+
+# Every entity carries these; type-specific attributes are listed per entity below.
+common_attributes:
+  id:            { type: string, required: true, note: "stable slug; referenced by relationships" }
+  name:          { type: string, required: true }
+  description:   { type: string, required: true, note: "one line, technical register" }
+  plain_language:
+    type: string
+    required: false
+    note: >
+      How this is explained to a non-technical stakeholder. Required on Motivation and
+      Business layer entities — the accessible view is generated from these fields rather
+      than improvised at presentation time, so the plain-English story cannot drift from
+      the technical model.
+
+layers:
+
+  # ---------------------------------------------------------------- Motivation
+  # TOGAF Preliminary Phase / Phase A. Small, but it is what makes the rest
+  # defensible: it records WHY choices were made, so a reviewer can check whether the
+  # technology actually follows from the stated intent.
+  motivation:
+    Driver:
+      togaf: core
+      description: An external or personal condition that motivates the estate to exist.
+      attributes:
+        priority: { type: enum, values: [primary, secondary] }
+    Principle:
+      togaf: core
+      description: A durable rule that constrains design decisions across the estate.
+      attributes:
+        statement:   { type: string, required: true }
+        rationale:   { type: string, required: true }
+        implication: { type: string, required: true, note: "what it forbids or forces" }
+
+  # ------------------------------------------------------------------ Business
+  # Phase B. Deliberately technology-free: these entities should still read true if
+  # every product below them were replaced.
+  business:
+    Capability:
+      togaf: core
+      description: A stable ability the estate possesses, independent of how it is implemented.
+      attributes:
+        maturity: { type: enum, values: [initial, managed, defined] }
+    BusinessService:
+      togaf: core
+      description: Value delivered to an identifiable consumer.
+      attributes:
+        criticality: { type: enum, values: [high, medium, low],
+                       note: "consequence of loss, not effort to restore" }
+    Actor:
+      togaf: core
+      description: A person or automated consumer that interacts with the estate.
+      attributes:
+        kind: { type: enum, values: [human, machine] }
+
+  # --------------------------------------------------------------- Application
+  # Phase C (application). Component = the deployable thing; Service = the interface
+  # it offers. Keeping them separate is what allows one component to be exposed at two
+  # different tiers, which several components here genuinely are.
+  application:
+    ApplicationComponent:
+      togaf: core
+      description: A deployable software unit, in practice one Podman compose stack.
+      attributes:
+        stack:        { type: string, note: "compose/<name> in this repo" }
+        image:        { type: string }
+        lifecycle:    { type: enum, values: [production, demonstration, experimental] }
+        source:       { type: string, note: "Where the built source comes from. Required when
+                                             image is 'locally built' - see
+                                             every-vendored-component-names-its-source. Either the
+                                             dependent project's own repo (vendored in by
+                                             compose/<name>/sync-*.sh), or 'in-repo' when the app
+                                             lives here. This attribute IS the platform/dependent
+                                             boundary: it is recorded as data so the prose docs
+                                             need not narrate it" }
+        routing:      { type: enum, values: [strip, no-strip, not-path-mounted],
+                        note: "How the tls-proxy path router mounts this component. 'strip' uses
+                               handle_path; 'no-strip' uses handle. Records the verdict of the
+                               path-stripping criterion in docs/NETWORK-CONFIG.md so the doc does
+                               not have to enumerate services" }
+    ApplicationService:
+      togaf: core
+      description: A network-reachable interface provided by a component.
+      attributes:
+        endpoint:  { type: string }
+        protocol:  { type: enum, values: [https, http, mcp] }
+        auth:      { type: enum, values: [none, basic, oauth, edge-identity, network-identity] }
+
+  # ---------------------------------------------------------------------- Data
+  # Phase C (data). The split matters for backup reasoning: DataEntity carries the
+  # classification that drives protection, DataStore is what actually gets dumped.
+  data:
+    DataEntity:
+      togaf: core
+      description: A logical grouping of information the estate is responsible for.
+      attributes:
+        classification: { type: enum, values: [public, internal, confidential, secret] }
+        recoverability: { type: enum, values: [recoverable, irreplaceable],
+                          note: "irreplaceable = cannot be regenerated from any other source" }
+    DataStore:
+      togaf: core
+      note: TOGAF "Physical Data Component"
+      description: Where a data entity is physically persisted.
+      attributes:
+        technology: { type: string }
+        backup_method: { type: enum, values: [logical-dump, file-copy, none],
+                         note: "logical-dump for live databases; a file copy of a running
+                                database directory is not a backup" }
+
+  # ---------------------------------------------------------------- Technology
+  # Phase D.
+  technology:
+    Node:
+      togaf: core
+      description: A compute host.
+      attributes:
+        location: { type: enum, values: [home, cloud, mobile] }
+        spec:     { type: string }
+    TechnologyService:
+      togaf: core
+      description: A platform capability consumed by application components.
+      attributes:
+        product: { type: string }
+    Network:
+      togaf: core
+      description: A connectivity domain with its own trust characteristics.
+      attributes:
+        trust: { type: enum, values: [untrusted, authenticated, trusted] }
+    ExternalProvider:
+      togaf: core
+      note: TOGAF treats these as Technology Components sourced externally
+      description: A third-party service the estate depends on and does not control.
+      attributes:
+        function:    { type: string }
+        cost:        { type: string }
+        lock_in:     { type: enum, values: [low, medium, high],
+                       note: "effort to substitute, not contractual lock-in" }
+
+  # ---------------------------------------------------------------- Extensions
+  extensions:
+    ExposureTier:
+      togaf: extension
+      rationale: >
+        TOGAF has no first-class concept for reachability zoning, but in this estate it is
+        the single most consequential design decision and the one most often got wrong.
+        Every service sits in exactly one tier per endpoint, and the tier is what a
+        non-technical reader most needs to understand: who can reach this at all.
+      description: A reachability zone determining who can address a service.
+      attributes:
+        reachable_from: { type: string, required: true }
+        enforced_by:    { type: string, required: true }
+    Control:
+      togaf: extension
+      rationale: >
+        Modelled separately rather than as prose so that each control can be traced to the
+        principle it implements and the asset it protects. An unattached control is a
+        finding: it means either the control or the principle is not real.
+      description: A safeguard protecting a service, store or node.
+      attributes:
+        type: { type: enum, values: [preventive, detective, recovery] }
+    Gap:
+      togaf: extension
+      rationale: >
+        TOGAF performs gap analysis between baseline and target architectures. There is no
+        formal target architecture here, so gaps are recorded directly against the baseline.
+        Modelling them keeps the architecture honest — an architecture description with no
+        gaps is a marketing document.
+      description: A known weakness, accepted or scheduled.
+      attributes:
+        severity: { type: enum, values: [high, medium, low] }
+        status:   { type: enum, values: [accepted, planned, mitigated] }
+
+# Directed relationships. `from` and `to` list the entity types each end may take.
+# The validator rejects any relationship whose endpoints fall outside these.
+relationships:
+  - { name: motivates,    from: [Driver],               to: [Principle] }
+  - { name: governs,      from: [Principle],            to: [ApplicationComponent, ExposureTier, Control, TechnologyService, ExternalProvider, DataStore] }
+  - { name: realised_by,  from: [Capability],           to: [ApplicationComponent, ExternalProvider] }
+  - { name: supports,     from: [BusinessService],      to: [Capability] }
+  - { name: consumed_by,  from: [BusinessService],      to: [Actor] }
+  - { name: provides,     from: [ApplicationComponent], to: [ApplicationService] }
+  - { name: delivers,     from: [ApplicationService],   to: [BusinessService] }
+  - { name: manages,      from: [ApplicationComponent], to: [DataEntity] }
+  - { name: persisted_in, from: [DataEntity],           to: [DataStore] }
+  - { name: deployed_on,  from: [ApplicationComponent], to: [Node] }
+  - { name: depends_on,   from: [ApplicationComponent, TechnologyService], to: [ExternalProvider, TechnologyService, ApplicationComponent] }
+  - { name: exposed_via,  from: [ApplicationService],   to: [ExposureTier] }
+  - { name: enforced_by,  from: [ExposureTier],         to: [TechnologyService, ExternalProvider] }
+  - { name: trust_zone,   from: [ExposureTier],         to: [Network],
+      note: "which trust zone this tier is addressable from; distinct from the tier's own reachable_from prose attribute" }
+  - { name: protects,     from: [Control],              to: [ApplicationService, DataStore, Node, DataEntity] }
+  - { name: implements,   from: [Control],              to: [Principle] }
+  - { name: connects,     from: [Node],                 to: [Network] }
+  - { name: affects,      from: [Gap],                  to: [ApplicationComponent, DataStore, Node, BusinessService, ExternalProvider] }
+
+# Rules the validator enforces beyond referential integrity. These encode the modelling
+# discipline: without them the model degrades into an unconnected inventory.
+invariants:
+  - id: every-service-has-a-tier
+    rule: Every ApplicationService must have exactly one exposed_via relationship.
+    why: An endpoint whose reachability nobody stated is the commonest source of accidental exposure.
+  - id: every-capability-is-realised
+    rule: Every Capability must have at least one realised_by relationship.
+    why: A capability nothing implements is an aspiration, and should be a Gap instead.
+  - id: irreplaceable-data-is-backed-up
+    rule: Every DataEntity marked irreplaceable must reach a DataStore whose backup_method is not "none".
+    why: This is the invariant whose violation destroys the estate. It is checked, not assumed.
+  - id: no-orphan-controls
+    rule: Every Control must both protect something and implement a Principle.
+    why: A control tied to no principle is unexplained; a principle with no control is unenforced.
+  - id: every-vendored-component-names-its-source
+    rule: Every ApplicationComponent whose image is "locally built" must declare a source.
+    why: A component this repo builds is owned by some other project. Naming that repo is what
+         keeps this platform's docs neutral to its dependents - the dependency is recorded as
+         data here instead of being narrated in prose that goes stale.

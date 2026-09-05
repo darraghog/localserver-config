@@ -29,8 +29,8 @@ Configuration for exposing containerized HTTPS services from your desktop (WSL) 
                     │   │   (WSL)      │         │   (WSL)      │◄─── SERVER  │
                     │   └──────┬───────┘         └──────┬───────┘             │
                     │          │                        │                     │
-                    │          │  hosts: darragh-pc     │                     │
-                    │          │  → 192.168.86.237       │                     │
+                    │          │  hosts: <hostname>     │                     │
+                    │          │  → 192.168.86.50       │                     │
                     │          └────────────────────────┘                     │
                     │                     │                                   │
                     └─────────────────────┼───────────────────────────────────┘
@@ -68,8 +68,8 @@ This keeps **no inbound ports** to your home network. Desktop makes outbound con
 
 ### Local access (unchanged)
 
-- Hosts: `192.168.86.237 darragh-pc` (or `thelearningcto.com` if you prefer).
-- Use `https://darragh-pc:8443` or `https://thelearningcto.com:8443` locally.
+- Hosts: `192.168.86.50 <hostname>` (or `thelearningcto.com` if you prefer).
+- Use `https://<hostname>:8443` or `https://thelearningcto.com:8443` locally.
 - Certificates will be valid (Let's Encrypt) — no CA trust needed on clients.
 
 ### Remote access
@@ -109,7 +109,7 @@ Tailscale creates a mesh VPN. Each device gets a Tailscale IP; no port forwardin
 
 You can use `thelearningcto.com` with Let's Encrypt for local + Tailscale for remote:
 
-- Local: `https://darragh-pc:8443` or `https://thelearningcto.com:8443` (hosts + Let’s Encrypt).
+- Local: `https://<hostname>:8443` or `https://thelearningcto.com:8443` (hosts + Let’s Encrypt).
 - Remote: `https://desktop.your-tailnet.ts.net:8443` or Tailscale IP.
 
 ---
@@ -142,7 +142,7 @@ tailscale ip -4
 # e.g. 100.101.102.103
 
 tailscale status
-# Shows MagicDNS name, e.g. darragh-pc.tail12345.ts.net
+# Shows MagicDNS name, e.g. <hostname>.tail12345.ts.net
 ```
 
 #### 4. Remote access URLs
@@ -151,8 +151,8 @@ From any device with Tailscale installed:
 
 | Service     | URL (replace with your Tailscale name or IP)     |
 |------------|---------------------------------------------------|
-| hello-world | `https://darragh-pc.tail12345.ts.net:8443` or `https://100.x.x.x:8443` |
-| n8n        | `https://darragh-pc.tail12345.ts.net:8444` or `https://100.x.x.x:8444` |
+| hello-world | `https://<hostname>.tail12345.ts.net:8443` or `https://100.x.x.x:8443` |
+| n8n        | `https://<hostname>.tail12345.ts.net:8444` or `https://100.x.x.x:8444` |
 
 #### 5. Auto-start (optional)
 
@@ -180,17 +180,17 @@ Otherwise omit; direct access to 8443/8444 is enough for your services.
 
 ### Tailscale overwriting resolv.conf
 
-Tailscale injects its MagicDNS (100.100.100.100) into `/etc/resolv.conf`, which overwrites your local DNS (e.g. dnsmasq at 192.168.86.237). To keep your own DNS:
+Tailscale injects its MagicDNS (100.100.100.100) into `/etc/resolv.conf`, which overwrites your local DNS (e.g. dnsmasq at 192.168.86.50). To keep your own DNS:
 
 ```bash
 sudo tailscale up --accept-dns=false
 ```
 
-This disables Tailscale's DNS management. Your `resolv.conf` stays under your control. Configure it to use 192.168.86.237 (local dnsmasq) or 1.1.1.1 / 8.8.8.8 (Route53 via public resolvers).
+This disables Tailscale's DNS management. Your `resolv.conf` stays under your control. Configure it to use 192.168.86.50 (local dnsmasq) or 1.1.1.1 / 8.8.8.8 (Route53 via public resolvers).
 
 **Important:** If dnsmasq is running, stop it before editing resolv.conf: `sudo systemctl stop dnsmasq`. Update resolv.conf, then start it again: `sudo systemctl start dnsmasq`. This avoids conflicts while resolv.conf is being changed.
 
-**Trade-off:** You lose Tailscale MagicDNS (e.g. `darragh-pc.tailnet.ts.net` won't resolve). Use the Tailscale IP (100.x.x.x) directly for remote access instead.
+**Trade-off:** You lose Tailscale MagicDNS (e.g. `<hostname>.tailnet.ts.net` won't resolve). Use the Tailscale IP (100.x.x.x) directly for remote access instead.
 
 ---
 
@@ -202,34 +202,29 @@ On beeblebox, most Tailscale URLs use **path names instead of a port per service
 
 ### Tailnet-only path router (`:8090`)
 
-A loopback-only Caddy site (`:8090` in `compose/tls-proxy/Caddyfile`) does path-based dispatch for tic-tac-toe, claude-mock-test, hello-world, cockpit, and the weather GUI. A single `tailscale serve` mount exposes that whole router tailnet-only:
+A loopback-only Caddy site (`:8090` in `compose/tls-proxy/Caddyfile`) does path-based dispatch for
+every component whose model entry says `routing: strip` or `no-strip`. A single `tailscale serve`
+mount exposes that whole router tailnet-only:
 
 ```bash
-ssh beeblebox tailscale serve --bg --https=8090 http://127.0.0.1:8090
+ssh <server> tailscale serve --bg --https=8090 http://127.0.0.1:8090
 ```
 
-```
-https://beeblebox.taile98462.ts.net:8090/tictactoe
-https://beeblebox.taile98462.ts.net:8090/claudemock
-https://beeblebox.taile98462.ts.net:8090/helloworld
-https://beeblebox.taile98462.ts.net:8090/cockpit
-https://beeblebox.taile98462.ts.net:8090/weather
-```
-
-An index page listing these lives at `https://beeblebox.taile98462.ts.net:8090/`
+**Which services are mounted, and at which paths, is not listed here** — it is data in
+[`architecture/model.yaml`](../architecture/model.yaml) (the `as-*` application services and their
+endpoints), rendered by `architecture/overview.html`. A live index page is served at the router root
 (`compose/tls-proxy/router-static/index.html`) — add new mounts there too.
 
-Per-service Caddy directive choice:
+**Which directive a service gets** is decided by the criterion below and recorded per component
+as `routing: strip | no-strip | not-path-mounted` in
+[`architecture/model.yaml`](../architecture/model.yaml) — so this document states the rule and the
+model holds the verdicts. `strip` means `handle_path /<name>/*`, `no-strip` means `handle /<name>/*`.
 
-| Service | Directive | Why |
-|---|---|---|
-| tictactoe | `handle_path /tictactoe/*` (strip) | Its frontend derives the API base from `location.pathname` (see `compose/tic-tac-toe/templates/index.html`'s `BASE` constant), so it doesn't care about the stripped prefix |
-| helloworld | `handle_path /helloworld/*` (strip) | Serves nginx's stock default page — no root-absolute asset paths to break |
-| claudemock | `handle_path /claudemock/*` (strip) | Static nginx bundle (`compose/claude-mock-test`); every asset reference is relative and the app makes no HTTP calls at all — all state is in `localStorage` |
-| weather | `handle_path /weather/*` (strip) | Same `BASE` pattern as tictactoe (`compose/weather-mcp/templates/index.html`). Tailnet-only on purpose: the GUI and its `/api/*` routes are unauthenticated — see "Why only part of the app is published" below. Shares a path name with the public `:443/weather` funnel mount but not a port: `:443/weather` is MCP-only, `:8090/weather` is the GUI |
-| cockpit | `handle /cockpit/*` (no strip) | Cockpit's own asset scheme already uses `/cockpit/$checksum/...` as an internal convention — stripping breaks it. Also requires `UrlRoot = /cockpit` in `/etc/cockpit/cockpit.conf` (set by `scripts/sudo/setup-cockpit.sh`) |
+Two verdicts worth knowing the reason for, because they are the shapes you will meet again:
+cockpit is `no-strip` (its asset scheme already uses `/cockpit/$checksum/...` internally, so
+stripping breaks it — it also needs `UrlRoot = /cockpit` in `/etc/cockpit/cockpit.conf`, set by
+`scripts/sudo/setup-cockpit.sh`), and litellm is `not-path-mounted` at all — see its own section below.
 
-litellm is deliberately **not** in this router — see its own section below.
 
 **Path-stripping footgun:** `handle_path` (and the old Funnel-era `tailscale serve --set-path`) strips the mount prefix before forwarding to the backend — a request to `/tictactoe/api/reset` arrives at the backend as `/api/reset`. That's fine for backends that don't need to know their own mount prefix, but a real footgun for ones that *do*: n8n's MCP webhook was once path-mounted this way and silently broke, because the stripped path no longer matched the webhook's registered ID (see n8n section below), and litellm's admin UI hits the same problem in a different way (see below). **Before path-mounting a new service, check whether its frontend/backend makes any absolute-root-path requests (assets *or* API calls) or otherwise depends on seeing its own mount prefix** — if so, either fix the app (preferred, see the tictactoe `BASE` pattern) or give it its own dedicated root mount/port instead.
 
@@ -336,7 +331,7 @@ Run WireGuard on the desktop. Remote clients connect to a single UDP port (e.g. 
 1. Install WireGuard on desktop.
 2. Forward UDP 51820 on Verizon router → desktop.
 3. Configure peers (laptop, phone).
-4. Remote users connect to VPN, then use `https://192.168.86.237:8443` or `https://darragh-pc:8443` (via hosts).
+4. Remote users connect to VPN, then use `https://192.168.86.50:8443` or `https://<hostname>:8443` (via hosts).
 
 ### Pros
 
@@ -367,7 +362,7 @@ Use only if you specifically need public, unauthenticated access and understand 
 
 ### Today (self-signed)
 
-- SANs: `darragh-pc`, `localhost`, `127.0.0.1`, `192.168.86.237`.
+- SANs: `<hostname>`, `localhost`, `127.0.0.1`, and the server's LAN IP.
 - Clients must import `certs/ca.pem` (see [tls.md](tls.md)).
 
 ### With the domain (recommended)
@@ -400,20 +395,22 @@ Or use Caddy’s `tls` directive with a Route53 DNS challenge module if availabl
 
 ---
 
-## Troubleshooting: Laptop Cannot Reach darragh-pc
+## Troubleshooting: A Client Cannot Reach the WSL Server
+
+Example addresses — substitute your own:
 
 | Host | IP |
 |------|-----|
-| darragh-pc (desktop) | 192.168.86.237 |
-| darragh-laptop | 192.168.86.236 |
+| `<hostname>` — WSL server | 192.168.86.50 |
+| Client laptop | 192.168.86.51 |
 
-**From darragh-laptop**, run:
+**From the client**, run:
 
 ```bash
-./scripts/check-connectivity.sh 192.168.86.237
+./scripts/check-connectivity.sh 192.168.86.50
 ```
 
-**From darragh-pc**, verify:
+**From the server**, verify:
 
 ```bash
 # Ports listening?
@@ -422,7 +419,7 @@ Or use Caddy’s `tls` directive with a Route53 DNS challenge module if availabl
 # Network & IPs
 ip -br addr
 
-# If ping fails from laptop: Windows Firewall may block ICMP
+# If ping fails from the client: Windows Firewall may block ICMP
 # In PowerShell (Admin): New-NetFirewallRule -DisplayName "ICMP" -Protocol ICMPv4 -IcmpType 8 -Action Allow
 ```
 
@@ -444,7 +441,7 @@ New-NetFirewallRule -DisplayName "<service> <port>" -Direction Inbound -Protocol
 netsh interface portproxy add v4tov6 listenport=<port> listenaddress=0.0.0.0 connectport=<port> connectaddress=::1
 ```
 
-These rules **do not survive a reboot**. On **darragh-pc**, use [scripts/setup-windows-podman-lan-ports.ps1](../scripts/setup-windows-podman-lan-ports.ps1) (run as Administrator). It **reads listener ports** from `compose/tls-proxy/Caddyfile` (any line like `:8443 {` or `host:8443 {`) and merges [compose/windows-lan-extra-ports.txt](../compose/windows-lan-extra-ports.txt) for host-published ports that are not Caddy front doors (for example plain `8080` from hello-world). Re-run after editing Caddy or extras, or schedule **At startup** in Task Scheduler with **Run with highest privileges** (see script comment block). A small state file under `%LOCALAPPDATA%\localserver-config\` drops **removed** ports from `netsh` portproxy on the next run.
+These rules **do not survive a reboot**. On the **WSL server host**, use [scripts/setup-windows-podman-lan-ports.ps1](../scripts/setup-windows-podman-lan-ports.ps1) (run as Administrator). It **reads listener ports** from `compose/tls-proxy/Caddyfile` (any line like `:8443 {` or `host:8443 {`) and merges [compose/windows-lan-extra-ports.txt](../compose/windows-lan-extra-ports.txt) for host-published ports that are not Caddy front doors (for example plain `8080` from hello-world). Re-run after editing Caddy or extras, or schedule **At startup** in Task Scheduler with **Run with highest privileges** (see script comment block). A small state file under `%LOCALAPPDATA%\localserver-config\` drops **removed** ports from `netsh` portproxy on the next run.
 
 **Ports that commonly need this in this stack** (adjust names to taste):
 
@@ -497,18 +494,18 @@ Symptom: `Test-NetConnection -ComputerName <LAN-IP> -Port <port>` shows `PingSuc
 
 | Device | Add to hosts |
 |--------|--------------|
-| Desktop (Windows) | `127.0.0.1 darragh-pc darragh-pc.thelearningcto.com thelearningcto.com` |
-| Desktop (WSL) | Add your names to `/etc/hosts` — use `sudo ./scripts/sudo/setup-wsl-hosts.sh` or set `LOCALSERVER_HOSTS_ENTRY` |
+| Server host (Windows side) | `127.0.0.1 <hostname> <hostname>.thelearningcto.com thelearningcto.com` |
+| Server host (WSL) | Add your names to `/etc/hosts` — use `sudo ./scripts/sudo/setup-wsl-hosts.sh` or set `LOCALSERVER_HOSTS_ENTRY` |
 | Laptop / other WSL | Point at the server LAN IP — `sudo ./scripts/sudo/setup-wsl-hosts.sh <server-ip>` or `LOCALSERVER_HOSTS_ENTRY` |
 | Other LAN devices | Server IP + hostnames your apps use |
 
-Use the desktop’s **actual** LAN IP (e.g. DHCP reservation at `192.168.86.237`).
+Use the server’s **actual** LAN IP (e.g. DHCP reservation at `192.168.86.50`).
 
 ---
 
 ## DHCP Reservation (Recommended)
 
-On the Google Home app (or router) set a static DHCP reservation for the desktop MAC → `192.168.86.237` so the IP is stable.
+On the Google Home app (or router) set a static DHCP reservation for the server's MAC → `192.168.86.50` so the IP is stable.
 
 ---
 
@@ -529,7 +526,7 @@ On the Google Home app (or router) set a static DHCP reservation for the desktop
 | Access | URL example | Mechanism |
 |--------|-------------|-----------|
 | Local (same machine) | `https://127.0.0.1:8443` | Caddy in WSL |
-| Local (LAN) | `https://darragh-pc:8443` or `https://192.168.86.237:8443` | Hosts + Caddy |
+| Local (LAN) | `https://<hostname>:8443` or `https://192.168.86.50:8443` | Hosts + Caddy |
 | Remote | `https://n8n.thelearningcto.com` | Cloudflare Tunnel → Caddy |
 
 ---
@@ -543,149 +540,89 @@ On the Google Home app (or router) set a static DHCP reservation for the desktop
 - [ ] Optional: Cloudflare Access or Tailscale ACLs for access control
 - [ ] Firewall: only allow 8443/8444 from LAN if not using tunnel for local-only
 
-## weather-mcp: public :443 path mounts
+## Publishing an application: where the per-service notes live
 
-The weather MCP server (`compose/weather-mcp`, source vendored from
-`~/dev/claude/weather`) is published on the existing public Funnel. Three mounts,
-all additive — n8n's root entry is untouched:
+The platform provides the exposure mechanisms above; **what each application does with them is
+recorded with that application**, not here — so this document stays true no matter which projects
+the estate happens to host. Who is on which mechanism is data, in
+[`architecture/model.yaml`](../architecture/model.yaml) (rendered by `architecture/overview.html`).
+
+| Service | Deployment notes |
+|---|---|
+| weather-mcp | [`compose/weather-mcp/README.md`](../compose/weather-mcp/README.md) |
+| wordpress | [`compose/wordpress/README.md`](../compose/wordpress/README.md) |
+
+Two platform capabilities those write-ups lean on, documented here because they are reusable:
+
+- **OAuth metadata alongside a Funnel path mount.** Funnel can mount `/.well-known/*` paths beside
+  a service's own path. An app that advertises OAuth metadata needs this: RFC 8414 fixes the
+  metadata at the *host root*, not under the app's mount prefix, so the well-known paths must be
+  published as siblings of the app rather than beneath it.
+- **Cloudflare Tunnel as an alternative to Funnel.** Funnel serves one hostname (the tailnet name);
+  a public site on its own domain needs Tunnel instead. Both terminate at the same local Caddy.
+
+## Container-to-container traffic (east-west)
+
+Under `p-open-east-west` ([architecture/model.yaml](../architecture/model.yaml)) any container
+may call an endpoint another container publishes on the host, with no shared network and no
+per-pair configuration. Consumers use:
 
 ```
-/weather                                          -> 127.0.0.1:8095   Caddy allowlist -> :8094
-/.well-known/oauth-authorization-server/weather   -> 127.0.0.1:8094/.well-known/oauth-authorization-server
-/.well-known/oauth-protected-resource/weather/mcp -> 127.0.0.1:8094/.well-known/oauth-protected-resource/mcp
+http://host.containers.internal:<backend-port>/
 ```
 
-**Why `:443` and not a dedicated port.** Same lesson as n8n's `:10000` failure
-above — a public MCP endpoint has to be on `:443` for Claude's connector
-infrastructure to reach it.
+Podman injects `host.containers.internal` into every container; `host.docker.internal` works
+too wherever a stack declares `extra_hosts: - "host.docker.internal:host-gateway"`.
 
-**Why the metadata gets its own mounts.** `--set-path` strips its prefix, so the
-container serves everything at `/` and only the advertised URLs carry `/weather`
-(all derived from `WEATHER_MCP_ISSUER_URL`). But RFC 8414 puts
-authorization-server metadata at the **host root**, which n8n owns — and n8n's
-SPA answers every unmatched path with `200 text/html`. That is worse than a 404:
-the client gets a success it cannot parse and has nothing to fall back from. So
-those URLs are claimed explicitly. Their proxy targets carry a path, which
-Tailscale re-applies when the stripped path is empty — verified on a scratch
-tailnet-only port before touching `:443`.
+**The host-side address is per-host**, held in `HOST_INTERNAL_IP` in `.env` and used by every
+stack's `ports:` entry and by the Caddyfile as `{env.HOST_INTERNAL_IP}`:
 
-**Why only part of the app is published.** The app's bearer/OAuth check wraps
-only its `/mcp` mount, so the Flask GUI and `/api/*` routes are unauthenticated,
-and `/api/city-coordinates` proxies to `nominatim.openstreetmap.org`, whose usage
-policy bans abusive IPs. The `:8095` Caddy site the funnel points at passes only
-MCP, the OAuth endpoints, `/login`, the well-known documents and `/health`. The
-GUI stays off the public leg: it is reachable on the LAN front door at `:8448` and
-on the tailnet at `:8090/weather` (the path router above), both of which require
-either the LAN or the VPN to reach.
+| Host | Networking | `HOST_INTERNAL_IP` | Why |
+|---|---|---|---|
+| beeblebox | native Linux, rootless podman 5.x + **pasta** | `127.0.0.1` | pasta does not forward to host loopback by default — see below |
+| WSL2 hosts | rootless podman 4.x + slirp4netns | `10.255.255.254` | WSL's own global address on `lo`: container-reachable, not LAN-routable |
 
-### Regression check
+Neither value is reachable from the home LAN or the tailnet, which is the point: publishing an
+endpoint makes it available to other containers **without** widening its exposure tier. A port
+left unpublished (litellm's Postgres, for example) stays private to its own stack.
 
-`tailscale funnel status`'s **text** output pads the mount column to the longest
-entry, so adding a long mount re-pads the `/` line and a byte-identical text diff
-is impossible. Use the JSON:
+### pasta and the host loopback (native Linux only)
+
+Out of the box, pasta does **not** forward container traffic to the host's loopback, so a
+service published on `127.0.0.1` is unreachable from a container:
+
+```
+$ podman exec n8n_n8n_1 wget -qO- http://host.containers.internal:4000/
+wget: can't connect to remote host (169.254.1.2): Connection refused
+```
+
+[`podman/containers.conf`](../podman/containers.conf) fixes this with
+`pasta_options = ["--map-host-loopback", "169.254.1.2"]`, which translates the address pasta
+already advertises as `host.containers.internal` to the host's loopback.
+`scripts/sudo/bootstrap-host.sh` installs it to `~/.config/containers/containers.conf`.
+
+Binding `0.0.0.0` would also work and needs no pasta option — but on beeblebox that publishes
+every internal endpoint on both `192.168.86.237` (LAN) and `100.97.127.79` (tailnet), which
+contradicts `p-tiered-exposure`. Don't do it.
+
+> **Changing this file does nothing until the rootless network namespace is recreated.** pasta
+> options are read when the namespace is created, which happens when the first container
+> starts. On a running estate every container must stop once:
+>
+> ```bash
+> podman stop --all --time 30
+> for s in $(grep -vE '^#|^$' compose/stack-order); do ./scripts/start-stack.sh "$s" up; done
+> ```
+
+Verify afterwards, from any container:
 
 ```bash
-ssh beeblebox 'tailscale funnel status --json' | jq -S \
-  '{root:       .Web["beeblebox.taile98462.ts.net:443"].Handlers["/"],
-    claudemock: .Web["beeblebox.taile98462.ts.net:443"].Handlers["/claudemock"],
-    funnel:     .AllowFunnel,
-    tcp:        .TCP}'
+podman exec n8n_n8n_1 wget -qO- http://host.containers.internal:4000/health/liveliness
+# "I'm alive!"
 ```
 
-This object must be identical before and after any funnel change.
+and confirm the endpoint is still *not* reachable from outside the host:
 
-> **`tailscale funnel reset` and `tailscale serve reset` are banned on beeblebox.**
-> They clear the entire ServeConfig, taking n8n's root, `/claudemock`, the `:8090`
-> router and litellm's `:8092` with them. To remove one mount:
-> `tailscale funnel --https=443 --set-path=/weather off`.
-
----
-
-## wordpress: public on thelearningcto.com via Cloudflare Tunnel
-
-**Added 2026-08-30**, migrating the blog off the free WordPress.com plan
-(`thelearningcto.wordpress.com`) onto beeblebox. This is the first service here published
-on a **custom domain**, and the first that does not use Tailscale Funnel.
-
-### Why Cloudflare Tunnel and not Funnel
-
-Funnel can only ever serve `beeblebox.taile98462.ts.net`. It has no mechanism for a custom
-domain, so it cannot host this blog at all. The remaining options were the two this document
-already weighed: a direct `:443` port-forward (listed above as "Option to Avoid" — inbound
-exposure of the home network, plus dynamic-IP fragility on Verizon FIOS) or an outbound-only
-tunnel. Cloudflare Tunnel keeps the "no inbound ports" property Funnel gave us.
-
-Everything already on Funnel — n8n at `:443` root, `/weather`, `/claudemock`, the `:8090`
-router, litellm's `:8092` — is untouched by this and stays on Funnel. The two systems run
-side by side. **Verify with the JSON regression check above after any tunnel work**; adding
-the WordPress tunnel left it identical.
-
-### Request path
-
+```bash
+(echo >/dev/tcp/192.168.86.237/4000) 2>/dev/null && echo REACHABLE || echo refused
 ```
-browser -> Cloudflare edge (TLS terminates here, Access gates /wp-admin)
-        -> cloudflared (outbound QUIC, no inbound port)
-        -> Caddy :8097  (loopback, plain HTTP, blocks /xmlrpc.php)
-        -> WordPress :8096 (loopback) -> MariaDB (compose network, no host port)
-```
-
-`cloudflared` runs as the **user** unit `localserver-cloudflared.service` (config in
-`cloudflared/config.yml`), matching this repo's rootless-podman + linger model — a tunnel
-dials out, so it needs neither root nor `cloudflared service install`.
-
-### Two traps this setup walks into, both already handled
-
-1. **HTTPS detection.** cloudflared and Caddy both speak plain HTTP to the container while
-   `WP_SITEURL` says `https://`. WordPress then decides the request was insecure and
-   redirect-loops against its own canonical URL. The `:8097` Caddy site therefore sets
-   `header_up X-Forwarded-Proto https` **hardcoded** — `{scheme}` would resolve to `http`
-   here and overwrite what Cloudflare sent. Same reasoning as the `:8092` litellm block.
-2. **Compose eats `$_SERVER`.** The wp-config additions live in
-   `compose/wordpress/config/config-extra.php`, mounted as a directory and pulled in by a
-   one-line `WORDPRESS_CONFIG_EXTRA=require ...`. Putting the PHP inline in `compose.yaml`
-   fails silently: Compose treats `$_SERVER` as a variable reference and blanks it. The
-   official image `eval()`s `WORDPRESS_CONFIG_EXTRA` at runtime rather than inlining it into
-   wp-config.php, so edits to that file take effect on redeploy without regenerating config.
-
-### Admin access: Cloudflare Access, not a second hostname
-
-`/wp-admin/*` and `/wp-login.php` are deliberately **not** blocked at Caddy. WordPress
-canonical-redirects every admin URL to `WP_SITEURL`, so serving admin on a different
-hostname (a tailnet port, say) makes the login form post back to the public URL and fail —
-the same category of problem as litellm's hardcoded root paths, but with redirects rather
-than assets. Admin is gated at the Cloudflare edge by Access instead (team
-`tight-sun-921f`). The LAN `:8449` site exists for break-glass checks only; it redirects to
-the public URL like everything else.
-
-### WP-CLI
-
-The official wordpress image ships no wp-cli. Use `./scripts/wp-cli.sh <subcommand>`, which
-runs the `wordpress:cli` image against the app container's volumes. It passes the DB env
-explicitly (wp-config falls back to `DB_HOST=mysql` otherwise, which reads as "database is
-down") and runs as the **uid owning the site files**: the apache image is Debian
-(`www-data` = 33) while the cli image is Alpine (`www-data` = 82), and the mismatch surfaces
-as a misleading `Error: No plugins installed`.
-
-### HTTPS enforcement lives at the edge, not at the origin
-
-`http://` → `https://` redirection is done by Cloudflare's **Always Use HTTPS** (SSL/TLS → Edge
-Certificates), and it **has to be**. The `:8097` site hardcodes `header_up X-Forwarded-Proto https`
-to prevent the redirect loop described above, so WordPress believes every request already arrived
-over TLS and will never issue an http→https redirect itself. Passing the edge's real
-`X-Forwarded-Proto` through instead would restore that ability and reintroduce the loop risk — the
-wrong trade.
-
-The confusing symptom if the toggle is off: `http://www.thelearningcto.com` redirects to https
-correctly while `http://thelearningcto.com` serves 200 in the clear and the browser says "Not
-secure". Those are two different mechanisms — the `www` redirect is WordPress canonicalising the
-*hostname* (which happens to target the https `WP_SITEURL`), not a scheme upgrade. Don't go hunting
-for a Caddy or WordPress bug; check the Cloudflare toggle.
-
-### Zone activation gotcha
-
-A Cloudflare zone in **`pending`** status serves its unproxied records (MX, TXT) but *not*
-its proxied ones. Since tunnel routes are proxied CNAMEs, the symptom is email working
-perfectly while the website NXDOMAINs — even though `cloudflared tunnel route dns` reported
-success and the records are visibly present in the dashboard. Check with the zone API
-(`status` field); the fix is Cloudflare re-verifying the nameservers, not anything on this
-host. The tunnel's own scoped token cannot trigger `activation_check`.

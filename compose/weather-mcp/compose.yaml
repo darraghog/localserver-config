@@ -16,7 +16,7 @@ services:
   app:
     build: .
     ports:
-      - "127.0.0.1:8094:8094"
+      - "${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}:8094:8094"
     volumes:
       # Registered OAuth clients + refresh tokens. A named volume, not a bind:
       # deploy-service.sh rsyncs with --delete, which would wipe a bind under the

@@ -1,6 +1,8 @@
 # Adding a new Podman service behind Caddy
 
-This repo uses **Caddy in `network_mode: host`** (`compose/tls-proxy`) so TLS terminates on the Linux host. Each site block listens on a **host TCP port** (for example `:8444`) and `reverse_proxy`s to a **backend** that is usually bound on **`127.0.0.1:<port>`** on the same host (other compose stacks publish ports to the host).
+This repo uses **Caddy in `network_mode: host`** (`compose/tls-proxy`) so TLS terminates on the Linux host. Each site block listens on a **host TCP port** (for example `:8444`) and `reverse_proxy`s to a **backend** bound on the **host-internal address**, written in the Caddyfile as `{env.HOST_INTERNAL_IP}` (Caddy has no shell-style `${VAR}` substitution) and passed into the Caddy container by `compose/tls-proxy/compose.yaml` (other compose stacks publish ports to the host).
+
+> **Publish on `${HOST_INTERNAL_IP}`, never a hardcoded address.** Under the `p-open-east-west` principle ([architecture/model.yaml](../architecture/model.yaml)), a published endpoint is reachable by every other container on the host with no shared-network setup. **The value is per-host** — `127.0.0.1` on beeblebox (native Linux + pasta `--map-host-loopback`), `10.255.255.254` on WSL2 — and neither is reachable from the home LAN or the tailnet, unlike `0.0.0.0`, which would publish to both. A port you do not publish stays private. See [NETWORK-CONFIG.md](NETWORK-CONFIG.md#container-to-container-traffic-east-west).
 
 Use this checklist so the service is reachable from **other containers on the same host** and from **other PCs on your home LAN** (including through **WSL2 + Podman on Windows** if that is your setup).
 
@@ -12,7 +14,7 @@ Use this checklist so the service is reachable from **other containers on the sa
 ./scripts/deploy-stack.sh myapp
 ```
 
-Then add a Caddy `:<https-port> { ... reverse_proxy 127.0.0.1:8090 }` block in `compose/tls-proxy/Caddyfile` and run `./scripts/deploy-stack.sh tls-proxy`.
+Then add a Caddy `:<https-port> { ... reverse_proxy {env.HOST_INTERNAL_IP}:8090 }` block in `compose/tls-proxy/Caddyfile` and run `./scripts/deploy-stack.sh tls-proxy`.
 
 - **Full ordered deploy** (everything in [compose/stack-order](../compose/stack-order)): `./scripts/deploy.sh`
 - **One or more stacks only**: `./scripts/deploy-stack.sh <name> [<name> ...]`
@@ -23,8 +25,8 @@ Then add a Caddy `:<https-port> { ... reverse_proxy 127.0.0.1:8090 }` block in `
 ## 1. Choose ports and names
 
 - **Backend port** — the port your app listens on inside its container (for example `3000`).
-- **Published host port** — map the container to the host with `ports: ["3000:3000"]` (or `"127.0.0.1:3000:3000"` if you only want loopback; for Caddy on the same host, `127.0.0.1` is enough and slightly tighter).
-- **HTTPS front door** — pick a **new, unused** host port for Caddy (for example `8455`). That is what browsers and other machines use as `https://darragh-pc:8455`.
+- **Published host port** — map the container to the host with `ports: ["${HOST_INTERNAL_IP}:3000:3000"]`. That reaches Caddy and every other container, and nothing outside the host. Use `"0.0.0.0:3000:3000"` only when you deliberately want the raw port on the LAN.
+- **HTTPS front door** — pick a **new, unused** host port for Caddy (for example `8455`). That is what browsers and other machines use as `https://<hostname>:8455`.
 
 Avoid colliding with existing stacks (see [README](../README.md) “Stacks” and [tests/check-ports.sh](../tests/check-ports.sh)).
 
@@ -33,14 +35,14 @@ Avoid colliding with existing stacks (see [README](../README.md) “Stacks” an
 ## 2. Add a Compose stack
 
 1. Create `compose/<service-name>/compose.yaml` (same layout as `compose/hello-world` or `compose/n8n`).
-2. Set `image`, `volumes`, `environment`, `restart`, and **`ports`** so the app is reachable on the host at `127.0.0.1:<backend-host-port>` (or `0.0.0.0:<port>` if you prefer).
-3. If the app must know its public URL (like n8n’s `N8N_EDITOR_BASE_URL`), set env vars to `https://<hostname>:<caddy-port>` using your LAN hostname (for example `darragh-pc`) or IP.
+2. Set `image`, `volumes`, `environment`, `restart`, and **`ports`** so the app is reachable at `${HOST_INTERNAL_IP}:<backend-host-port>`. Leave a port unpublished (a database, say) and it stays private to its own stack.
+3. If the app must know its public URL (like n8n’s `N8N_EDITOR_BASE_URL`), set env vars to `https://<hostname>:<caddy-port>` using your LAN hostname or IP.
 
 Bring it up once to verify:
 
 ```bash
 cd compose/<service-name> && podman-compose up -d
-curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:<backend-host-port>/
+curl -sS -o /dev/null -w "%{http_code}" "http://${HOST_INTERNAL_IP}:<backend-host-port>/"   # source ../../.env first
 ```
 
 ---
@@ -77,7 +79,7 @@ Edit [compose/tls-proxy/Caddyfile](../compose/tls-proxy/Caddyfile) and add a **n
 :8455 {
 	bind 0.0.0.0
 	tls /certs/server.pem /certs/server-key.pem
-	reverse_proxy 127.0.0.1:<backend-host-port>
+	reverse_proxy {env.HOST_INTERNAL_IP}:<backend-host-port>
 }
 ```
 
@@ -114,7 +116,7 @@ Every client (LAN PC, phone, browser on Windows next to WSL) must **trust `certs
 
 **Linux firewall** — if you use `ufw` on the server, allow the new **Caddy** TCP port (and the raw HTTP port only if you exposed it LAN-wide on `0.0.0.0`).
 
-**DNS / hosts** — other PCs need a name or IP that reaches the machine running Podman (for example `192.168.86.237 darragh-pc` in hosts, or your router DNS). See [docs/NETWORK-CONFIG.md](NETWORK-CONFIG.md).
+**DNS / hosts** — other PCs need a name or IP that reaches the machine running Podman (for example `192.168.86.50 <hostname>` in hosts, or your router DNS). See [docs/NETWORK-CONFIG.md](NETWORK-CONFIG.md).
 
 **Windows + WSL2 + Podman** — when listeners are only on IPv6 loopback from Windows’ point of view, run [scripts/setup-windows-podman-lan-ports.ps1](../scripts/setup-windows-podman-lan-ports.ps1) as Administrator after you change the Caddyfile (or rely on a scheduled task). That script reads **Caddy listener ports** from the Caddyfile and merges [compose/windows-lan-extra-ports.txt](../compose/windows-lan-extra-ports.txt) for ports that are **not** declared as `:PORT {` sites (for example plain **8080** for nginx).
 
@@ -124,25 +126,33 @@ Background: [WSL2 Podman / IPv6 localhost](NETWORK-CONFIG.md#wsl2-podman-ports-b
 
 ## 8. Reachability from **other Podman containers** on the same host
 
-`127.0.0.1` inside **container A** is **not** the host. To hit Caddy or a published port on the host:
+`127.0.0.1` inside **container A** is **not** the host — which is exactly why services publish on `${HOST_INTERNAL_IP}` rather than loopback. Once a service does, any container reaches it with **no network configuration at all**:
 
-1. **Prefer the host’s LAN IP or hostname** — for example `https://192.168.86.237:8455` or `https://darragh-pc:8455`, if the container can resolve `darragh-pc` (add `extra_hosts` if needed), and trust the CA or use tooling flags for dev.
-2. **Podman / Compose** — you can add:
-   - `extra_hosts: - "darragh-pc:host-gateway"`  
-     (same idea as n8n’s [compose/n8n/compose.yaml](../compose/n8n/compose.yaml) `host-gateway` pattern), then use `https://darragh-pc:<caddy-port>` from the app.
-3. **`host.containers.internal`** — on many Podman setups this resolves to the host; try `curl -k https://host.containers.internal:8455` from a throwaway container.
+```
+http://host.containers.internal:<backend-host-port>/
+```
 
-For **service-to-service without TLS** on a private user network, you can instead attach stacks to the same Podman network and call `http://other-service:port` by compose service name. That path bypasses Caddy; use it when you do not need the public HTTPS URL.
+Podman injects `host.containers.internal` into every container automatically, and it resolves to the host-internal address. `host.docker.internal` works too where a stack declares `extra_hosts: - "host.docker.internal:host-gateway"`.
+
+Use plain HTTP and the backend port directly. **Do not route east-west traffic through Caddy** — the `:844x` sites serve the private CA, so every consumer container would need `NODE_EXTRA_CA_CERTS` or an equivalent, and the cert's SANs do not cover container-visible hostnames. Caddy is for north-south traffic (browsers, external callers), not for one app calling another.
+
+Verify from any running container:
+
+```bash
+podman exec <some-container> wget -qO- http://host.containers.internal:<backend-host-port>/
+```
+
+**Authenticate the endpoint.** Under `p-open-east-west` every container can reach every published port, so network position is not authentication — see `gap-flat-east-west` in [architecture/model.yaml](../architecture/model.yaml) for the accepted residual risk. If a service must not be callable by other workloads, do not publish its port; keep it on its stack's own compose network (as `litellm`'s Postgres does).
 
 ---
 
-## 9. Tailnet path routing (Tailscale, beeblebox)
+## 9. Tailnet path routing (Tailscale)
 
-Beyond the LAN Caddy ports above, beeblebox exposes services over Tailscale by **path name instead of port number**, on one of two tiers — pick based on whether the service is safe to expose to the public internet:
+Beyond the LAN Caddy ports above, the server exposes services over Tailscale by **path name instead of port number**, on one of two tiers — pick based on whether the service is safe to expose to the public internet:
 
 - **Public, low-risk services** (no real data or credentials, e.g. `hello-world`, `tic-tac-toe`): mount directly on the existing public Funnel, no Caddy involved —
   ```bash
-  ssh beeblebox tailscale serve --bg --set-path=/<name> http://127.0.0.1:<backend-port>
+  ssh <server> tailscale serve --bg --set-path=/<name> http://127.0.0.1:<backend-port>   # the server's HOST_INTERNAL_IP
   ```
   This strips the `/<name>` prefix before forwarding, so the backend sees plain `/...` paths. That's correct for stateless/simple apps, but if the frontend makes API calls with **absolute root paths** (`fetch("/api/...")`), fix it to use `location.pathname`-relative paths first — see `compose/tic-tac-toe/templates/index.html`'s `BASE` constant for the pattern. Confirm with `tailscale funnel status` that the existing root mount (n8n) is untouched before and after.
 
@@ -152,7 +162,33 @@ Full rationale, the exposure-tiering decision, and why `--set-path` stripping is
 
 ---
 
-## 10. Verify end-to-end
+## 10. Record the service in the architecture model
+
+**This step is enforced — `./scripts/deploy.sh` refuses to run against a non-conformant model.**
+
+Add the service to [`architecture/model.yaml`](../architecture/model.yaml) rather than listing it in
+prose. Nothing about a new service belongs in README.md or NETWORK-CONFIG.md; those describe the
+platform's mechanisms, and the model holds which services use them.
+
+- An `ApplicationComponent` (`ac-<name>`): `stack`, `image`, `lifecycle`, `routing`
+  (`strip` | `no-strip` | `not-path-mounted`), and — if `image` is `locally built` — `source`, being
+  the repo that owns the app (or `in-repo`). The `source` attribute is what keeps this repo's docs
+  neutral to the projects that depend on it; the validator requires it.
+- An `ApplicationService` (`as-<name>`) per reachable endpoint, with an `exposed_via`
+  relationship to exactly one exposure tier.
+
+Check it before committing (the `.githooks/pre-commit` hook does this for you):
+
+```bash
+python3 scripts/arch-validate.py
+```
+
+Application-specific deployment notes — OAuth metadata paths, edge config, anything true only of
+this one app — go in `compose/<service-name>/README.md`, not in the platform docs.
+
+---
+
+## 11. Verify end-to-end
 
 On the server:
 
@@ -161,13 +197,13 @@ On the server:
 ./tests/check-ports.sh   # extend this script if you want automated checks for new ports
 ```
 
-From another LAN PC: open `https://darragh-pc:<caddy-port>` (after trusting the CA).
+From another LAN PC: open `https://<hostname>:<caddy-port>` (after trusting the CA).
 
 From another container (example):
 
 ```bash
-podman run --rm --add-host=darragh-pc:host-gateway curlimages/curl \
-  -sk https://darragh-pc:<caddy-port>/
+podman run --rm --add-host=<hostname>:host-gateway curlimages/curl \
+  -sk https://<hostname>:<caddy-port>/
 ```
 
 (`-k` skips verify only for a quick test; install the CA for real use.)
@@ -179,12 +215,12 @@ podman run --rm --add-host=darragh-pc:host-gateway curlimages/curl \
 | Goal | What to touch |
 |------|----------------|
 | Run the app | `compose/<name>/compose.yaml`, `podman-compose up -d` |
-| HTTPS URL on LAN | `compose/tls-proxy/Caddyfile` (`:PORT { ... reverse_proxy 127.0.0.1:... }`) |
+| HTTPS URL on LAN | `compose/tls-proxy/Caddyfile` (`:PORT { ... reverse_proxy {env.HOST_INTERNAL_IP}:... }`) |
 | Deploy all (ordered) | `compose/stack-order` + `./scripts/deploy.sh` |
 | Deploy one stack | `./scripts/deploy-stack.sh <name>` |
 | Scaffold + unit file | `./scripts/add-service.sh <name>` |
 | New hostname in cert | `scripts/setup-certs.sh` + restart tls-proxy |
 | WSL2 / Windows LAN | `scripts/setup-windows-podman-lan-ports.ps1` + `compose/windows-lan-extra-ports.txt` if needed |
-| Container → Caddy | `host-gateway` / LAN IP / `host.containers.internal`, not `127.0.0.1` |
-| Tailnet URL, public/low-risk | `tailscale serve --set-path=/<name> http://127.0.0.1:<port>` |
+| Container → another container | `http://host.containers.internal:<backend-port>` — no network config, no TLS |
+| Tailnet URL, public/low-risk | `tailscale serve --set-path=/<name> http://127.0.0.1:<port>` (beeblebox) |
 | Tailnet URL, sensitive/admin | `handle`/`handle_path /<name>/*` block in the `:8090` router (`compose/tls-proxy/Caddyfile`) |

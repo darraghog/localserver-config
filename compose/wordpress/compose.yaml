@@ -36,7 +36,7 @@ services:
     depends_on:
       - db
     ports:
-      - "127.0.0.1:8096:80"
+      - "${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}:8096:80"
     volumes:
       - wordpress-data:/var/www/html
       # Directory, not the single file: a directory bind-mount survives rsync

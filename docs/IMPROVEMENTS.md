@@ -11,13 +11,13 @@
 
 ### 1.2 Consolidate compose file names
 **Status:** ⚠️ Partial
-**Current:** The `docker-compose.yaml` symlink was removed from `tls-proxy` (commit `967841f`) but still exists in `compose/n8n/`.
-**Improvement:** Remove the remaining `compose/n8n/docker-compose.yaml` symlink or document why n8n keeps it.
+**Status:** ✅ Resolved
+**Current:** No stack ships a `docker-compose.yaml`; the `tls-proxy` symlink went in `967841f` and the `compose/n8n/` one has now followed, along with the unreachable fallback branches that looked for that filename.
 
-### 1.3 Hardcoded hostname in deploy-to-server
-**Status:** ✅ Mostly resolved
-**Current:** `deploy-to-server.sh` no longer defaults to `darragh-pc` — target is a required positional arg, and "is this machine" detection is generic (hostname match, loopback, or LAN IP). `scripts/deploy-litellm.sh` still hardcodes `PROD_HOST="darragh-pc"` as its prod default.
-**Remaining:** Generalize `deploy-litellm.sh`'s `PROD_HOST` the same way, or fold it into `deploy-service.sh`.
+### 1.3 Hardcoded hostname in deploy scripts
+**Status:** ✅ Resolved
+**Current:** `deploy-to-server.sh` takes the target as a required positional arg, and "is this machine" detection is generic (hostname match, loopback, or LAN IP). `deploy-litellm.sh` now matches: `prod <hostname>` positionally, falling back to `$LITELLM_PROD_HOST` (settable in `.env`), with no built-in default host.
+**Remaining:** Optionally fold `deploy-litellm.sh` into `deploy-service.sh` to remove the duplicate prod-target handling.
 
 ### 1.4 Cert setup: reduce prompts
 **Status:** ✅ Resolved
@@ -112,8 +112,8 @@
 
 1. ~~`scripts/backup-n8n.sh`~~ — done, as `scripts/backup.sh` (all stacks, off-site, weekly). See §3.3.
 2. `tests/check-n8n.sh` (or extend `check-tls.sh`) — standalone n8n health check, independent of a deploy run.
-3. Remove `compose/n8n/docker-compose.yaml` symlink.
-4. Generalize `PROD_HOST="darragh-pc"` in `scripts/deploy-litellm.sh`.
+3. ~~Remove `compose/n8n/docker-compose.yaml` symlink~~ — done; the dead `docker-compose.yaml` fallbacks in `build-stack.sh`, `start-stack.sh` and `stack-helpers.sh` went with it.
+4. ~~Generalize `PROD_HOST` in `scripts/deploy-litellm.sh`~~ — done; see §1.3.
 5. README: note SQLite is dev/single-user only; consider a quick-start/full-setup split.
 6. `EXECUTIONS_MODE=queue` + Redis — low priority, only if concurrent workflow load becomes an issue.
 7. Native Python task runner for n8n's Code node — new `task-runners` service (`n8nio/runners`) + `N8N_RUNNERS_AUTH_TOKEN` secret; see §2.6.

@@ -115,13 +115,47 @@ setup_systemd() {
   fi
 }
 
+# Install podman/containers.conf so containers can reach endpoints other containers publish
+# on the host (p-open-east-west). See that file for why, and for the fact that a running
+# estate must be fully stopped before the change takes effect.
+setup_podman_networking() {
+  local src="$REPO_ROOT/podman/containers.conf"
+  local dst="${HOME}/.config/containers/containers.conf"
+  local marker="localserver-managed: podman-networking"
+
+  [[ -f "$src" ]] || { log "WARNING: $src missing; skipping podman network config."; return 0; }
+
+  if [[ -f "$dst" ]] && ! grep -q "$marker" "$dst"; then
+    log "WARNING: $dst exists and is not managed by this repo — leaving it alone."
+    log "         Merge the [network] section from $src by hand, or east-west traffic will fail."
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$dst")"
+  install -m 0644 "$src" "$dst"
+  log "Installed podman containers.conf → $dst"
+  log "  NOTE: pasta options apply when the rootless netns is created. On an already-running"
+  log "        estate, stop every container once so the change takes effect."
+}
+
+# Point git at the repo's tracked hooks, so the architecture model is validated before a
+# commit that could invalidate it. Per-clone git config, so it cannot be shipped in the repo.
+setup_git_hooks() {
+  [[ -d "$REPO_ROOT/.githooks" ]] || return 0
+  git -C "$REPO_ROOT" rev-parse --git-dir &>/dev/null || return 0
+  git -C "$REPO_ROOT" config core.hooksPath .githooks
+  log "git core.hooksPath -> .githooks (pre-commit validates architecture/model.yaml)"
+}
+
 main() {
   log "Host bootstrap (repo: $REPO_ROOT)"
   check_sudo
   install_base
   install_podman
   install_compose
+  setup_podman_networking
   setup_systemd
+  setup_git_hooks
   verify_podman
   log "Done. Next: configure .env, run ./scripts/setup-certs.sh if needed, then ./scripts/deploy.sh"
 }

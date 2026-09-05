@@ -40,6 +40,7 @@ verify_podman() {
 
 main() {
   log "Deploy stacks (repo: $REPO_ROOT)"
+  require_conformant_model || exit 1
   install_compose
   verify_podman
 

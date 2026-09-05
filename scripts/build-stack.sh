@@ -76,7 +76,6 @@ for s in "${stacks[@]}"; do
   elif [[ -f "$dir/Dockerfile" ]]; then
     log "Building $s (Dockerfile, no build.sh)..."
     compose="$dir/compose.yaml"
-    [[ -f "$compose" ]] || compose="$dir/docker-compose.yaml"
     compose_files=(-f "$compose")
     [[ -f "$dir/compose.local.yaml" ]] && compose_files+=(-f "$dir/compose.local.yaml")
     (cd "$dir" && podman-compose "${compose_files[@]}" build "${extra[@]}")

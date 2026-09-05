@@ -1,0 +1,846 @@
+<title>Beeblebox Architecture Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap">
+
+<style>
+  :root {
+    --paper:      #E7EAEC;
+    --surface:    #F1F3F4;
+    --surface-2:  #DDE2E5;
+    --ink:        #111A22;
+    --ink-soft:   #46565F;
+    --ink-faint:  #78868F;
+    --rule:       #CBD3D7;
+    --rule-firm:  #A7B2B9;
+    --accent:     #1F5C6E;
+    --accent-bg:  #DEE9ED;
+
+    /* Exposure ramp — warm to cool encodes open to closed. Semantic, not decorative. */
+    --t-public:   #9E3328;
+    --t-funnel:   #B0662F;
+    --t-tailnet:  #7A6830;
+    --t-lan:      #3D6355;
+    --t-loop:     #435463;
+
+    --sev-high:   #9E3328;
+    --sev-med:    #B0662F;
+    --sev-low:    #5A6B72;
+
+    --measure: 66ch;
+    --rail: 9.5rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #0D141A;
+      --surface:   #141D24;
+      --surface-2: #1C272F;
+      --ink:       #DBE3E7;
+      --ink-soft:  #9AA9B2;
+      --ink-faint: #6C7B85;
+      --rule:      #24313A;
+      --rule-firm: #3A4A55;
+      --accent:    #74B6C7;
+      --accent-bg: #14252B;
+
+      --t-public:  #DB7565;
+      --t-funnel:  #D9975C;
+      --t-tailnet: #C2AB66;
+      --t-lan:     #74A895;
+      --t-loop:    #8698A6;
+
+      --sev-high:  #DB7565;
+      --sev-med:   #D9975C;
+      --sev-low:   #8698A6;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:     #0D141A;
+    --surface:   #141D24;
+    --surface-2: #1C272F;
+    --ink:       #DBE3E7;
+    --ink-soft:  #9AA9B2;
+    --ink-faint: #6C7B85;
+    --rule:      #24313A;
+    --rule-firm: #3A4A55;
+    --accent:    #74B6C7;
+    --accent-bg: #14252B;
+
+    --t-public:  #DB7565;
+    --t-funnel:  #D9975C;
+    --t-tailnet: #C2AB66;
+    --t-lan:     #74A895;
+    --t-loop:    #8698A6;
+
+    --sev-high:  #DB7565;
+    --sev-med:   #D9975C;
+    --sev-low:   #8698A6;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Newsreader", Georgia, "Times New Roman", serif;
+    font-size: 1.0625rem;
+    line-height: 1.62;
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sheet { max-width: 78rem; margin: 0 auto; padding: 0 1.75rem 7rem; }
+
+  /* ------------------------------------------------------------ masthead */
+  .masthead {
+    padding: 4.5rem 0 2.25rem;
+    border-bottom: 2px solid var(--ink);
+    margin-bottom: 0.375rem;
+  }
+  .masthead::after {
+    content: "";
+    display: block;
+    height: 1px;
+    background: var(--ink);
+    margin-top: 3px;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 1.25rem;
+  }
+  h1 {
+    font-family: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 700;
+    font-size: clamp(2.4rem, 6vw, 4rem);
+    line-height: 1.02;
+    letter-spacing: -0.025em;
+    margin: 0 0 1rem;
+    text-wrap: balance;
+    max-width: 20ch;
+  }
+  .standfirst {
+    font-size: 1.25rem;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    max-width: 54ch;
+    margin: 0;
+    text-wrap: pretty;
+  }
+  .stamp {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 2.25rem;
+    margin-top: 2.25rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.06em;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+  }
+  .stamp b { display: block; color: var(--ink); font-weight: 500; letter-spacing: 0.02em; }
+
+  /* ------------------------------------------------------------- bands */
+  .band {
+    display: grid;
+    grid-template-columns: var(--rail) minmax(0, var(--measure));
+    gap: 0 2.75rem;
+    padding: 3.25rem 0 0;
+    align-items: start;
+  }
+  .rail {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    line-height: 1.5;
+    letter-spacing: 0.06em;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--rule);
+    position: sticky;
+    top: 1.5rem;
+  }
+  .rail b { display: block; color: var(--accent); font-weight: 500; }
+  .rail span { display: block; margin-top: 0.5rem; text-transform: none; letter-spacing: 0.02em; }
+  .col { min-width: 0; }
+
+  h2 {
+    font-family: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 600;
+    font-size: 1.9rem;
+    line-height: 1.14;
+    letter-spacing: -0.018em;
+    margin: 0 0 1rem;
+    text-wrap: balance;
+    border-top: 1px solid var(--rule);
+    padding-top: 0.6rem;
+  }
+  h3 {
+    font-family: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 600;
+    font-size: 1.1rem;
+    letter-spacing: -0.008em;
+    margin: 2.25rem 0 0.6rem;
+    text-wrap: balance;
+  }
+  p { margin: 0 0 1.05rem; text-wrap: pretty; }
+  .col > p:last-child { margin-bottom: 0; }
+  strong { font-weight: 600; }
+  em { font-style: italic; }
+
+  code, .mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.86em;
+  }
+  code {
+    background: var(--surface-2);
+    padding: 0.1em 0.34em;
+    border-radius: 2px;
+  }
+
+  .lede {
+    font-size: 1.16rem;
+    line-height: 1.55;
+    color: var(--ink-soft);
+  }
+
+  ul.plain { margin: 0 0 1.05rem; padding-left: 1.15rem; }
+  ul.plain li { margin-bottom: 0.5rem; }
+
+  /* --------------------------------------------------------- call-outs */
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-bg);
+    padding: 1rem 1.15rem;
+    margin: 1.5rem 0;
+    font-size: 0.98rem;
+  }
+  .note p:last-child { margin-bottom: 0; }
+  .note .tag {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 0.45rem;
+  }
+
+  /* ------------------------------------------------------------ tables */
+  .scroll { overflow-x: auto; margin: 1.5rem 0; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+  }
+  caption {
+    text-align: left;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding-bottom: 0.6rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.55rem 0.9rem 0.55rem 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 500;
+    font-size: 0.68rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border-bottom: 1px solid var(--rule-firm);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td .mono { color: var(--ink-soft); }
+
+  /* --------------------------------------------------------- wide figs */
+  .wide { grid-column: 1 / -1; margin: 2.5rem 0 0; }
+  figure { margin: 0; }
+  .frame {
+    border: 1px solid var(--rule-firm);
+    background: var(--surface);
+    padding: 1.5rem;
+    overflow-x: auto;
+  }
+  figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; min-width: 640px; }
+  figcaption {
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+    margin-top: 0.85rem;
+    max-width: 72ch;
+  }
+  figcaption b {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    display: block;
+    margin-bottom: 0.35rem;
+    font-weight: 500;
+  }
+
+  /* ------------------------------------------------------------- chips */
+  .tier {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .tier::before {
+    content: "";
+    width: 0.55rem; height: 0.55rem;
+    border-radius: 50%;
+    background: var(--dot, var(--ink-faint));
+    flex: none;
+    transform: translateY(-0.02em);
+  }
+  .t-public  { --dot: var(--t-public); }
+  .t-funnel  { --dot: var(--t-funnel); }
+  .t-tailnet { --dot: var(--t-tailnet); }
+  .t-lan     { --dot: var(--t-lan); }
+  .t-loop    { --dot: var(--t-loop); }
+
+  .sev {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.66rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.12rem 0.42rem;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .s-high { color: var(--sev-high); }
+  .s-med  { color: var(--sev-med); }
+  .s-low  { color: var(--sev-low); }
+
+  /* --------------------------------------------------------- trace row */
+  .trace {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.5rem;
+    margin: 1.4rem 0;
+    padding: 0;
+    list-style: none;
+  }
+  .trace li {
+    flex: 1 1 8rem;
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-top: 2px solid var(--accent);
+    padding: 0.7rem 0.8rem;
+    position: relative;
+  }
+  .trace li .k {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    display: block;
+    margin-bottom: 0.3rem;
+  }
+  .trace li .v { font-size: 0.92rem; line-height: 1.35; display: block; }
+
+  /* ------------------------------------------------------------ counts */
+  .counts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 1.6rem 0;
+  }
+  .counts div { background: var(--paper); padding: 0.9rem 1rem; }
+  .counts .n {
+    font-family: "Bricolage Grotesque", sans-serif;
+    font-size: 1.7rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    display: block;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .counts .l {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.64rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    display: block;
+    margin-top: 0.4rem;
+  }
+
+  hr.rule { border: 0; border-top: 1px solid var(--rule); margin: 3.5rem 0 0; }
+
+  a { color: var(--accent); text-underline-offset: 0.18em; }
+  a:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 62rem) {
+    .band { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .rail {
+      position: static;
+      border-top: none;
+      display: flex;
+      gap: 1.25rem;
+      padding: 0 0 0.75rem;
+    }
+    .rail span { margin-top: 0; }
+    .wide { grid-column: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="sheet">
+
+  <header class="masthead">
+    <p class="eyebrow">Architecture description &middot; Baseline</p>
+    <h1>Beeblebox Architecture Model</h1>
+    <p class="standfirst">A TOGAF-aligned metamodel for a one-server estate — what is worth capturing, what is deliberately left out, and the machine-checked model that keeps the description honest.</p>
+    <div class="stamp">
+      <div><b>2026-08-30</b>Baseline date</div>
+      <div><b>93 / 155</b>Entities / relationships</div>
+      <div><b>16</b>Entity types</div>
+      <div><b>Conformant</b>Validator status</div>
+    </div>
+  </header>
+
+  <!-- ================================================== 1. THE ESTATE -->
+  <section class="band">
+    <div class="rail"><b>Context</b><span>Who this is for</span></div>
+    <div class="col">
+      <h2>One server in a house, doing five jobs</h2>
+      <p class="lede">Everything described here runs on a single computer called <strong>beeblebox</strong>, sitting in a home office on a domestic broadband line. It publishes a public blog, runs automations that outside AI assistants can call, provides a private gateway to several AI providers, hosts a handful of demonstration applications, and backs all of it up to cloud storage once a week.</p>
+      <p>That is a small estate. It is also a real one: it has paying-attention consequences when it breaks, irreplaceable data, external users, and a public attack surface. The purpose of modelling it is not ceremony — it is to be able to answer, quickly and without opening a terminal, three questions that a non-technical stakeholder actually asks.</p>
+      <ul class="plain">
+        <li><strong>What would we lose?</strong> Which information could not be recreated, and where does it live.</li>
+        <li><strong>Who can reach this?</strong> For every running service, whether the whole internet can address it, only the owner's devices, or nothing outside the machine.</li>
+        <li><strong>Why is it built this way?</strong> Which decision each piece of technology follows from, rather than an inventory of products.</li>
+      </ul>
+      <div class="note">
+        <span class="tag">Framing</span>
+        <p>This is a <strong>baseline</strong> description — the estate as it is, not as it should be. There is no target architecture here, so weaknesses are recorded as first-class <em>Gaps</em> rather than quietly omitted. An architecture description with no gaps is a marketing document.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== 2. WHAT TO CAPTURE -->
+  <section class="band">
+    <div class="rail"><b>Assessment</b><span>Metadata worth holding</span></div>
+    <div class="col">
+      <h2>Choosing what to model, and what to refuse</h2>
+      <p>TOGAF's Content Metamodel is designed for enterprises with programme portfolios and organisational units. Applied whole to a one-server estate it produces impressive, empty tables — which is worse than not modelling at all, because it makes the description look maintained when it is not. The assessment below is therefore as much about exclusion as inclusion.</p>
+
+      <h3>Kept, because a real question depends on it</h3>
+      <div class="scroll">
+        <table>
+          <caption>Included entity types, and the question each answers</caption>
+          <thead>
+            <tr><th>Entity</th><th>TOGAF</th><th>Earns its place by answering</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="mono">Driver</span></td><td>Core</td><td>Why does this estate exist at all?</td></tr>
+            <tr><td><span class="mono">Principle</span></td><td>Core</td><td>What rule does this design decision follow from?</td></tr>
+            <tr><td><span class="mono">Capability</span></td><td>Core</td><td>What can it do, stated so it survives replacing every product?</td></tr>
+            <tr><td><span class="mono">BusinessService</span></td><td>Core</td><td>What breaks for someone if this stops?</td></tr>
+            <tr><td><span class="mono">Actor</span></td><td>Core</td><td>Who or what consumes it — including machine callers.</td></tr>
+            <tr><td><span class="mono">ApplicationComponent</span></td><td>Core</td><td>What is actually deployed, and from which source?</td></tr>
+            <tr><td><span class="mono">ApplicationService</span></td><td>Core</td><td>What interface does it publish, and with what authentication?</td></tr>
+            <tr><td><span class="mono">DataEntity</span></td><td>Core</td><td>How sensitive is it, and could we recreate it?</td></tr>
+            <tr><td><span class="mono">DataStore</span></td><td>Core</td><td>Where does it physically sit, and how is it backed up?</td></tr>
+            <tr><td><span class="mono">Node</span></td><td>Core</td><td>What hardware does this depend on?</td></tr>
+            <tr><td><span class="mono">TechnologyService</span></td><td>Core</td><td>Which platform capability does it consume?</td></tr>
+            <tr><td><span class="mono">Network</span></td><td>Core</td><td>Which trust zone is it addressable from?</td></tr>
+            <tr><td><span class="mono">ExternalProvider</span></td><td>Core</td><td>What do we depend on that we do not control?</td></tr>
+            <tr><td><span class="mono">ExposureTier</span></td><td>Extension</td><td>Who can reach this at all?</td></tr>
+            <tr><td><span class="mono">Control</span></td><td>Extension</td><td>What safeguard protects it, and which principle does it serve?</td></tr>
+            <tr><td><span class="mono">Gap</span></td><td>Extension</td><td>What do we know is wrong and have chosen to accept?</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Refused, with reasons</h3>
+      <p><strong>Organisation Unit, Business Process, Value Stream, Contract, Work Package, Measure.</strong> Every one of these presumes a structure this estate does not have: there is one person, no process hand-offs, no contracts, no funded work packages, and no service levels anyone has agreed to. Modelling them would mean inventing them.</p>
+      <p><strong>Location</strong> is demoted from an entity to an attribute. TOGAF treats it as core because enterprises span sites; here there are precisely two places — the house and other people's clouds — so a field carries it without a table.</p>
+      <p><strong>Target architecture and Gap Analysis in the TOGAF sense.</strong> Formal gap analysis compares baseline against target. There is no target architecture, so gaps are recorded directly against the baseline instead. This is a deliberate deviation, not an omission.</p>
+    </div>
+
+    <div class="wide">
+      <figure>
+        <div class="frame">
+          <svg viewBox="0 0 940 660" role="img" aria-label="The metamodel: sixteen entity types arranged in five TOGAF layers plus extensions, joined by named relationships that form a traceable chain from Driver down to Node.">
+            <defs>
+              <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+            <g fill="none" stroke="currentColor" stroke-width="1" opacity="0.28">
+              <line x1="0" y1="118" x2="660" y2="118"/>
+              <line x1="0" y1="240" x2="660" y2="240"/>
+              <line x1="0" y1="362" x2="660" y2="362"/>
+              <line x1="0" y1="470" x2="660" y2="470"/>
+            </g>
+            <g font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="1.2" fill="currentColor" opacity="0.55">
+              <text x="0" y="30">MOTIVATION</text>
+              <text x="0" y="140">BUSINESS</text>
+              <text x="0" y="262">APPLICATION</text>
+              <text x="0" y="384">DATA</text>
+              <text x="0" y="492">TECHNOLOGY</text>
+              <text x="700" y="30">EXTENSIONS</text>
+            </g>
+
+            <g font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">
+              <!-- motivation -->
+              <rect x="110" y="40" width="140" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="180" y="66" text-anchor="middle">Driver</text>
+              <rect x="330" y="40" width="150" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="405" y="66" text-anchor="middle">Principle</text>
+
+              <!-- business -->
+              <rect x="20" y="160" width="130" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="85" y="186" text-anchor="middle">Actor</text>
+              <rect x="190" y="160" width="180" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="280" y="186" text-anchor="middle">BusinessService</text>
+              <rect x="410" y="160" width="150" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="485" y="186" text-anchor="middle">Capability</text>
+
+              <!-- application -->
+              <rect x="150" y="282" width="215" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="257" y="308" text-anchor="middle">ApplicationComponent</text>
+              <rect x="405" y="282" width="185" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="497" y="308" text-anchor="middle">ApplicationService</text>
+
+              <!-- data -->
+              <rect x="150" y="400" width="150" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="225" y="426" text-anchor="middle">DataEntity</text>
+              <rect x="345" y="400" width="140" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="415" y="426" text-anchor="middle">DataStore</text>
+
+              <!-- technology -->
+              <rect x="20" y="510" width="110" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="75" y="536" text-anchor="middle">Node</text>
+              <rect x="150" y="510" width="175" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="237" y="536" text-anchor="middle">TechnologyService</text>
+              <rect x="345" y="510" width="115" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="402" y="536" text-anchor="middle">Network</text>
+              <rect x="480" y="510" width="160" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="560" y="536" text-anchor="middle">ExternalProvider</text>
+
+              <!-- extensions -->
+              <rect x="700" y="160" width="170" height="42" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="5 3"/>
+              <text x="785" y="186" text-anchor="middle">Control</text>
+              <rect x="700" y="282" width="170" height="42" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="5 3"/>
+              <text x="785" y="308" text-anchor="middle">ExposureTier</text>
+              <rect x="700" y="510" width="170" height="42" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="5 3"/>
+              <text x="785" y="536" text-anchor="middle">Gap</text>
+            </g>
+
+            <g stroke="currentColor" stroke-width="1.3" fill="none" marker-end="url(#ar)">
+              <line x1="250" y1="61" x2="325" y2="61"/>
+              <line x1="485" y1="160" x2="485" y2="90"/>
+              <line x1="265" y1="160" x2="180" y2="118"/>
+              <line x1="485" y1="202" x2="330" y2="278"/>
+              <line x1="365" y1="303" x2="400" y2="303"/>
+              <path d="M 450 282 L 450 240 L 330 205"/>
+              <line x1="230" y1="324" x2="228" y2="396"/>
+              <line x1="300" y1="421" x2="341" y2="421"/>
+              <line x1="180" y1="324" x2="95" y2="506"/>
+              <line x1="330" y1="324" x2="520" y2="506"/>
+              <line x1="590" y1="303" x2="696" y2="303"/>
+              <line x1="700" y1="292" x2="330" y2="292" stroke-dasharray="4 3" marker-end="none"/>
+            </g>
+            <g stroke="currentColor" stroke-width="1.2" fill="none" marker-end="url(#ar)" stroke-dasharray="5 3" opacity="0.8">
+              <path d="M 785 160 L 785 100 L 484 82"/>
+              <path d="M 760 282 L 700 240 L 600 214"/>
+              <path d="M 785 510 L 785 360 L 596 330"/>
+              <line x1="785" y1="324" x2="785" y2="504" stroke-dasharray="0"/>
+            </g>
+
+            <g font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.72">
+              <text x="287" y="54" text-anchor="middle">motivates</text>
+              <text x="492" y="128" text-anchor="start">supports</text>
+              <text x="212" y="132" text-anchor="middle">consumed_by</text>
+              <text x="392" y="248" text-anchor="middle">realised_by</text>
+              <text x="383" y="296" text-anchor="middle">provides</text>
+              <text x="392" y="228" text-anchor="middle">delivers</text>
+              <text x="236" y="364" text-anchor="middle">manages</text>
+              <text x="320" y="414" text-anchor="middle">persisted_in</text>
+              <text x="104" y="420" text-anchor="middle">deployed_on</text>
+              <text x="452" y="420" text-anchor="middle">depends_on</text>
+              <text x="643" y="296" text-anchor="middle">exposed_via</text>
+              <text x="560" y="286" text-anchor="middle">enforced_by</text>
+              <text x="700" y="116" text-anchor="middle">implements</text>
+              <text x="672" y="236" text-anchor="middle">protects</text>
+              <text x="700" y="352" text-anchor="middle">affects</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption><b>Figure 1 — The metamodel</b>Sixteen entity types across five TOGAF layers, joined by seventeen named relationship types. Solid boxes are TOGAF core; dashed boxes are the three extensions. The chain that matters runs top to bottom: a <span class="mono">Driver</span> motivates a <span class="mono">Principle</span>, which governs how a <span class="mono">Capability</span> is realised by a component, which provides a service, which is exposed at exactly one tier. Any claim in this document can be walked back up that chain.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ================================================= 3. EXTENSIONS -->
+  <section class="band">
+    <div class="rail"><b>Extensions</b><span>Three additions to core</span></div>
+    <div class="col">
+      <h2>Where the standard needed extending</h2>
+      <p>TOGAF explicitly permits metamodel extension. Three were added, each because a question kept being asked that the core vocabulary could not express.</p>
+
+      <h3>ExposureTier — who can reach this at all</h3>
+      <p>TOGAF has no first-class concept for reachability zoning. In this estate it is the single most consequential design decision and the one most easily got wrong: a service intended for one person, published to the internet, is the failure mode that matters. Every endpoint sits in exactly one tier, and that is also the fact a non-technical reader most needs.</p>
+
+      <h3>Control — the safeguard, tied to its reason</h3>
+      <p>Modelled as an entity rather than prose so each safeguard can be traced both to what it protects and to the principle it serves. That constraint is doing real work: <strong>an unattached control is a finding.</strong> A control tied to no principle is unexplained; a principle with no control is unenforced. The validator refuses both.</p>
+
+      <h3>Gap — what is known to be wrong</h3>
+      <p>With no target architecture to diff against, gaps attach directly to the baseline. Recording them as entities rather than a footnote means they appear in the same views as everything else, and cannot be quietly dropped when the description is presented.</p>
+
+      <div class="note">
+        <span class="tag">Modelling discipline</span>
+        <p>Four invariants are enforced mechanically, not by review. Every <span class="mono">ApplicationService</span> must declare exactly one exposure tier. Every <span class="mono">Capability</span> must be realised by something. Every <span class="mono">Control</span> must both protect an asset and implement a principle. And every <span class="mono">DataEntity</span> marked irreplaceable must reach a store that is actually backed up — the one invariant whose violation destroys the estate, so it is checked rather than assumed.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================== 4. THE BASELINE -->
+  <section class="band">
+    <div class="rail"><b>Baseline</b><span>The estate as modelled</span></div>
+    <div class="col">
+      <h2>What the model contains</h2>
+      <div class="counts">
+        <div><span class="n">3</span><span class="l">Drivers</span></div>
+        <div><span class="n">5</span><span class="l">Principles</span></div>
+        <div><span class="n">7</span><span class="l">Capabilities</span></div>
+        <div><span class="n">8</span><span class="l">Components</span></div>
+        <div><span class="n">10</span><span class="l">Services</span></div>
+        <div><span class="n">6</span><span class="l">Data entities</span></div>
+        <div><span class="n">7</span><span class="l">Providers</span></div>
+        <div><span class="n">6</span><span class="l">Gaps</span></div>
+      </div>
+      <p>Seven external providers against eight self-built components is the number worth pausing on. More than half of what makes this estate work is rented, not owned — DNS and edge identity, the private network, the backup store, the registrar, mail forwarding, the config repository, the model APIs. Modelling them as first-class entities makes the real dependency surface visible instead of leaving it implicit in configuration files.</p>
+
+      <h3>Information the estate is responsible for</h3>
+      <div class="scroll">
+        <table>
+          <caption>Data entities by classification and recoverability</caption>
+          <thead><tr><th>Information</th><th>Classification</th><th>If lost</th><th>Held in</th></tr></thead>
+          <tbody>
+            <tr><td>Blog content</td><td>Public</td><td>Irreplaceable</td><td>MariaDB</td></tr>
+            <tr><td>Media assets</td><td>Public</td><td>Irreplaceable</td><td>Volume</td></tr>
+            <tr><td>Workflow definitions &amp; credentials</td><td>Confidential</td><td>Irreplaceable</td><td>PostgreSQL 15</td></tr>
+            <tr><td>LLM keys &amp; usage history</td><td>Secret</td><td>Irreplaceable</td><td>PostgreSQL 16</td></tr>
+            <tr><td>Issued OAuth tokens</td><td>Secret</td><td>Recoverable</td><td>Volume</td></tr>
+            <tr><td>Platform secrets</td><td>Secret</td><td>Irreplaceable</td><td>Host filesystem</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <span class="tag">The dependency that is easy to miss</span>
+        <p>Platform secrets include the key that encrypts every stored automation credential. Restore the workflow database without it and the restore <em>succeeds</em> — producing a database full of text nobody can ever read again. Modelling secrets as an irreplaceable data entity in their own right, rather than treating them as configuration, is what forces that file into the backup set.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================ 5. EXPOSURE -->
+  <section class="band">
+    <div class="rail"><b>View</b><span>Reachability</span></div>
+    <div class="col">
+      <h2>Who can reach what</h2>
+      <p>Every application listens only on the machine's own loopback address. Nothing is reachable from anywhere until a proxy has explicitly decided it should be — so publishing something is an act, not an accident. The tiers below are ordered from most open to most closed.</p>
+    </div>
+
+    <div class="wide">
+      <figure>
+        <div class="frame">
+          <svg viewBox="0 0 940 430" role="img" aria-label="Reachability: three caller zones on the left route through named enforcement points into services, all of which listen only on host loopback.">
+            <defs>
+              <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+
+            <g font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="1.2" fill="currentColor" opacity="0.55">
+              <text x="0" y="20">WHO IS CALLING</text>
+              <text x="330" y="20">ENFORCEMENT POINT</text>
+              <text x="700" y="20">REACHES</text>
+            </g>
+
+            <g font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">
+              <rect x="0" y="44" width="170" height="52" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="85" y="68" text-anchor="middle">Anyone</text>
+              <text x="85" y="84" text-anchor="middle" font-size="10" opacity="0.7">on the internet</text>
+
+              <rect x="0" y="196" width="170" height="52" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="85" y="220" text-anchor="middle">Owner devices</text>
+              <text x="85" y="236" text-anchor="middle" font-size="10" opacity="0.7">enrolled in the VPN</text>
+
+              <rect x="0" y="316" width="170" height="52" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="85" y="340" text-anchor="middle">Home network</text>
+              <text x="85" y="356" text-anchor="middle" font-size="10" opacity="0.7">devices in the house</text>
+            </g>
+
+            <g font-family="IBM Plex Mono, monospace" font-size="11.5">
+              <rect x="300" y="36" width="210" height="46" fill="none" style="stroke:var(--t-public)" stroke-width="2"/>
+              <text x="405" y="57" text-anchor="middle" style="fill:var(--t-public)">Cloudflare edge</text>
+              <text x="405" y="72" text-anchor="middle" style="fill:var(--t-public)" font-size="9.5">+ Access on admin paths</text>
+
+              <rect x="300" y="104" width="210" height="46" fill="none" style="stroke:var(--t-funnel)" stroke-width="2"/>
+              <text x="405" y="125" text-anchor="middle" style="fill:var(--t-funnel)">Tailscale Funnel</text>
+              <text x="405" y="140" text-anchor="middle" style="fill:var(--t-funnel)" font-size="9.5">machine callers</text>
+
+              <rect x="300" y="196" width="210" height="46" fill="none" style="stroke:var(--t-tailnet)" stroke-width="2"/>
+              <text x="405" y="217" text-anchor="middle" style="fill:var(--t-tailnet)">Device identity</text>
+              <text x="405" y="232" text-anchor="middle" style="fill:var(--t-tailnet)" font-size="9.5">tailnet only</text>
+
+              <rect x="300" y="316" width="210" height="46" fill="none" style="stroke:var(--t-lan)" stroke-width="2"/>
+              <text x="405" y="337" text-anchor="middle" style="fill:var(--t-lan)">Private CA on the LAN</text>
+              <text x="405" y="352" text-anchor="middle" style="fill:var(--t-lan)" font-size="9.5">break-glass only</text>
+            </g>
+
+            <g font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">
+              <rect x="680" y="30" width="250" height="58" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="694" y="50">Blog (public + admin)</text>
+              <text x="694" y="68" opacity="0.7" font-size="10">admin challenged at the edge</text>
+
+              <rect x="680" y="100" width="250" height="58" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="694" y="120">Automation + tool endpoints</text>
+              <text x="694" y="138" opacity="0.7" font-size="10">one demo app, holding no data</text>
+
+              <rect x="680" y="190" width="250" height="58" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="694" y="210">Admin console, AI gateway</text>
+              <text x="694" y="228" opacity="0.7" font-size="10">anything unauthenticated lives here</text>
+
+              <rect x="680" y="310" width="250" height="58" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <text x="694" y="330">Per-service ports</text>
+              <text x="694" y="348" opacity="0.7" font-size="10">not the designed route</text>
+            </g>
+
+            <g stroke-width="1.6" fill="none" marker-end="url(#ar2)">
+              <path d="M 170 62 L 235 62 L 235 59 L 296 59" style="stroke:var(--t-public)"/>
+              <path d="M 170 78 L 235 78 L 235 127 L 296 127" style="stroke:var(--t-funnel)"/>
+              <line x1="170" y1="222" x2="296" y2="219" style="stroke:var(--t-tailnet)"/>
+              <line x1="170" y1="342" x2="296" y2="339" style="stroke:var(--t-lan)"/>
+              <line x1="510" y1="59" x2="676" y2="59" style="stroke:var(--t-public)"/>
+              <line x1="510" y1="127" x2="676" y2="129" style="stroke:var(--t-funnel)"/>
+              <line x1="510" y1="219" x2="676" y2="219" style="stroke:var(--t-tailnet)"/>
+              <line x1="510" y1="339" x2="676" y2="339" style="stroke:var(--t-lan)"/>
+            </g>
+
+            <g>
+              <line x1="680" y1="392" x2="930" y2="392" style="stroke:var(--t-loop)" stroke-width="2"/>
+              <text x="805" y="412" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" style="fill:var(--t-loop)">every service listens on loopback only</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption><b>Figure 2 — Reachability by tier</b>Warmer lines are more open. The estate accepts no inbound connections at all: both public paths are held open from the inside out, so the house has no listening ports facing the internet. Note the asymmetry that carries the design — the blog needs a memorable address and gets Cloudflare; machine callers do not, and get the private network's own public ingress.</figcaption>
+      </figure>
+    </div>
+
+  </section>
+
+  <section class="band">
+    <div class="rail"></div>
+    <div class="col">
+        <div class="scroll">
+          <table>
+            <caption>The ten published services, by tier</caption>
+            <thead><tr><th>Tier</th><th>Services</th><th>Authentication</th></tr></thead>
+            <tbody>
+              <tr><td><span class="tier t-public">Public / Cloudflare</span></td><td>Blog, blog administration</td><td>None / email challenge at edge</td></tr>
+              <tr><td><span class="tier t-funnel">Public / Funnel</span></td><td>Workflow endpoints, tool transport, one demo</td><td>Password, OAuth, none</td></tr>
+              <tr><td><span class="tier t-tailnet">Private network</span></td><td>Admin console, AI gateway, tool GUI, demos</td><td>Device identity, then password</td></tr>
+              <tr><td><span class="tier t-lan">Home network</span></td><td>Per-service diagnostic ports</td><td>Network position</td></tr>
+              <tr><td><span class="tier t-loop">Loopback</span></td><td>Every application, underneath all of the above</td><td>Unreachable externally</td></tr>
+            </tbody>
+          </table>
+        </div>
+    </div>
+  </section>
+
+  <!-- ================================================ 6. TRACEABILITY -->
+  <section class="band">
+    <div class="rail"><b>Method</b><span>Traceability</span></div>
+    <div class="col">
+      <h2>Following one decision all the way down</h2>
+      <p>The test of an architecture description is whether a claim at the top can be walked to something running at the bottom. Here is the estate's most consequential principle, traced end to end.</p>
+      <ul class="trace">
+        <li><span class="k">Driver</span><span class="v">Near-zero recurring cost</span></li>
+        <li><span class="k">Principle</span><span class="v">No inbound ports</span></li>
+        <li><span class="k">Governs</span><span class="v">Cloudflare &amp; Tailscale as ingress</span></li>
+        <li><span class="k">Realised by</span><span class="v">Outbound tunnel connector</span></li>
+        <li><span class="k">Service</span><span class="v">Blog, published</span></li>
+        <li><span class="k">Tier</span><span class="v">Public, edge-enforced</span></li>
+      </ul>
+      <p>Read the other way, the chain explains a rejection rather than a choice. Forwarding a port from the router would have been simpler and free, and it was refused — a residential network has no security team, and an open port is permanent attack surface protecting the whole house, not just the service behind it. The principle records that reasoning so the next person does not re-litigate it, or worse, quietly undo it.</p>
+      <p>The same walk works for data. <em>Blog content</em> is classified irreplaceable; it is persisted in a database whose backup method is a logical dump; that dump is protected by a weekly off-site copy and by a restore rehearsal, both of which implement the principle that recovery is tested rather than assumed. Each link is a row in the model, and the validator fails if any of them is missing.</p>
+    </div>
+  </section>
+
+  <!-- ====================================================== 7. GAPS -->
+  <section class="band">
+    <div class="rail"><b>Register</b><span>Known weaknesses</span></div>
+    <div class="col">
+      <h2>What is wrong with it</h2>
+      <p>All six gaps below are <em>accepted</em> rather than planned — they are understood, and the cost of fixing them currently exceeds the cost of living with them. Recording that judgement is the point.</p>
+      <div class="scroll">
+        <table>
+          <caption>Gap register, baseline 2026-08-30</caption>
+          <thead><tr><th></th><th>Gap</th><th>Consequence</th></tr></thead>
+          <tbody>
+            <tr><td><span class="sev s-high">High</span></td><td>Single point of failure</td><td>Every workload runs on one machine in one house. Backups make the data survivable; the service is not. Recovery is hours of rebuild.</td></tr>
+            <tr><td><span class="sev s-med">Med</span></td><td>No monitoring or alerting</td><td>Nothing reports failure. A failed backup or stopped service is found by looking — so the detective controls only fire when someone remembers.</td></tr>
+            <tr><td><span class="sev s-med">Med</span></td><td>Residential connectivity</td><td>Availability is bounded by domestic broadband and household power.</td></tr>
+            <tr><td><span class="sev s-med">Med</span></td><td>No secret rotation</td><td>Long-lived provider and storage keys with no rotation schedule.</td></tr>
+            <tr><td><span class="sev s-low">Low</span></td><td>Demo apps published</td><td>One demonstration app is internet-facing. It holds no data, but it is attack surface earning nothing.</td></tr>
+            <tr><td><span class="sev s-low">Low</span></td><td>No staging environment</td><td>Changes are validated by deploying to production and checking afterwards.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The first two compound each other, and that is the honest headline: the estate can lose its only server without losing its data, but nothing would tell anyone it had happened.</p>
+    </div>
+  </section>
+
+  <!-- ================================================ 8. MAINTENANCE -->
+  <section class="band">
+    <div class="rail"><b>Currency</b><span>Keeping it true</span></div>
+    <div class="col">
+      <h2>Why this description should still be true next year</h2>
+      <p>Architecture documents rot because nothing contradicts them when they drift. This one is held to the estate by three deliberate choices.</p>
+      <p><strong>The model is the source, the document is the view.</strong> Entities and relationships live in version-controlled YAML beside the configuration they describe, in the same repository and the same commits. A change to the estate and a change to its description travel together or the difference is visible in review.</p>
+      <p><strong>Conformance is machine-checked.</strong> A validator enforces referential integrity, relationship typing, and the four invariants. It does not check that the model matches reality — nothing can — but it does refuse the specific decay that makes architecture models useless: dangling references, unclassified endpoints, controls attached to nothing.</p>
+      <p><strong>The plain-language explanation is part of the model.</strong> Every motivation and business entity carries a stakeholder-facing sentence as a required field, and the validator rejects it if missing. The non-technical narrative is therefore generated from the same rows as the technical one, and cannot drift from it at presentation time.</p>
+      <div class="note">
+        <span class="tag">Its honest limit</span>
+        <p>None of this proves the model is accurate. A validator confirms the description is internally coherent, not that it still matches what is running — that gap closes only by re-deriving the model from the live estate, which today is a manual act. It is the most valuable next step, and it is not done.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+</div>

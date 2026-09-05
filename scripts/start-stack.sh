@@ -21,7 +21,6 @@ DIR="$REPO_ROOT/compose/$SERVICE"
 }
 
 compose="$DIR/compose.yaml"
-[[ -f "$compose" ]] || compose="$DIR/docker-compose.yaml"
 [[ -f "$compose" ]] || {
   echo "ERROR: No compose.yaml in compose/$SERVICE" >&2
   exit 1

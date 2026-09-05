@@ -1,0 +1,881 @@
+# Baseline architecture of the beeblebox homelab estate.
+# Conforms to metamodel.yaml — verify with: python3 scripts/arch-validate.py
+#
+# This is the BASELINE (as-is), not a target. Known weaknesses are modelled as Gaps
+# rather than omitted.
+#
+# Verified against the running estate 2026-08-30.
+
+model:
+  name: beeblebox estate
+  baseline_date: 2026-08-30
+  metamodel_version: 1.0.0
+
+# =============================================================== MOTIVATION ===
+Driver:
+  - id: d-currency
+    name: Stay technically current
+    priority: primary
+    description: Operate production-grade systems first-hand rather than only reading about them.
+    plain_language: >
+      Running real systems, with real consequences when they break, is how the technical
+      judgement behind leadership decisions stays sharp.
+  - id: d-publish
+    name: Own the publishing platform
+    priority: primary
+    description: Publish thelearningcto.com on infrastructure under direct control.
+    plain_language: >
+      The blog is the public face of this work. Hosting it personally means the content,
+      the domain and the audience are not dependent on a platform that can change terms.
+  - id: d-frugal
+    name: Near-zero recurring cost
+    priority: secondary
+    description: Prefer free tiers and owned hardware over recurring subscriptions.
+    plain_language: >
+      The estate should cost little enough that keeping it running is never a budget
+      decision — roughly the price of a domain name and a few pence of cloud storage.
+
+Principle:
+  - id: p-no-inbound
+    name: No inbound ports
+    description: The estate is reachable from the internet only via outbound-initiated connections.
+    statement: The home network exposes no inbound listening ports to the internet.
+    rationale: >
+      A residential network has no security team. Every open port is permanent attack
+      surface protecting everything else on the LAN, not just the service behind it.
+    implication: >
+      Public reachability must be achieved by outbound-only connections. Port-forwarding
+      is rejected outright, even where it would be simpler.
+    plain_language: >
+      Nothing on the internet can dial into the house. The house dials out, and traffic
+      comes back down that same connection.
+  - id: p-tiered-exposure
+    name: Exposure is tiered by sensitivity
+    description: Reachability from beyond the host is an explicit, recorded property of every endpoint.
+    statement: >
+      Every endpoint is assigned the narrowest reachability tier beyond the host that still
+      serves its purpose.
+    rationale: >
+      Most services need to be reachable by one person, not by the internet. Defaulting
+      to public and then bolting on authentication inverts the safer order.
+    implication: >
+      New services start private. Publishing one beyond the host is a deliberate, recorded
+      decision, and admin interfaces are never published without an identity check in front
+      of them. This principle governs reachability from outside beeblebox; traffic between
+      workloads already running on it is governed by p-open-east-west.
+    plain_language: >
+      Each thing is visible to the smallest possible audience outside the server — the whole
+      internet, only my own devices, or only the house — and going wider is an explicit choice.
+  - id: p-open-east-west
+    name: East-west traffic is open
+    description: Containers reach each other's published endpoints without per-pair configuration.
+    statement: >
+      Any container on the host may address any endpoint another container has published;
+      no shared network or per-pair grant is required.
+    rationale: >
+      Per-pair network wiring makes every new internal dependency a change to the provider's
+      deployment — friction paid on every integration, to defend a boundary between workloads
+      that are already deployed and operated together.
+    implication: >
+      Applications publish on a host-internal address that containers can reach and the LAN
+      and tailnet cannot. Publishing is what makes an endpoint internally reachable, so a port
+      left unpublished — a database, say — stays private by default. Internal endpoints must
+      not treat network position as authentication.
+    plain_language: >
+      Applications on this server can talk to each other freely, without extra setup for each
+      new pair. Nothing outside the server gains anything by it.
+  - id: p-rootless
+    name: Rootless by default
+    description: Workloads hold no host privilege.
+    statement: Workloads run as an unprivileged user; root is used only for host setup.
+    rationale: A container escape should not yield host root.
+    implication: >
+      Low ports cannot be bound directly, which forces reverse-proxy patterns; the
+      constraint is accepted rather than worked around.
+    plain_language: >
+      Applications run with the minimum permissions they need, so a compromise of one
+      does not hand over the whole machine.
+  - id: p-reproducible
+    name: Reproducible from source
+    description: Configuration is version-controlled; only secrets live outside git.
+    statement: The estate is rebuildable from a git repository plus a secrets file.
+    rationale: >
+      Configuration discovered only by inspecting a running host is lost when that host is.
+    implication: >
+      Manual changes on the server are defects. Every stack, proxy rule and unit file is
+      committed; only secrets live outside version control.
+    plain_language: >
+      The entire setup is written down as code, so it can be rebuilt from scratch rather
+      than remembered.
+  - id: p-tested-recovery
+    name: Recovery is tested, not assumed
+    description: Restorability is demonstrated, not inferred from job success.
+    statement: Backups are verified by performing a restore, not by observing that a job succeeded.
+    rationale: >
+      A backup job reporting success proves a file was written. It says nothing about
+      whether the contents can be restored.
+    implication: >
+      Dumps are checked for completion markers, and restores are exercised against a
+      throwaway database and compared to production.
+    plain_language: >
+      We regularly prove the backups actually work by restoring from them, rather than
+      trusting that they do.
+
+# ================================================================= BUSINESS ===
+Capability:
+  - id: cap-publishing
+    name: Content Publishing
+    maturity: defined
+    description: Author, host and serve public written content on an owned domain.
+    plain_language: Writing and publishing the blog, on our own address.
+  - id: cap-automation
+    name: Workflow Automation
+    maturity: managed
+    description: Build and run automated workflows, callable by external AI connectors.
+    plain_language: Building small automations that run on a schedule or when something calls them.
+  - id: cap-ai-access
+    name: Governed AI Model Access
+    maturity: managed
+    description: Route requests to multiple model providers through one audited gateway.
+    plain_language: >
+      A single front door to several AI providers, so usage and spend can be seen in one
+      place instead of scattered across accounts.
+  - id: cap-remote-access
+    name: Secure Remote Access
+    maturity: defined
+    description: Reach private services from anywhere without exposing the home network.
+    plain_language: Getting to my own services from anywhere, without leaving a door open at home.
+  - id: cap-data-protection
+    name: Data Protection and Recovery
+    maturity: defined
+    description: Protect estate data off-site with verified restoration.
+    plain_language: Keeping a safe, tested copy of everything somewhere other than the house.
+  - id: cap-domain-services
+    name: Domain Ownership and Services
+    maturity: defined
+    description: >
+      Own thelearningcto.com and the services bound to it — authoritative DNS, public web
+      addressing, and inbound mail routing.
+    plain_language: >
+      Owning the web address itself, and everything that hangs off it — the website
+      address and the email that arrives at it.
+  - id: cap-administration
+    name: Estate Administration
+    maturity: managed
+    description: Observe, deploy and repair the estate.
+    plain_language: "Day-to-day running: deploying changes, checking health, fixing faults."
+
+BusinessService:
+  - id: bs-blog
+    name: The Learning CTO blog
+    criticality: high
+    description: Public technical blog at thelearningcto.com; 63 posts spanning 2014-2019 plus current work.
+    plain_language: >
+      The public website. If it is down, nobody can read the articles; if its content were
+      lost, a decade of writing would go with it.
+  - id: bs-automation-endpoints
+    name: Automation endpoints
+    criticality: medium
+    description: Publicly callable workflow and MCP endpoints consumed by hosted AI connectors.
+    plain_language: >
+      Web addresses that let AI assistants trigger my automations. If they break, the
+      assistants simply cannot call them.
+  - id: bs-llm-gateway
+    name: LLM gateway
+    criticality: medium
+    description: Single authenticated proxy across OpenAI, Anthropic and Google models.
+    plain_language: One place to use several AI providers, with a record of what was spent.
+  - id: bs-demonstrations
+    name: Demonstration applications
+    criticality: low
+    description: Small published applications used to exercise and prove platform patterns.
+    plain_language: >
+      Toy applications that exist to prove the platform works. Nobody depends on them.
+  - id: bs-domain-email
+    name: Domain email forwarding
+    criticality: medium
+    description: >
+      Inbound mail to the domain forwarded to the operator's mailbox via ImprovMX MX records.
+    plain_language: >
+      Email sent to addresses at the domain arrives in my normal inbox. Nobody notices it
+      until it stops — and it is the thing most easily broken by a DNS change.
+  - id: bs-administration
+    name: Administration and observability
+    criticality: medium
+    description: Container and host management surface for the operator.
+    plain_language: The control panel used to see what is running and fix it.
+
+Actor:
+  - id: act-operator
+    name: Operator
+    kind: human
+    description: Sole administrator, author and owner of the estate.
+    plain_language: Me — the only person who administers any of this.
+  - id: act-public-reader
+    name: Public reader
+    kind: human
+    description: Anonymous internet visitor to the blog.
+    plain_language: Anyone on the internet reading the blog.
+  - id: act-ai-connector
+    name: Hosted AI connector
+    kind: machine
+    description: Third-party AI platform infrastructure calling published MCP and webhook endpoints.
+    plain_language: >
+      AI assistants calling in from outside to run an automation or use a tool.
+
+# ============================================================== APPLICATION ===
+ApplicationComponent:
+  - id: ac-wordpress
+    name: WordPress
+    stack: compose/wordpress
+    image: wordpress:7.1-php8.3-apache + mariadb:11.8
+    routing: not-path-mounted
+    lifecycle: production
+    description: Blog platform migrated off WordPress.com, serving thelearningcto.com.
+  - id: ac-n8n
+    name: n8n
+    stack: compose/n8n
+    image: n8nio/n8n:2.33.7 + postgres:15-alpine
+    routing: not-path-mounted
+    lifecycle: production
+    description: Workflow automation engine; publishes webhook and MCP trigger endpoints.
+  - id: ac-litellm
+    name: LiteLLM
+    stack: compose/litellm
+    image: ghcr.io/berriai/litellm:main-stable + postgres:16-alpine
+    routing: not-path-mounted
+    lifecycle: production
+    description: Multi-provider LLM proxy with key management and spend tracking.
+  - id: ac-weather-mcp
+    name: Weather MCP server
+    stack: compose/weather-mcp
+    image: locally built
+    source: ~/dev/claude/weather (vendored by compose/weather-mcp/sync-app.sh)
+    routing: strip
+    lifecycle: production
+    description: MCP tool server with an OAuth-protected public transport and a private GUI.
+  - id: ac-cockpit
+    name: Cockpit
+    stack: (host package, not containerised)
+    image: distribution package
+    routing: no-strip
+    lifecycle: production
+    description: Web administration console for the host and its containers.
+  - id: ac-tictactoe
+    name: Tic-tac-toe
+    stack: compose/tic-tac-toe
+    image: locally built
+    source: in-repo
+    routing: strip
+    lifecycle: demonstration
+    description: Reference app proving path-based routing with a relative API base.
+  - id: ac-helloworld
+    name: Hello world
+    stack: compose/hello-world
+    image: nginx:alpine
+    source: in-repo
+    routing: strip
+    lifecycle: demonstration
+    description: Smoke-test endpoint used by deployment health checks.
+  - id: ac-claudemock
+    name: Claude mock test
+    stack: compose/claude-mock-test
+    image: locally built
+    source: ~/dev/claude/mock-test (vendored by compose/claude-mock-test/sync-site.sh)
+    routing: strip
+    lifecycle: demonstration
+    description: Static practice-exam application; state held entirely in the browser.
+
+ApplicationService:
+  - id: as-blog-public
+    name: Blog (public web)
+    endpoint: https://thelearningcto.com
+    protocol: https
+    auth: none
+    description: Public read access to blog content.
+  - id: as-blog-admin
+    name: Blog administration
+    endpoint: https://thelearningcto.com/wp-admin
+    protocol: https
+    auth: edge-identity
+    description: WordPress admin, gated by Cloudflare Access before reaching the origin.
+  - id: as-n8n-editor
+    name: n8n editor and webhooks
+    endpoint: https://beeblebox.taile98462.ts.net/
+    protocol: https
+    auth: basic
+    description: Workflow editor plus registered webhook and MCP trigger URLs, root-mounted on :443.
+  - id: as-weather-mcp
+    name: Weather MCP transport
+    endpoint: https://beeblebox.taile98462.ts.net/weather
+    protocol: mcp
+    auth: oauth
+    description: Publicly reachable MCP endpoint; only the authenticated transport paths are published.
+  - id: as-weather-gui
+    name: Weather GUI
+    endpoint: https://beeblebox.taile98462.ts.net:8090/weather
+    protocol: https
+    auth: network-identity
+    description: Unauthenticated GUI, kept private precisely because it is unauthenticated.
+  - id: as-litellm-ui
+    name: LiteLLM admin UI and API
+    endpoint: https://beeblebox.taile98462.ts.net:8092/ui/
+    protocol: https
+    auth: basic
+    description: Given a dedicated port because its SPA hardcodes root-relative API paths.
+  - id: as-cockpit
+    name: Cockpit console
+    endpoint: https://beeblebox.taile98462.ts.net:8090/cockpit/
+    protocol: https
+    auth: basic
+    description: Host administration console, reachable only over the tailnet.
+  - id: as-claudemock
+    name: Claude mock test (public)
+    endpoint: https://beeblebox.taile98462.ts.net/claudemock
+    protocol: https
+    auth: none
+    description: Published deliberately; holds no data and makes no outbound calls.
+  - id: as-demos-private
+    name: Demonstration apps (private)
+    endpoint: https://beeblebox.taile98462.ts.net:8090/{tictactoe,helloworld}
+    protocol: https
+    auth: network-identity
+    description: Demo apps on the tailnet path router.
+  - id: as-lan-consoles
+    name: LAN service endpoints
+    endpoint: https://beeblebox:8443-8449, :9443
+    protocol: https
+    auth: network-identity
+    description: Direct per-service HTTPS ports on the home LAN, using a private CA.
+
+# ==================================================================== DATA ===
+DataEntity:
+  - id: de-blog-content
+    name: Blog content
+    classification: public
+    recoverability: irreplaceable
+    description: Posts, pages, taxonomy and comments — 63 posts, 3 pages, 29 attachments.
+    plain_language: A decade of published writing. Public to read, but impossible to recreate if lost.
+  - id: de-media-assets
+    name: Media assets
+    classification: public
+    recoverability: irreplaceable
+    description: Uploaded images and generated derivatives under wp-content.
+    plain_language: The images used in posts.
+  - id: de-workflow-definitions
+    name: Workflow definitions and credentials
+    classification: confidential
+    recoverability: irreplaceable
+    description: n8n workflows plus credentials encrypted at rest with N8N_ENCRYPTION_KEY.
+    plain_language: >
+      The automations themselves, and the saved logins they use. The logins are scrambled
+      with a key that must be kept separately — without it they can never be read again.
+  - id: de-llm-usage
+    name: LLM keys and usage history
+    classification: secret
+    recoverability: irreplaceable
+    description: Virtual API keys and accumulated spend/usage records.
+    plain_language: AI provider keys and the record of what has been spent.
+  - id: de-oauth-tokens
+    name: Issued OAuth tokens
+    classification: secret
+    recoverability: recoverable
+    description: Tokens issued by the weather MCP authorisation server; reissuable.
+    plain_language: Access passes handed to AI tools; they can simply be reissued.
+  - id: de-platform-secrets
+    name: Platform secrets
+    classification: secret
+    recoverability: irreplaceable
+    description: >
+      .env — N8N_ENCRYPTION_KEY, database passwords, provider API keys — plus tunnel
+      credentials and the private CA. Gitignored, so it exists nowhere else.
+    plain_language: >
+      The master key file. Losing it makes several of the backups permanently unreadable,
+      which is why it matters more than anything else here.
+
+DataStore:
+  - id: ds-wordpress-db
+    name: WordPress database
+    technology: MariaDB 11.8
+    backup_method: logical-dump
+    description: mariadb-dump --single-transaction, so the blog keeps serving during backup.
+  - id: ds-n8n-db
+    name: n8n database
+    technology: PostgreSQL 15
+    backup_method: logical-dump
+    description: pg_dump of the n8n database; credentials inside remain encrypted at rest.
+  - id: ds-litellm-db
+    name: LiteLLM database
+    technology: PostgreSQL 16
+    backup_method: logical-dump
+    description: pg_dump of the LiteLLM database holding virtual keys and spend history.
+  - id: ds-wp-content
+    name: WordPress site tree
+    technology: Podman volume
+    backup_method: file-copy
+    description: The whole /var/www/html including wp-config.php, not merely uploads.
+  - id: ds-n8n-data
+    name: n8n instance data
+    technology: Podman volume
+    backup_method: file-copy
+    description: n8n's instance directory; safe to copy as files since state lives in Postgres.
+  - id: ds-oauth-store
+    name: OAuth token store
+    technology: Podman volume
+    backup_method: file-copy
+    description: Small JSON store of issued tokens.
+  - id: ds-secrets
+    name: Secrets and credentials
+    technology: Host filesystem (.env, ~/.cloudflared, certs/)
+    backup_method: file-copy
+    description: Included in the encrypted snapshot; the reason encryption is load-bearing.
+
+# ============================================================== TECHNOLOGY ===
+Node:
+  - id: n-beeblebox
+    name: beeblebox
+    location: home
+    spec: Ubuntu 26.04, 12 cores, 30 GB RAM, 1.1 TB NVMe
+    description: Sole server. Runs every application component.
+  - id: n-laptop
+    name: darragh-laptop
+    location: home
+    spec: Windows + WSL2, Podman
+    description: Development and deployment workstation; runs no production workload.
+  - id: n-mobile
+    name: Mobile devices
+    location: mobile
+    spec: iOS
+    description: Tailnet members providing operator access away from home.
+
+TechnologyService:
+  - id: ts-podman
+    name: Container runtime
+    product: Podman 5.7.0 (rootless) + podman-compose
+    description: Runs every application component as an unprivileged user.
+  - id: ts-caddy
+    name: Reverse proxy and TLS termination
+    product: Caddy (host network)
+    description: Single ingress point; every tier's routing rules are expressed here.
+  - id: ts-systemd
+    name: Service lifecycle and scheduling
+    product: systemd user units with loginctl linger
+    description: Starts stacks at boot without login and drives the weekly backup timer.
+  - id: ts-tailscale
+    name: Mesh VPN and public funnel
+    product: Tailscale
+    description: Provides private device-identity reachability and the public *.ts.net ingress.
+  - id: ts-cloudflared
+    name: Outbound tunnel connector
+    product: cloudflared
+    description: Dials out to Cloudflare so the blog is public with no inbound port.
+  - id: ts-restic
+    name: Backup engine
+    product: restic 0.19.1 (containerised)
+    description: Client-side encrypted, deduplicating, weekly with 12-week retention.
+
+Network:
+  - id: net-internet
+    name: Public internet
+    trust: untrusted
+    description: Anonymous callers; the zone the public tiers are addressable from.
+  - id: net-tailnet
+    name: Tailnet
+    trust: authenticated
+    description: WireGuard mesh; membership is identity, so reachability implies authentication.
+  - id: net-home-lan
+    name: Home LAN
+    trust: trusted
+    description: 192.168.86.0/24 behind Google Wi-Fi and a bridged Verizon FIOS router.
+  - id: net-container
+    name: Container network
+    trust: trusted
+    description: >
+      The podman bridge networks and the host-internal address they reach. Membership is
+      being a workload on beeblebox; there is no boundary between members.
+
+ExternalProvider:
+  - id: ep-cloudflare
+    name: Cloudflare
+    function: Authoritative DNS, tunnel ingress, edge TLS, Access identity gating
+    cost: free tier
+    lock_in: medium
+    description: >
+      Holds the domain's DNS and fronts the blog. Substitutable, but doing so means
+      re-establishing DNS, tunnel and the admin identity gate together.
+  - id: ep-tailscale
+    name: Tailscale
+    function: Mesh VPN, private service reachability, public Funnel ingress
+    cost: free tier
+    lock_in: medium
+    description: Carries both the private tier and the machine-facing public tier.
+  - id: ep-azure-blob
+    name: Azure Blob Storage
+    function: Off-site encrypted backup repository
+    cost: pennies/month (Cool tier)
+    lock_in: low
+    description: restic abstracts the backend; substituting for S3 is a configuration change.
+  - id: ep-amazon-registrar
+    name: Amazon Registrar
+    function: Domain registration for thelearningcto.com
+    cost: ~annual domain fee
+    lock_in: low
+    description: Registrar of record; delegates DNS to Cloudflare nameservers.
+  - id: ep-improvmx
+    name: ImprovMX
+    function: Inbound email forwarding for the domain
+    cost: free tier
+    lock_in: low
+    description: Forwards mail addressed to the domain; depends on MX records surviving DNS changes.
+  - id: ep-github
+    name: GitHub
+    function: Configuration source of truth
+    cost: free tier
+    lock_in: low
+    description: Remote of the localserver-config repository that defines the estate.
+  - id: ep-model-providers
+    name: Model providers
+    function: OpenAI, Anthropic and Google inference APIs consumed via LiteLLM
+    cost: metered usage
+    lock_in: low
+    description: Upstream model APIs; the only metered cost in the estate.
+
+# ============================================================== EXTENSIONS ===
+ExposureTier:
+  - id: et-public-cloudflare
+    name: Public via Cloudflare
+    reachable_from: The entire internet
+    enforced_by: Cloudflare edge; admin paths additionally gated by Access
+    description: Custom-domain public tier. The only tier serving thelearningcto.com.
+    plain_language: Anyone in the world can reach this.
+  - id: et-public-funnel
+    name: Public via Tailscale Funnel
+    reachable_from: The entire internet
+    enforced_by: Tailscale Funnel on the *.ts.net hostname
+    description: >
+      Public tier for machine callers. Cannot serve a custom domain, which is precisely
+      why the blog needed Cloudflare instead.
+    plain_language: Also reachable by anyone, but on a technical address rather than a friendly one.
+  - id: et-tailnet
+    name: Tailnet only
+    reachable_from: Devices enrolled in the tailnet
+    enforced_by: Tailscale device identity
+    description: Default tier for anything with an admin surface or unauthenticated routes.
+    plain_language: Only my own enrolled devices can reach this, from anywhere in the world.
+  - id: et-lan
+    name: Home LAN only
+    reachable_from: Devices on the home network
+    enforced_by: Caddy listeners bound to the LAN with a private CA
+    description: Break-glass access path; not the designed route for any service.
+    plain_language: Only reachable from inside the house.
+  - id: et-loopback
+    name: Host internal only
+    reachable_from: beeblebox itself, and any container running on it
+    enforced_by: Bind to a host-internal address that is neither LAN- nor tailnet-routable
+    description: >
+      Where every application actually listens. Reaching it requires already being on
+      beeblebox — as the host, or as a workload it is running.
+    plain_language: >
+      Not reachable from outside the server — only from the server and the applications
+      it runs.
+
+Control:
+  - id: ctl-access-gate
+    name: Cloudflare Access on admin paths
+    type: preventive
+    description: >
+      Email OTP challenge at the edge for /wp-admin and /wp-login.php, so brute-force
+      traffic never reaches PHP.
+  - id: ctl-tailnet-identity
+    name: Tailnet device identity
+    type: preventive
+    description: Reachability requires an enrolled device, making network position the first auth factor.
+  - id: ctl-rootless
+    name: Rootless containers
+    type: preventive
+    description: Workloads run as uid 1000; a container escape does not yield host root.
+  - id: ctl-encrypted-backup
+    name: Client-side backup encryption
+    type: preventive
+    description: >
+      restic encrypts before upload, so the storage provider — and anyone holding only the
+      storage key — cannot read the secrets in the snapshot.
+  - id: ctl-offsite-copy
+    name: Weekly off-site copy
+    type: recovery
+    description: Weekly snapshot to Azure Blob, 12-week retention, surviving loss of the house.
+  - id: ctl-dump-verification
+    name: Dump completion verification
+    type: detective
+    description: >
+      Each dump is checked for its terminator, because a dump truncated midway still
+      produces a valid compressed file.
+  - id: ctl-restore-rehearsal
+    name: Restore rehearsal
+    type: detective
+    description: >
+      Restores are loaded into a throwaway database and compared row-for-row with
+      production.
+  - id: ctl-published-surface
+    name: Minimum published surface
+    type: preventive
+    description: >
+      Public fronts publish only what must be public — an allowlist for the MCP transport,
+      and xmlrpc.php blocked outright.
+
+Gap:
+  - id: gap-single-node
+    name: Single point of failure
+    severity: high
+    status: accepted
+    description: >
+      Every production workload runs on one machine in one house. Backups make the data
+      survivable; the service does not. Recovery is measured in hours of rebuild.
+    plain_language: >
+      Everything runs on one computer at home. If it fails, the services are down until
+      it is rebuilt — though nothing is permanently lost.
+  - id: gap-no-alerting
+    name: No monitoring or alerting
+    severity: medium
+    status: accepted
+    description: >
+      Nothing reports failure. A failed weekly backup or a stopped stack is discovered by
+      looking, which means the detective controls only fire when someone remembers.
+    plain_language: >
+      Nothing tells me when something breaks — I have to go and check.
+  - id: gap-residential-connectivity
+    name: Residential connectivity
+    severity: medium
+    status: accepted
+    description: Availability is bounded by a domestic ISP and household power.
+  - id: gap-no-secret-rotation
+    name: No secret rotation
+    severity: medium
+    status: accepted
+    description: >
+      Long-lived provider keys and a storage account key sit in .env with no rotation
+      schedule. A SAS token scoped to the backup container is the identified improvement.
+  - id: gap-public-demo-surface
+    name: Demonstration apps published
+    severity: low
+    status: accepted
+    description: >
+      claude-mock-test is served on the public Funnel. Accepted because it holds no data
+      and makes no outbound calls — but it is published surface earning nothing.
+  - id: gap-no-staging
+    name: No staging environment
+    severity: low
+    status: accepted
+    description: Changes are validated by deploying to production and verifying afterwards.
+  - id: gap-flat-east-west
+    name: No isolation between co-located workloads
+    severity: medium
+    status: accepted
+    description: >
+      Any container can reach any endpoint another container publishes, so a compromise of
+      one workload reaches the internal surface of all of them. Most published endpoints
+      authenticate their callers — litellm on virtual keys, n8n on basic auth — but
+      weather-mcp's bearer check wraps only its /mcp mount, leaving its GUI and /api/*
+      routes unauthenticated and now reachable from every other container.
+    plain_language: >
+      If one application on the server were broken into, it could talk to the others.
+      Accepted in exchange for not having to wire up every connection by hand.
+
+# ============================================================ RELATIONSHIPS ===
+relationships:
+  # Motivation -> Principle
+  - { from: d-currency,  name: motivates, to: p-reproducible }
+  - { from: d-currency,  name: motivates, to: p-rootless }
+  - { from: d-publish,   name: motivates, to: p-tested-recovery }
+  - { from: d-publish,   name: motivates, to: p-tiered-exposure }
+  - { from: d-frugal,    name: motivates, to: p-no-inbound }
+  - { from: d-frugal,    name: motivates, to: p-open-east-west }
+
+  # Principle -> what it governs
+  - { from: p-no-inbound,      name: governs, to: ep-cloudflare }
+  - { from: p-no-inbound,      name: governs, to: ep-tailscale }
+  - { from: p-tiered-exposure, name: governs, to: et-public-cloudflare }
+  - { from: p-tiered-exposure, name: governs, to: et-public-funnel }
+  - { from: p-tiered-exposure, name: governs, to: et-tailnet }
+  - { from: p-open-east-west,  name: governs, to: et-loopback }
+  - { from: p-rootless,        name: governs, to: ts-podman }
+  - { from: p-reproducible,    name: governs, to: ts-systemd }
+  - { from: p-tested-recovery, name: governs, to: ts-restic }
+  - { from: p-tested-recovery, name: governs, to: ds-secrets }
+
+  # Capability realisation
+  - { from: cap-publishing,       name: realised_by, to: ac-wordpress }
+  - { from: cap-automation,       name: realised_by, to: ac-n8n }
+  - { from: cap-ai-access,        name: realised_by, to: ac-litellm }
+  - { from: cap-automation,       name: realised_by, to: ac-weather-mcp }
+  - { from: cap-administration,   name: realised_by, to: ac-cockpit }
+  - { from: cap-remote-access,    name: realised_by, to: ac-cockpit }
+  - { from: cap-data-protection,  name: realised_by, to: ac-wordpress }
+
+  # Business service -> capability, and -> consumer
+  - { from: bs-blog,                 name: supports, to: cap-publishing }
+  - { from: bs-automation-endpoints, name: supports, to: cap-automation }
+  - { from: bs-llm-gateway,          name: supports, to: cap-ai-access }
+  - { from: bs-administration,       name: supports, to: cap-administration }
+  - { from: bs-administration,       name: supports, to: cap-remote-access }
+  - { from: bs-demonstrations,       name: supports, to: cap-automation }
+  - { from: bs-blog,                 name: consumed_by, to: act-public-reader }
+  - { from: bs-blog,                 name: consumed_by, to: act-operator }
+  - { from: bs-automation-endpoints, name: consumed_by, to: act-ai-connector }
+  - { from: bs-llm-gateway,          name: consumed_by, to: act-operator }
+  - { from: bs-administration,       name: consumed_by, to: act-operator }
+  - { from: bs-demonstrations,       name: consumed_by, to: act-public-reader }
+
+  # Component -> service
+  - { from: ac-wordpress,    name: provides, to: as-blog-public }
+  - { from: ac-wordpress,    name: provides, to: as-blog-admin }
+  - { from: ac-n8n,          name: provides, to: as-n8n-editor }
+  - { from: ac-weather-mcp,  name: provides, to: as-weather-mcp }
+  - { from: ac-weather-mcp,  name: provides, to: as-weather-gui }
+  - { from: ac-litellm,      name: provides, to: as-litellm-ui }
+  - { from: ac-cockpit,      name: provides, to: as-cockpit }
+  - { from: ac-claudemock,   name: provides, to: as-claudemock }
+  - { from: ac-tictactoe,    name: provides, to: as-demos-private }
+  - { from: ac-helloworld,   name: provides, to: as-lan-consoles }
+
+  # Service -> business service
+  - { from: as-blog-public,   name: delivers, to: bs-blog }
+  - { from: as-blog-admin,    name: delivers, to: bs-blog }
+  - { from: as-n8n-editor,    name: delivers, to: bs-automation-endpoints }
+  - { from: as-weather-mcp,   name: delivers, to: bs-automation-endpoints }
+  - { from: as-weather-gui,   name: delivers, to: bs-automation-endpoints }
+  - { from: as-litellm-ui,    name: delivers, to: bs-llm-gateway }
+  - { from: as-cockpit,       name: delivers, to: bs-administration }
+  - { from: as-lan-consoles,  name: delivers, to: bs-administration }
+  - { from: as-claudemock,    name: delivers, to: bs-demonstrations }
+  - { from: as-demos-private, name: delivers, to: bs-demonstrations }
+
+  # Service -> exposure tier (invariant: exactly one each)
+  - { from: as-blog-public,   name: exposed_via, to: et-public-cloudflare }
+  - { from: as-blog-admin,    name: exposed_via, to: et-public-cloudflare }
+  - { from: as-n8n-editor,    name: exposed_via, to: et-public-funnel }
+  - { from: as-weather-mcp,   name: exposed_via, to: et-public-funnel }
+  - { from: as-claudemock,    name: exposed_via, to: et-public-funnel }
+  - { from: as-weather-gui,   name: exposed_via, to: et-tailnet }
+  - { from: as-litellm-ui,    name: exposed_via, to: et-tailnet }
+  - { from: as-cockpit,       name: exposed_via, to: et-tailnet }
+  - { from: as-demos-private, name: exposed_via, to: et-tailnet }
+  - { from: as-lan-consoles,  name: exposed_via, to: et-lan }
+
+  # Tier enforcement
+  - { from: et-public-cloudflare, name: enforced_by, to: ep-cloudflare }
+  - { from: et-public-cloudflare, name: enforced_by, to: ts-cloudflared }
+  - { from: et-public-funnel,     name: enforced_by, to: ep-tailscale }
+  - { from: et-tailnet,           name: enforced_by, to: ts-tailscale }
+  - { from: et-lan,               name: enforced_by, to: ts-caddy }
+  - { from: et-loopback,          name: enforced_by, to: ts-podman }
+
+  # Data ownership and persistence
+  - { from: ac-wordpress,   name: manages, to: de-blog-content }
+  - { from: ac-wordpress,   name: manages, to: de-media-assets }
+  - { from: ac-n8n,         name: manages, to: de-workflow-definitions }
+  - { from: ac-litellm,     name: manages, to: de-llm-usage }
+  - { from: ac-weather-mcp, name: manages, to: de-oauth-tokens }
+  - { from: de-blog-content,         name: persisted_in, to: ds-wordpress-db }
+  - { from: de-media-assets,         name: persisted_in, to: ds-wp-content }
+  - { from: de-workflow-definitions, name: persisted_in, to: ds-n8n-db }
+  - { from: de-workflow-definitions, name: persisted_in, to: ds-n8n-data }
+  - { from: de-llm-usage,            name: persisted_in, to: ds-litellm-db }
+  - { from: de-oauth-tokens,         name: persisted_in, to: ds-oauth-store }
+  - { from: de-platform-secrets,     name: persisted_in, to: ds-secrets }
+
+  # Deployment
+  - { from: ac-wordpress,   name: deployed_on, to: n-beeblebox }
+  - { from: ac-n8n,         name: deployed_on, to: n-beeblebox }
+  - { from: ac-litellm,     name: deployed_on, to: n-beeblebox }
+  - { from: ac-weather-mcp, name: deployed_on, to: n-beeblebox }
+  - { from: ac-cockpit,     name: deployed_on, to: n-beeblebox }
+  - { from: ac-tictactoe,   name: deployed_on, to: n-beeblebox }
+  - { from: ac-helloworld,  name: deployed_on, to: n-beeblebox }
+  - { from: ac-claudemock,  name: deployed_on, to: n-beeblebox }
+
+  # Dependencies
+  - { from: ac-wordpress,   name: depends_on, to: ts-podman }
+  - { from: ac-wordpress,   name: depends_on, to: ts-caddy }
+  - { from: ac-wordpress,   name: depends_on, to: ep-cloudflare }
+  - { from: ac-n8n,         name: depends_on, to: ts-podman }
+  - { from: ac-n8n,         name: depends_on, to: ep-tailscale }
+  - { from: ac-litellm,     name: depends_on, to: ts-podman }
+  - { from: ac-litellm,     name: depends_on, to: ep-model-providers }
+  - { from: ac-weather-mcp, name: depends_on, to: ts-podman }
+  - { from: ac-weather-mcp, name: depends_on, to: ep-tailscale }
+  - { from: ac-cockpit,     name: depends_on, to: ts-caddy }
+  - { from: ac-tictactoe,   name: depends_on, to: ts-podman }
+  - { from: ac-helloworld,  name: depends_on, to: ts-podman }
+  - { from: ac-claudemock,  name: depends_on, to: ts-podman }
+
+  # Network
+  - { from: n-beeblebox, name: connects, to: net-home-lan }
+  - { from: n-beeblebox, name: connects, to: net-tailnet }
+  - { from: n-laptop,    name: connects, to: net-home-lan }
+  - { from: n-laptop,    name: connects, to: net-tailnet }
+  - { from: n-mobile,    name: connects, to: net-tailnet }
+
+  # Controls: what each protects, and which principle it implements
+  - { from: ctl-access-gate,        name: protects,   to: as-blog-admin }
+  - { from: ctl-access-gate,        name: implements, to: p-tiered-exposure }
+  - { from: ctl-tailnet-identity,   name: protects,   to: as-cockpit }
+  - { from: ctl-tailnet-identity,   name: protects,   to: as-litellm-ui }
+  - { from: ctl-tailnet-identity,   name: protects,   to: as-weather-gui }
+  - { from: ctl-tailnet-identity,   name: implements, to: p-tiered-exposure }
+  - { from: ctl-rootless,           name: protects,   to: n-beeblebox }
+  - { from: ctl-rootless,           name: implements, to: p-rootless }
+  - { from: ctl-encrypted-backup,   name: protects,   to: de-platform-secrets }
+  - { from: ctl-encrypted-backup,   name: implements, to: p-tested-recovery }
+  - { from: ctl-offsite-copy,       name: protects,   to: ds-wordpress-db }
+  - { from: ctl-offsite-copy,       name: protects,   to: ds-n8n-db }
+  - { from: ctl-offsite-copy,       name: protects,   to: ds-litellm-db }
+  - { from: ctl-offsite-copy,       name: protects,   to: ds-wp-content }
+  - { from: ctl-offsite-copy,       name: protects,   to: ds-n8n-data }
+  - { from: ctl-offsite-copy,       name: protects,   to: ds-oauth-store }
+  - { from: ctl-offsite-copy,       name: protects,   to: ds-secrets }
+  - { from: ctl-offsite-copy,       name: implements, to: p-tested-recovery }
+  - { from: ctl-dump-verification,  name: protects,   to: ds-wordpress-db }
+  - { from: ctl-dump-verification,  name: implements, to: p-tested-recovery }
+  - { from: ctl-restore-rehearsal,  name: protects,   to: de-blog-content }
+  - { from: ctl-restore-rehearsal,  name: implements, to: p-tested-recovery }
+  - { from: ctl-published-surface,  name: protects,   to: as-weather-mcp }
+  - { from: ctl-published-surface,  name: protects,   to: as-blog-public }
+  - { from: ctl-published-surface,  name: implements, to: p-tiered-exposure }
+
+  # Gaps
+  - { from: gap-single-node,             name: affects, to: n-beeblebox }
+  - { from: gap-single-node,             name: affects, to: bs-blog }
+  - { from: gap-no-alerting,             name: affects, to: bs-administration }
+  - { from: gap-residential-connectivity, name: affects, to: bs-blog }
+  - { from: gap-no-secret-rotation,      name: affects, to: ds-secrets }
+  - { from: gap-public-demo-surface,     name: affects, to: ac-claudemock }
+  - { from: gap-no-staging,              name: affects, to: n-beeblebox }
+  - { from: gap-flat-east-west,          name: affects, to: ac-weather-mcp }
+  - { from: gap-flat-east-west,          name: affects, to: n-beeblebox }
+
+  # Domain as an asset: this capability is realised by bought services, not built ones.
+  - { from: cap-domain-services, name: realised_by, to: ep-amazon-registrar }
+  - { from: cap-domain-services, name: realised_by, to: ep-cloudflare }
+  - { from: cap-domain-services, name: realised_by, to: ep-improvmx }
+  - { from: bs-domain-email,     name: supports,    to: cap-domain-services }
+  - { from: bs-domain-email,     name: consumed_by, to: act-operator }
+  - { from: bs-blog,             name: supports,    to: cap-domain-services }
+
+  # Platform services have their own external dependencies.
+  - { from: ts-restic,     name: depends_on, to: ep-azure-blob }
+  - { from: ts-cloudflared, name: depends_on, to: ep-cloudflare }
+  - { from: ts-tailscale,  name: depends_on, to: ep-tailscale }
+
+  # The repo that defines the estate is what makes reproducibility real.
+  - { from: p-reproducible, name: governs, to: ep-github }
+
+  # Which trust zone each tier is addressable from.
+  - { from: et-public-cloudflare, name: trust_zone, to: net-internet }
+  - { from: et-public-funnel,     name: trust_zone, to: net-internet }
+  - { from: et-tailnet,           name: trust_zone, to: net-tailnet }
+  - { from: et-lan,               name: trust_zone, to: net-home-lan }
+  - { from: et-loopback,          name: trust_zone, to: net-container }
+
+  # Email forwarding is the dependency most easily broken by a DNS migration.
+  - { from: gap-no-alerting, name: affects, to: bs-domain-email }

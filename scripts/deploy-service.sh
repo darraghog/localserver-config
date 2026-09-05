@@ -16,9 +16,9 @@
 #
 # Examples:
 #   ./scripts/deploy-service.sh dev local tic-tac-toe
-#   ./scripts/deploy-service.sh prod darragh-pc tic-tac-toe
-#   ./scripts/deploy-service.sh --ssh-port 2222 prod user@darragh-pc tic-tac-toe tls-proxy
-#   DEPLOY_SSH_DEST=user@192.168.1.50 ./scripts/deploy-service.sh prod darragh-pc hello-world
+#   ./scripts/deploy-service.sh prod <hostname> tic-tac-toe
+#   ./scripts/deploy-service.sh --ssh-port 2222 prod user@<hostname> tic-tac-toe tls-proxy
+#   DEPLOY_SSH_DEST=user@192.168.1.50 ./scripts/deploy-service.sh prod <hostname> hello-world
 #
 # Environment variables (optional):
 #   DEPLOY_SSH_DEST, DEPLOY_SSH_PORT  — same as deploy-to-server.sh

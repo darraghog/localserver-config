@@ -19,7 +19,7 @@ services:
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
     ports:
-      - "127.0.0.1:4000:4000"
+      - "${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}:4000:4000"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
     env_file:

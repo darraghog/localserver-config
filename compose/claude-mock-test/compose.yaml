@@ -4,7 +4,7 @@ services:
     # Loopback only: reached through Caddy (:8446 LAN TLS, /claudemock on the :8090
     # tailnet router), never directly.
     ports:
-      - "127.0.0.1:8093:80"
+      - "${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}:8093:80"
     restart: unless-stopped
     healthcheck:
       test: "wget -qO- http://127.0.0.1/ || exit 1"

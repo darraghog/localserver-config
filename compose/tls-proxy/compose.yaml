@@ -7,6 +7,10 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./router-static:/srv/router:ro
     command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    environment:
+      # Backends published under p-open-east-west live on a per-host address; the Caddyfile
+      # reads it as {env.HOST_INTERNAL_IP}. Fail loudly rather than proxying to ":PORT".
+      HOST_INTERNAL_IP: ${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}
     restart: unless-stopped
     init: true
     network_mode: host

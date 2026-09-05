@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Validate architecture/model.yaml before a commit that could invalidate it.
+#
+# Catches model drift at commit time; scripts/lib/stack-helpers.sh's require_conformant_model()
+# is the real gate and blocks the deploy itself. This hook is the early, cheap warning.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+# (scripts/sudo/bootstrap-host.sh does this for you.)
+# Bypass for a work-in-progress commit:  git commit --no-verify
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# Only worth running when something that shapes the model is staged.
+if ! git diff --cached --name-only | grep -qE '^(architecture/|compose/|scripts/arch-validate\.py)'; then
+  exit 0
+fi
+
+if [[ ! -f "$REPO_ROOT/architecture/model.yaml" ]]; then
+  exit 0
+fi
+
+if ! command -v python3 &>/dev/null; then
+  echo "[pre-commit] python3 not found; skipping architecture validation." >&2
+  exit 0
+fi
+
+if ! python3 "$REPO_ROOT/scripts/arch-validate.py"; then
+  echo "" >&2
+  echo "[pre-commit] architecture/model.yaml does not conform — commit refused." >&2
+  echo "[pre-commit] Fix the model, or commit with --no-verify if this is a WIP commit." >&2
+  exit 1
+fi

@@ -11,6 +11,24 @@
 # :8092 is litellm's dedicated tailnet-only port (root-mounted — see the :8092 block below
 # for why it can't be path-mounted on :8090). See docs/NETWORK-CONFIG.md.
 # New ":PORT {" sites here are picked up by scripts/setup-windows-podman-lan-ports.ps1 on Windows.
+#
+# Three address forms appear below and they are NOT interchangeable:
+#   bind 127.0.0.1          - a Caddy listener only tailscaled (on this host) should reach.
+#   reverse_proxy {env.HOST_INTERNAL_IP}:PORT
+#                           - a container backend published under p-open-east-west
+#                             (architecture/model.yaml). The address is PER-HOST and comes
+#                             from HOST_INTERNAL_IP in .env, passed into this container by
+#                             compose/tls-proxy/compose.yaml:
+#                               beeblebox (native Linux, rootless podman + pasta) -> 127.0.0.1,
+#                                 reachable from containers only because pasta is configured
+#                                 with --map-host-loopback (see docs/NETWORK-CONFIG.md);
+#                               WSL2 hosts -> 10.255.255.254, WSL's host address on lo.
+#                             Never hardcode either value here: they differ per host and
+#                             Caddy has no shell-style ${VAR} substitution, only {env.VAR}.
+#   reverse_proxy 127.0.0.1:PORT
+#                           - a backend that is NOT a migrated container publish: cockpit
+#                             (:9090) is a host service, and hello-world (:8080) / n8n
+#                             (:5678) still publish on 0.0.0.0.
 :8443 {
   bind 0.0.0.0
   tls /certs/server.pem /certs/server-key.pem
@@ -24,17 +42,17 @@
 :8445 {
   bind 0.0.0.0
   tls /certs/server.pem /certs/server-key.pem
-  reverse_proxy 127.0.0.1:8091
+  reverse_proxy {env.HOST_INTERNAL_IP}:8091
 }
 :8446 {
   bind 0.0.0.0
   tls /certs/server.pem /certs/server-key.pem
-  reverse_proxy 127.0.0.1:8093
+  reverse_proxy {env.HOST_INTERNAL_IP}:8093
 }
 :8447 {
   bind 0.0.0.0
   tls /certs/server.pem /certs/server-key.pem
-  reverse_proxy 127.0.0.1:4000 {
+  reverse_proxy {env.HOST_INTERNAL_IP}:4000 {
     header_up X-Forwarded-Proto {scheme}
     header_up X-Forwarded-Host {hostport}
     header_up Host {hostport}
@@ -48,12 +66,12 @@
 :8448 {
   bind 0.0.0.0
   tls /certs/server.pem /certs/server-key.pem
-  reverse_proxy 127.0.0.1:8094
+  reverse_proxy {env.HOST_INTERNAL_IP}:8094
 }
 :8449 {
   bind 0.0.0.0
   tls /certs/server.pem /certs/server-key.pem
-  reverse_proxy 127.0.0.1:8096
+  reverse_proxy {env.HOST_INTERNAL_IP}:8096
 }
 :9443 {
   bind 0.0.0.0
@@ -84,7 +102,7 @@
   # Strip is fine here: tic-tac-toe's frontend derives its API base from
   # location.pathname (see compose/tic-tac-toe/templates/index.html's BASE constant).
   handle_path /tictactoe/* {
-    reverse_proxy 127.0.0.1:8091
+    reverse_proxy {env.HOST_INTERNAL_IP}:8091
   }
   # Strip is fine here: the weather GUI derives its API base from location.pathname
   # the same way (see compose/weather-mcp/templates/index.html's BASE constant).
@@ -94,7 +112,7 @@
   # two mounts share a path name on different ports: :443/weather is MCP-only and
   # public, :8090/weather is the GUI and tailnet-only.
   handle_path /weather/* {
-    reverse_proxy 127.0.0.1:8094
+    reverse_proxy {env.HOST_INTERNAL_IP}:8094
   }
   # Strip is fine here: hello-world serves nginx's stock default page (no root-absolute
   # asset paths to break).
@@ -105,7 +123,7 @@
   # relative, and it makes no HTTP calls at all (state lives in localStorage) — verified
   # by grep before mounting, as docs/NETWORK-CONFIG.md requires.
   handle_path /claudemock/* {
-    reverse_proxy 127.0.0.1:8093
+    reverse_proxy {env.HOST_INTERNAL_IP}:8093
   }
   # n8n is NOT here — its registered webhook/MCP URLs (e.g. /mcp/<id>, /webhook/<id>) must
   # keep their exact path, and N8N_PATH is a whole-process setting (see "n8n: intentionally
@@ -130,7 +148,7 @@
 # Plain HTTP by design: Tailscale terminates TLS for tailnet clients (same as :8090).
 :8092 {
   bind 127.0.0.1
-  reverse_proxy 127.0.0.1:4000 {
+  reverse_proxy {env.HOST_INTERNAL_IP}:4000 {
     header_up X-Forwarded-Proto https
     header_up X-Forwarded-Host {hostport}
     header_up Host {hostport}
@@ -160,7 +178,7 @@
   # that completes the flow, RFC 8414/9728 discovery, and the health probe.
   @published path /mcp /mcp/* /health /login /authorize /token /register /revoke /.well-known/*
   handle @published {
-    reverse_proxy 127.0.0.1:8094
+    reverse_proxy {env.HOST_INTERNAL_IP}:8094
   }
 
   handle {
@@ -195,7 +213,7 @@
   # 302 to tight-sun-921f.cloudflareaccess.com before ever reaching this origin. Blocking
   # them here as well would break login for users Access has already authenticated.
   handle {
-    reverse_proxy 127.0.0.1:8096 {
+    reverse_proxy {env.HOST_INTERNAL_IP}:8096 {
       # Hardcoded https, not {scheme}: this site is plain HTTP, so {scheme} would say
       # "http" and overwrite the header Cloudflare set — and wp-config.php keys its
       # $_SERVER['HTTPS'] fix off exactly this header. Getting it wrong is an infinite
