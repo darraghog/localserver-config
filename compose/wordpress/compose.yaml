@@ -4,12 +4,15 @@
 # LAN:      https://<host>:8449          -> Caddy :8449 site
 # Public:   https://thelearningcto.com   -> Cloudflare Tunnel -> Caddy :8097 public front
 #
-# WP_HOME/WP_SITEURL are pinned to the public URL on purpose. WordPress bakes its site URL
-# into every generated link and canonical-redirects to it (same trap as n8n's
-# N8N_EDITOR_BASE_URL — see docs/NETWORK-CONFIG.md "n8n: root-mounted on public :443").
-# Consequence: the LAN :8449 door redirects to the public URL, so it is break-glass access
-# for checking the stack is alive, not a second admin entrance. Admin is gated at the
+# WP_HOME/WP_SITEURL default to the public URL. WordPress bakes its site URL into every
+# generated link and canonical-redirects to it (same trap as n8n's N8N_EDITOR_BASE_URL —
+# see docs/NETWORK-CONFIG.md "n8n: root-mounted on public :443"). In prod that is what you
+# want: the LAN :8449 door redirects to the public URL, making it break-glass access for
+# checking the stack is alive, not a second admin entrance. Admin is gated at the
 # Cloudflare edge by Access instead — see docs/NETWORK-CONFIG.md.
+#
+# Set WP_HOME/WP_SITEURL in .env to point a NON-PROD instance at its own address, so it can
+# be browsed locally instead of bouncing to production. Leave them unset in prod.
 services:
   db:
     image: docker.io/library/mariadb:11.8
@@ -48,6 +51,10 @@ services:
       - WORDPRESS_DB_NAME=wordpress
       - WORDPRESS_DB_USER=wordpress
       - WORDPRESS_DB_PASSWORD=${WORDPRESS_DB_PASSWORD}
+      # Read by config/config-extra.php, which falls back to the public URL when unset —
+      # so an environment that sets neither behaves as it did when these were hardcoded.
+      - WP_HOME=${WP_HOME:-https://thelearningcto.com}
+      - WP_SITEURL=${WP_SITEURL:-https://thelearningcto.com}
       # Written into wp-config.php on first run. Kept to a single line with no "$":
       # Compose would treat $_SERVER as a variable reference and silently blank it,
       # leaving broken PHP behind. The real settings live in config/config-extra.php.

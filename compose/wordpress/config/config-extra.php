@@ -16,10 +16,19 @@
  * redeploy without regenerating wp-config.php.
  */
 
-/* Canonical public URL. WordPress bakes this into every generated link and
-   canonical-redirects to it, which is why the LAN :8449 door bounces here. */
-define( 'WP_HOME', 'https://thelearningcto.com' );
-define( 'WP_SITEURL', 'https://thelearningcto.com' );
+/* Canonical site URL. WordPress bakes this into every generated link and
+   canonical-redirects to it, which is why the LAN :8449 door bounces to it in prod.
+
+   Overridable per environment so a non-prod instance can be browsed at its own
+   address instead of redirecting to production. compose.yaml passes WP_HOME and
+   WP_SITEURL through from .env, defaulting to the public URL — so an environment
+   that sets neither behaves exactly as it did when these were hardcoded.
+
+   plain getenv(), not the image's getenv_docker(): this file is required from
+   wp-config.php and must not depend on that helper still existing. An empty value
+   falls back too, so a blank line in .env cannot produce an empty WP_HOME. */
+define( 'WP_HOME',    getenv( 'WP_HOME' )    ?: 'https://thelearningcto.com' );
+define( 'WP_SITEURL', getenv( 'WP_SITEURL' ) ?: 'https://thelearningcto.com' );
 
 /* Cloudflare Tunnel and Caddy both speak plain HTTP to this container while the
    site URL above is https. Without this, WordPress decides the request was

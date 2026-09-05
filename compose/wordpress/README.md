@@ -4,6 +4,17 @@ How this platform publishes thelearningcto.com. Platform-side background:
 [`docs/NETWORK-CONFIG.md`](../../docs/NETWORK-CONFIG.md).
 Model entry: `ac-wordpress` in [`architecture/model.yaml`](../../architecture/model.yaml).
 
+## Running this stack outside production
+
+`WP_HOME` and `WP_SITEURL` are read from `.env` by `config/config-extra.php` and default to
+`https://thelearningcto.com` when unset — so production needs no configuration and behaves exactly
+as it did when they were hardcoded. A non-prod instance sets both to its own Caddy address
+(`envs/local.env` uses `https://127.0.0.1:8449`), otherwise WordPress canonical-redirects every
+request to the production domain and the instance cannot be browsed at all.
+
+Set them to the same value. The database is separate per environment, so a non-prod instance is a
+fresh install, not a copy of the live site.
+
 ## public on thelearningcto.com via Cloudflare Tunnel
 
 **Added 2026-08-30**, migrating the blog off the free WordPress.com plan

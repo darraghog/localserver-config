@@ -50,14 +50,13 @@ from rsync today, so any pipeline needs its own secret delivery.
 **Current:** Changes are exercised on the workstation (`local`) and then deployed to prod. `local`
 runs WSL2 (`HOST_INTERNAL_IP=10.255.255.254`) while prod is native Linux with rootless podman and
 pasta (`127.0.0.1`), so the two differ in exactly the layer most likely to break — container
-networking. WordPress additionally pins `WP_HOME`/`WP_SITEURL` to the public domain, so a local
-instance canonical-redirects to production.
+networking.
 
 **Improvement:** a cloud dev environment matching prod's shape (native Linux, rootless podman)
 rather than the workstation's. `envs/dev.env` is already wired for it — `deploy-to-server.sh <env>
 <target>` takes any env name, so a dev host needs no new deploy machinery, only credentials and a
-target. Per-environment `WP_HOME`/`WP_SITEURL` overrides would be needed for WordPress to be
-usable there.
+target. WordPress is already environment-aware: `WP_HOME`/`WP_SITEURL` come from `.env` and
+default to the public URL when unset.
 
 ## 2. n8n Reliability (Production-Ready)
 
