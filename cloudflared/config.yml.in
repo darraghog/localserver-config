@@ -11,10 +11,12 @@
 # port-forward option this repo documents as "Option to Avoid".
 tunnel: dfec2c79-9818-4af5-a23e-e69b0f329daf
 
-# Absolute path: this file is copied verbatim (unlike the .service files, which get
-# __HOME__/__REPO_ROOT__ substituted by bootstrap-host.sh). cert.pem lives alongside it
-# and is what `cloudflared tunnel route dns` authenticates with.
-credentials-file: /home/daradoom/.cloudflared/dfec2c79-9818-4af5-a23e-e69b0f329daf.json
+# Rendered from this template by scripts/sudo/bootstrap-host.sh, which substitutes __HOME__
+# the same way it does for the .service files, writing cloudflared/config.yml beside this
+# file (gitignored). The systemd unit reads that rendered file, so the tunnel never carries
+# one machine's home directory. cert.pem lives alongside the credentials JSON and is what
+# `cloudflared tunnel route dns` authenticates with.
+credentials-file: __HOME__/.cloudflared/dfec2c79-9818-4af5-a23e-e69b0f329daf.json
 
 # Cloudflare terminates TLS at the edge, so this leg is plain HTTP on loopback — the same
 # convention as the :8090 / :8095 sites where Tailscale terminates instead.

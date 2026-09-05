@@ -48,6 +48,7 @@ main() {
 
   mapfile -t stacks < <(list_stack_order)
   validate_n8n_env_for_stacks "${stacks[@]}"
+  validate_wordpress_env_for_stacks "${stacks[@]}"
 
   export N8N_HOST="${N8N_HOST:-$(hostname)}"
   export N8N_EDITOR_BASE_URL="${N8N_EDITOR_BASE_URL:-https://${N8N_HOST}:8444}"

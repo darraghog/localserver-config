@@ -25,6 +25,40 @@
 
 ---
 
+### 1.5 Deployment topology: prod is deployed from a workstation
+**Status:** ⬜ Open — the significant architectural gap
+**Current:** There are two real environments, not three. `local` is the workstation
+(`envs/local.env`) and is where development happens; `prod` is beeblebox. `envs/dev.env` exists but
+no dev environment does. Production deploys run `./scripts/deploy-to-server.sh prod <host>` **from
+the workstation**, which rsyncs that machine's working tree over SSH.
+
+**Why this matters:** what reaches production is whatever is in one laptop's working directory —
+not a reviewed commit, not a tagged build. Uncommitted edits deploy silently, the laptop must be
+on and reachable, and there is no record of what was deployed beyond local git state. The
+`.githooks/pre-commit` and `require_conformant_model()` gates constrain what can be committed and
+deployed, but neither can assert that the deployed tree matches `origin`.
+
+**Improvement:** deploy to beeblebox from GitHub rather than from a workstation — a workflow that
+builds from a pushed ref and pushes to the host (self-hosted runner on beeblebox, or a pull-based
+agent on the host reconciling against a ref). Deploying a *ref* rather than a *directory* is the
+actual change; the mechanism is secondary. `scripts/arch-validate.py` and the stack health checks
+already give such a pipeline its gates. Note the tunnel/certs/`.env` are deliberately excluded
+from rsync today, so any pipeline needs its own secret delivery.
+
+### 1.6 No non-production environment
+**Status:** ⬜ Open
+**Current:** Changes are exercised on the workstation (`local`) and then deployed to prod. `local`
+runs WSL2 (`HOST_INTERNAL_IP=10.255.255.254`) while prod is native Linux with rootless podman and
+pasta (`127.0.0.1`), so the two differ in exactly the layer most likely to break — container
+networking. WordPress additionally pins `WP_HOME`/`WP_SITEURL` to the public domain, so a local
+instance canonical-redirects to production.
+
+**Improvement:** a cloud dev environment matching prod's shape (native Linux, rootless podman)
+rather than the workstation's. `envs/dev.env` is already wired for it — `deploy-to-server.sh <env>
+<target>` takes any env name, so a dev host needs no new deploy machinery, only credentials and a
+target. Per-environment `WP_HOME`/`WP_SITEURL` overrides would be needed for WordPress to be
+usable there.
+
 ## 2. n8n Reliability (Production-Ready)
 
 ### 2.1 Security: N8N_ENCRYPTION_KEY **[High]**
@@ -117,3 +151,5 @@
 5. README: note SQLite is dev/single-user only; consider a quick-start/full-setup split.
 6. `EXECUTIONS_MODE=queue` + Redis — low priority, only if concurrent workflow load becomes an issue.
 7. Native Python task runner for n8n's Code node — new `task-runners` service (`n8nio/runners`) + `N8N_RUNNERS_AUTH_TOKEN` secret; see §2.6.
+8. **Deploy prod from GitHub, not from a workstation** — see §1.5. The largest structural gap.
+9. **Stand up a non-production environment** (cloud, prod-shaped) — see §1.6.

@@ -28,6 +28,29 @@ validate_n8n_env_for_stacks() {
   return 0
 }
 
+# WordPress's MariaDB exits on startup when its passwords are unset, and restart:unless-stopped
+# then retries forever — a silent crash loop rather than a failed deploy. Fail here instead.
+validate_wordpress_env_for_stacks() {
+  local need=0 s
+  for s in "$@"; do
+    [[ "$s" == "wordpress" ]] && need=1
+  done
+  [[ "$need" -eq 0 ]] && return 0
+
+  [[ -z "${WORDPRESS_DB_PASSWORD:-}" ]] && {
+    echo "ERROR: WORDPRESS_DB_PASSWORD is not set (required to deploy wordpress)." >&2
+    echo "       Set it in .env — without it MariaDB refuses to initialise and the db" >&2
+    echo "       container restarts indefinitely instead of failing." >&2
+    return 1
+  }
+  [[ -z "${MARIADB_ROOT_PASSWORD:-}" ]] && {
+    echo "ERROR: MARIADB_ROOT_PASSWORD is not set (required to deploy wordpress)." >&2
+    echo "       Set it in .env — see .env.example." >&2
+    return 1
+  }
+  return 0
+}
+
 assert_stack_compose_exists() {
   local name="$1" dir compose
   dir="$REPO_ROOT/compose/$name"

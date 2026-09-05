@@ -17,3 +17,6 @@ thelearningcto.WordPress.2026-08-30.xml
 
 # Per-machine Claude Code permissions - never track these.
 .claude/settings.local.json
+
+# Rendered from cloudflared/config.yml.in by scripts/sudo/bootstrap-host.sh (contains $HOME).
+cloudflared/config.yml

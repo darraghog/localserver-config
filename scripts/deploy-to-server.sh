@@ -172,7 +172,9 @@ else
     --exclude='certs/' \
     --exclude='.env' \
     --exclude='envs/' \
+    --exclude='cloudflared/config.yml' \
     --filter='P certs/' \
+    --filter='P cloudflared/config.yml' \
     "$REPO_ROOT/" "$SSH_DEST:$REMOTE_PATH/"; then
     ssh_port_hint
     exit 1

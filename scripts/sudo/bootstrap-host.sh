@@ -138,6 +138,17 @@ setup_podman_networking() {
   log "        estate, stop every container once so the change takes effect."
 }
 
+# Render cloudflared/config.yml from its template, so no machine's home directory is
+# hardcoded in a tracked config. Same __HOME__ substitution the .service files get.
+# The systemd unit reads the rendered file at __REPO_ROOT__/cloudflared/config.yml.
+render_cloudflared_config() {
+  local tpl="$REPO_ROOT/cloudflared/config.yml.in"
+  local out="$REPO_ROOT/cloudflared/config.yml"
+  [[ -f "$tpl" ]] || return 0
+  sed -e "s|__REPO_ROOT__|${REPO_ROOT}|g" -e "s|__HOME__|${HOME}|g" "$tpl" > "$out"
+  log "Rendered cloudflared/config.yml from template"
+}
+
 # Point git at the repo's tracked hooks, so the architecture model is validated before a
 # commit that could invalidate it. Per-clone git config, so it cannot be shipped in the repo.
 setup_git_hooks() {
@@ -155,6 +166,7 @@ main() {
   install_compose
   setup_podman_networking
   setup_systemd
+  render_cloudflared_config
   setup_git_hooks
   verify_podman
   log "Done. Next: configure .env, run ./scripts/setup-certs.sh if needed, then ./scripts/deploy.sh"
