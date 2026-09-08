@@ -72,7 +72,11 @@ caddy_backend_host_for_backend() {
 # HTTPS path to curl on the Caddy front door (stack-specific).
 caddy_verify_path_for_stack() {
   case "$1" in
-    litellm) printf '%s' "/health/liveliness" ;;
+    # Prefixed because litellm runs with SERVER_ROOT_PATH=/litellm. This one value is used
+    # for BOTH probes below — the backend directly on :4000, and the Caddy front door — so it
+    # depends on the @unprefixed guard in the Caddyfile's :8447/:8092 sites passing an
+    # already-prefixed path straight through instead of prefixing it twice.
+    litellm) printf '%s' "/litellm/health/liveliness" ;;
     n8n) printf '%s' "/healthz" ;;
     # Not "/": that renders the Flask GUI template on every deploy poll. /health
     # is a no-I/O JSON probe and stays answerable without a bearer token.

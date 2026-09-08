@@ -196,7 +196,7 @@ This disables Tailscale's DNS management. Your `resolv.conf` stays under your co
 
 ## Tailnet path routing
 
-**As of 2026-08-13:** tic-tac-toe, hello-world, and cockpit are tailnet-only (VPN required) via the `:8090` path router below. LiteLLM is also tailnet-only but on its own dedicated port (`:8092`), not the router — see its own section below. n8n is back on the public Funnel at root `:443` — same as its original setup, just reached via a fresh teardown/rebuild that day. n8n briefly sat on a dedicated public port (`:10000`) instead; that was reverted after claude.ai's MCP connector infrastructure repeatedly failed to connect to it there ("Couldn't register with N8N's sign-in service", `ofid_7b98ce3c2d189e3c`) while working immediately once moved back to standard `:443` — externally confirmed via a real outside-the-tailnet client, not just locally. No official Anthropic doc confirms a hard port-443 requirement for MCP connectors, but the evidence points that way; treat this as a strong empirical lesson, not confirmed spec: **prefer `:443` for any public MCP/webhook endpoint that Claude (or similar hosted connector infra) needs to reach.**
+**As of 2026-08-13:** tic-tac-toe, hello-world, and cockpit are tailnet-only (VPN required) via the `:8090` path router below. LiteLLM is also tailnet-only; as of 2026-09-08 it is path-mounted on the router at `/litellm` with `:8092` kept as a fallback — see its own section below. n8n is back on the public Funnel at root `:443` — same as its original setup, just reached via a fresh teardown/rebuild that day. n8n briefly sat on a dedicated public port (`:10000`) instead; that was reverted after claude.ai's MCP connector infrastructure repeatedly failed to connect to it there ("Couldn't register with N8N's sign-in service", `ofid_7b98ce3c2d189e3c`) while working immediately once moved back to standard `:443` — externally confirmed via a real outside-the-tailnet client, not just locally. No official Anthropic doc confirms a hard port-443 requirement for MCP connectors, but the evidence points that way; treat this as a strong empirical lesson, not confirmed spec: **prefer `:443` for any public MCP/webhook endpoint that Claude (or similar hosted connector infra) needs to reach.**
 
 On beeblebox, most Tailscale URLs use **path names instead of a port per service** (`/tictactoe` instead of remembering `:8445`) via a shared router; n8n is the exception and stays root-mounted on `:443` (see below) rather than joining the router.
 
@@ -226,26 +226,65 @@ stripping breaks it — it also needs `UrlRoot = /cockpit` in `/etc/cockpit/cock
 `scripts/sudo/setup-cockpit.sh`), and litellm is `not-path-mounted` at all — see its own section below.
 
 
-**Path-stripping footgun:** `handle_path` (and the old Funnel-era `tailscale serve --set-path`) strips the mount prefix before forwarding to the backend — a request to `/tictactoe/api/reset` arrives at the backend as `/api/reset`. That's fine for backends that don't need to know their own mount prefix, but a real footgun for ones that *do*: n8n's MCP webhook was once path-mounted this way and silently broke, because the stripped path no longer matched the webhook's registered ID (see n8n section below), and litellm's admin UI hits the same problem in a different way (see below). **Before path-mounting a new service, check whether its frontend/backend makes any absolute-root-path requests (assets *or* API calls) or otherwise depends on seeing its own mount prefix** — if so, either fix the app (preferred, see the tictactoe `BASE` pattern) or give it its own dedicated root mount/port instead.
+**Path-stripping footgun:** `handle_path` (and the old Funnel-era `tailscale serve --set-path`) strips the mount prefix before forwarding to the backend — a request to `/tictactoe/api/reset` arrives at the backend as `/api/reset`. That's fine for backends that don't need to know their own mount prefix, but a real footgun for ones that *do*: n8n's MCP webhook was once path-mounted this way and silently broke, because the stripped path no longer matched the webhook's registered ID (see n8n section below), and litellm's admin UI hit the same problem in a different way until `SERVER_ROOT_PATH` moved the whole app under its own prefix (see below). **Before path-mounting a new service, check whether its frontend/backend makes any absolute-root-path requests (assets *or* API calls) or otherwise depends on seeing its own mount prefix** — if so, either fix the app (preferred, see the tictactoe `BASE` pattern) or give it its own dedicated root mount/port instead.
 
-### litellm: dedicated tailnet-only port (`:8092`), not the path router
+### litellm: path-mounted at `/litellm` via `SERVER_ROOT_PATH`, `:8092` kept as a fallback
 
-litellm's admin UI is a Next.js SPA that can't be cleanly path-mounted, for two separable reasons — confirmed 2026-08-13 by diffing what works when hit directly on the backend vs. through the `:8090` router:
+**Superseded 2026-09-08.** litellm is mounted on the `:8090` router like everything else:
 
-1. **Static assets** are served from a fixed `/litellm-asset-prefix/_next/...` path baked into the build (litellm's own workaround for reverse-proxy deployments) — this is *not* relative to wherever you mount the app, so a plain `/litellm` path-mount 404s on every asset unless something also routes `/litellm-asset-prefix/*` to the backend.
-2. **API calls** (`/key/list`, `/global/activity`, `/model/cost_map/...`, everything the dashboard needs to show real data) are hardcoded root-relative in the JS bundle with no configurable base path at all — confirmed by grepping all 49 UI JS chunks for `PROXY_BASE_URL`/`basePath`/`assetPrefix` overrides and finding none. Even after fixing (1), a `/litellm` sub-path mount would load the UI shell but every data fetch would 404 against the site root instead of litellm.
+```
+https://beeblebox.taile98462.ts.net:8090/litellm/ui/
+```
 
-Point 2 has no workaround short of giving litellm the whole origin, which is exactly what the LAN `:8447` site already does (root-mounted, not path-mounted) — the tailnet mount mirrors that:
+**What changed.** The 2026-08-13 investigation (kept below) was right about the UI bundle and
+wrong about the conclusion it drew. It searched only for a *client-side* base path. litellm also
+has a server-side one — `SERVER_ROOT_PATH`, set in `compose/litellm/compose.yaml` — which moves
+the entire app, UI and assets and API together, under a prefix. Verified by probing the image
+directly with nothing else changed: `/litellm/ui/` returns `200` and the old root `/ui/` returns
+`404`.
+
+Because the app now serves its own prefix, the router uses `handle`, **not** `handle_path` — a
+strip would take the prefix straight back off and 404 everything. `architecture/model.yaml`
+records this as `routing: no-strip`. The router also carries a root-level
+`handle /litellm-asset-prefix/*` as belt and braces, since litellm builds have historically
+served assets from that fixed root-absolute path; it costs nothing if unused.
+
+**What it costs.** `SERVER_ROOT_PATH` moves *every* path, `/v1/...` and `/health/liveliness`
+included. Two consequences are handled in-tree and must stay in sync:
+
+- The `:8447` LAN site and the `:8092` tailnet site add the prefix for callers still using the
+  root-mounted base (`https://beeblebox:8447/v1/...`), so no API client had to change. Both use
+  `@unprefixed not path /litellm /litellm/*`, which passes an already-prefixed request through
+  untouched instead of turning it into `/litellm/litellm/...`.
+- `scripts/lib/post-deploy-caddy.sh` probes `/litellm/health/liveliness` and uses that single
+  value **both** directly against the backend and through Caddy — which only works because of
+  that pass-through. The compose healthcheck carries the same prefix.
+
+`:8092` stays for now as a known-good fallback, its `tailscale serve` mount unchanged:
 
 ```bash
 ssh beeblebox tailscale serve --bg --https=8092 http://127.0.0.1:8092
 ```
 
-```
-https://beeblebox.taile98462.ts.net:8092/ui/
+**Verify** — all must return `200`:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/litellm/ui/
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/litellm/health/liveliness
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8092/ui/
+# assets: take any src=/href= URL from the page source and fetch it through the same mount
+curl -s http://127.0.0.1:8090/litellm/ui/ | grep -oE '(src|href)="[^"]+"' | head -5
 ```
 
-The `:8092` Caddy site (plain HTTP, Tailscale terminates TLS — same convention as `:8090`) reuses the `:8447` LAN site's `Location`-header rewriting for litellm's self-redirects, with the URLs swapped for this port. Verify with: `curl http://127.0.0.1:8092/ui/`, `curl http://127.0.0.1:8092/litellm-asset-prefix/_next/static/...` (any chunk path from the page), and `curl http://127.0.0.1:8092/health/liveliness` — all three must return `200`.
+The last one is the check that catches a half-working mount: the UI shell can return `200` while
+every asset and data fetch 404s underneath it.
+
+**The original 2026-08-13 finding**, kept because the reasoning still applies to the next service
+you consider path-mounting — the UI's own JS really does hardcode root-relative paths, and
+`SERVER_ROOT_PATH` works by moving the server to meet them, not by making the bundle configurable:
+
+1. **Static assets** are served from a fixed `/litellm-asset-prefix/_next/...` path baked into the build (litellm's own workaround for reverse-proxy deployments) — this is *not* relative to wherever you mount the app, so a plain `/litellm` path-mount 404s on every asset unless something also routes `/litellm-asset-prefix/*` to the backend.
+2. **API calls** (`/key/list`, `/global/activity`, `/model/cost_map/...`, everything the dashboard needs to show real data) are hardcoded root-relative in the JS bundle with no configurable base path at all — confirmed by grepping all 49 UI JS chunks for `PROXY_BASE_URL`/`basePath`/`assetPrefix` overrides and finding none.
 
 ### n8n: root-mounted on public `:443`, not the path router
 

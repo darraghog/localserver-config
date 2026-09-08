@@ -32,6 +32,12 @@ services:
       UI_PASSWORD: ${LITELLM_UI_PASSWORD:-}
       PROXY_BASE_URL: ${LITELLM_PROXY_BASE_URL:-https://localhost:8447}
       STORE_MODEL_IN_DB: "True"
+      # Serve the whole app (UI, assets and API) under /litellm so it can be path-mounted
+      # on the :8090 tailnet router. The 2026-08-13 investigation ruled out a path mount by
+      # grepping the UI bundle for a *client-side* base path and finding none; this is the
+      # server-side setting it did not try. Until the Caddy rewrites land, this moves the
+      # :8447 and :8092 mounts to /litellm/... too — see docs/NETWORK-CONFIG.md.
+      SERVER_ROOT_PATH: /litellm
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -40,7 +46,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=8)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/litellm/health/liveliness', timeout=8)"]
       interval: 30s
       timeout: 10s
       retries: 3

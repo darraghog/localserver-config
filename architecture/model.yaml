@@ -243,7 +243,7 @@ ApplicationComponent:
     name: LiteLLM
     stack: compose/litellm
     image: ghcr.io/berriai/litellm:main-stable + postgres:16-alpine
-    routing: not-path-mounted
+    routing: no-strip
     lifecycle: production
     description: Multi-provider LLM proxy with key management and spend tracking.
   - id: ac-weather-mcp
@@ -319,10 +319,11 @@ ApplicationService:
     description: Unauthenticated GUI, kept private precisely because it is unauthenticated.
   - id: as-litellm-ui
     name: LiteLLM admin UI and API
-    endpoint: https://beeblebox.taile98462.ts.net:8092/ui/
+    endpoint: https://beeblebox.taile98462.ts.net:8090/litellm/ui/
     protocol: https
     auth: basic
-    description: Given a dedicated port because its SPA hardcodes root-relative API paths.
+    description: Path-mounted on the tailnet router via SERVER_ROOT_PATH; the dedicated
+      :8092 port is retained as a fallback until the mount has proven itself.
   - id: as-cockpit
     name: Cockpit console
     endpoint: https://beeblebox.taile98462.ts.net:8090/cockpit/

@@ -52,6 +52,13 @@
 :8447 {
   bind 0.0.0.0
   tls /certs/server.pem /certs/server-key.pem
+  # litellm serves under SERVER_ROOT_PATH=/litellm. Add the prefix for callers still using
+  # the root-mounted base (https://beeblebox:8447/v1/..., the tailnet /ui/), and pass an
+  # already-prefixed path through untouched so nothing ever gets /litellm/litellm/... .
+  # scripts/lib/post-deploy-caddy.sh depends on that pass-through: its one health path
+  # (/litellm/health/liveliness) is probed both directly and through these sites.
+  @unprefixed not path /litellm /litellm/*
+  rewrite @unprefixed /litellm{uri}
   reverse_proxy {env.HOST_INTERNAL_IP}:4000 {
     header_up X-Forwarded-Proto {scheme}
     header_up X-Forwarded-Host {hostport}
@@ -92,6 +99,7 @@
   redir /helloworld /helloworld/
   redir /claudemock /claudemock/
   redir /weather /weather/
+  redir /litellm /litellm/
 
   # No strip: Cockpit's own asset scheme uses "/cockpit/$checksum/..." as an internal
   # path convention — stripping the prefix here would break it. Requires UrlRoot=/cockpit
@@ -125,16 +133,28 @@
   handle_path /claudemock/* {
     reverse_proxy {env.HOST_INTERNAL_IP}:8093
   }
+  # No strip, unlike the mounts above: litellm runs with SERVER_ROOT_PATH=/litellm
+  # (compose/litellm/compose.yaml), so the app serves — and expects to see — its own prefix.
+  # handle_path would strip it back off and 404 everything.
+  #
+  # This reverses the 2026-08-13 verdict recorded in docs/NETWORK-CONFIG.md. That
+  # investigation was right that the UI bundle has no *client-side* base path; it did not try
+  # the server-side one. Confirmed 2026-09-08 by probing the image directly: with
+  # SERVER_ROOT_PATH set, /litellm/ui/ returns 200 and the old root /ui/ returns 404.
+  handle /litellm/* {
+    reverse_proxy {env.HOST_INTERNAL_IP}:4000
+  }
+  # Belt and braces: litellm builds have historically served UI assets from a fixed,
+  # root-absolute /litellm-asset-prefix/... path that SERVER_ROOT_PATH does not move. Costs
+  # nothing if unused — no other service on this router claims that path.
+  handle /litellm-asset-prefix/* {
+    reverse_proxy {env.HOST_INTERNAL_IP}:4000
+  }
   # n8n is NOT here — its registered webhook/MCP URLs (e.g. /mcp/<id>, /webhook/<id>) must
   # keep their exact path, and N8N_PATH is a whole-process setting (see "n8n: intentionally
   # excluded" in docs/NETWORK-CONFIG.md) — a prefix strip or redirect would break
   # already-registered callers. It's root-funneled on the public :443 port instead
   # (also required for external MCP connector infra to reach it — see docs).
-  # litellm is NOT here either — its admin UI is a Next.js SPA whose API calls
-  # (/key/list, /global/activity, etc.) are hardcoded root-relative with no configurable
-  # base path, so a /litellm sub-path mount can serve the shell but never load real data.
-  # It gets its own dedicated tailnet-only port instead: see the :8092 block below.
-
   handle {
     root * /srv/router
     file_server
@@ -148,6 +168,13 @@
 # Plain HTTP by design: Tailscale terminates TLS for tailnet clients (same as :8090).
 :8092 {
   bind 127.0.0.1
+  # litellm serves under SERVER_ROOT_PATH=/litellm. Add the prefix for callers still using
+  # the root-mounted base (https://beeblebox:8447/v1/..., the tailnet /ui/), and pass an
+  # already-prefixed path through untouched so nothing ever gets /litellm/litellm/... .
+  # scripts/lib/post-deploy-caddy.sh depends on that pass-through: its one health path
+  # (/litellm/health/liveliness) is probed both directly and through these sites.
+  @unprefixed not path /litellm /litellm/*
+  rewrite @unprefixed /litellm{uri}
   reverse_proxy {env.HOST_INTERNAL_IP}:4000 {
     header_up X-Forwarded-Proto https
     header_up X-Forwarded-Host {hostport}
