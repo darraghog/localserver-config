@@ -75,7 +75,8 @@ default to the public URL when unset.
 
 ### 2.4 Image tag: avoid `latest` **[Medium]**
 **Status:** ✅ Resolved (commit `455068a`)
-**Current:** Pinned to `n8nio/n8n:2.19.5`.
+**Current:** n8n is pinned to `n8nio/n8n:2.33.7`. The rest of the estate is mixed by intent: wordpress, mariadb, both postgres instances and the Python base images are pinned; nginx, caddy and litellm itself deliberately track moving tags (`alpine`, `main-stable`) and are refreshed on every `./scripts/deploy.sh` by the pull-and-compare in `start-stack.sh`.
+**Remaining:** Pinning creates the opposite problem — nothing announces that a newer version exists, and this entry claimed `2.19.5` for months after the pin had moved. `scripts/check-updates.py` now reports every pinned tag against the newest published tag of the same shape, separating a leading-number change (postgres/mariadb majors need a dump/restore, not a tag edit) from the rest, and flags where `compose/` and `architecture/model.yaml` disagree about an image. It is advisory and manual: no hook, no CI, and `arch-validate.py` is untouched.
 
 ### 2.5 EXECUTIONS_MODE for concurrency **[Low]**
 **Status:** ⏳ Open
@@ -152,3 +153,4 @@ default to the public URL when unset.
 7. Native Python task runner for n8n's Code node — new `task-runners` service (`n8nio/runners`) + `N8N_RUNNERS_AUTH_TOKEN` secret; see §2.6.
 8. **Deploy prod from GitHub, not from a workstation** — see §1.5. The largest structural gap.
 9. **Stand up a non-production environment** (cloud, prod-shaped) — see §1.6.
+10. Run `scripts/check-updates.py` on a schedule (or in the deploy pipeline of §1.5) — today it only reports when someone remembers to run it, which is the failure mode §2.4 already demonstrated.

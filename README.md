@@ -83,6 +83,7 @@ Uses `envs/local.env` and deploys on this machine.
 | `compose/stack-order` | Lines = stack directory names; order used by `deploy.sh` |
 | `scripts/deploy-to-server.sh` | `<env> <target> [<ssh-port>]` — remote sync+deploy, or **local** if target is this host; `DEPLOY_SSH_DEST`, `DEPLOY_SSH_PORT` |
 | `scripts/check-tls.sh` | TLS diagnostic |
+| `scripts/check-updates.py` | Report pinned image tags vs newest published, plus compose ↔ `model.yaml` drift (read-only; `--offline`, `--stack`, `--strict`). Tests: `python3 -m unittest discover -s tests` |
 | `tests/check-ports.sh` | Port checks (WSL-side only — does not test Windows LAN reachability); use `--core-only` for 8080/5678 only; full list includes Caddy TLS + Cockpit |
 | `scripts/setup-windows-hosts.ps1` | Windows hosts file (requires `LOCALSERVER_HOST_PRIMARY`; optional `LOCALSERVER_HOST_SECONDARY`; Admin) |
 | `scripts/setup-windows-port-forward.ps1` | Forward Windows 8443/8444 → WSL (alternative to hosts; run as Admin) |
