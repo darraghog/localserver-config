@@ -318,12 +318,24 @@ ApplicationService:
     auth: network-identity
     description: Unauthenticated GUI, kept private precisely because it is unauthenticated.
   - id: as-litellm-ui
-    name: LiteLLM admin UI and API
+    name: LiteLLM admin console
     endpoint: https://beeblebox.taile98462.ts.net:8090/litellm/ui/
     protocol: https
     auth: basic
-    description: Path-mounted on the tailnet router via SERVER_ROOT_PATH; the dedicated
-      :8092 port is retained as a fallback until the mount has proven itself.
+    description: Operator console for keys, models and spend — an administrative surface,
+      not the gateway itself, which is why it delivers administration rather than the LLM
+      gateway. Path-mounted on the tailnet router via SERVER_ROOT_PATH; the dedicated :8092
+      port is retained as a fallback until the mount has proven itself.
+  - id: as-litellm-api
+    name: LiteLLM OpenAI-compatible API
+    endpoint: https://beeblebox.taile98462.ts.net:8090/litellm/v1
+    protocol: https
+    auth: api-key
+    description: The gateway proper — /v1/chat/completions and the rest — authenticated by
+      the master key or a virtual key, not by the console's login. Intended for east-west use
+      by components on beeblebox (http://127.0.0.1:4000/litellm/v1); it answers more widely
+      than that today, which gap-litellm-api-reach records. Any route that later needs
+      internet exposure for an integration gets its own service entry and its own tier.
   - id: as-cockpit
     name: Cockpit console
     endpoint: https://beeblebox.taile98462.ts.net:8090/cockpit/
@@ -668,6 +680,19 @@ Gap:
     severity: low
     status: accepted
     description: Changes are validated by deploying to production and verifying afterwards.
+  - id: gap-litellm-api-reach
+    name: LLM gateway API reachable beyond its intended scope
+    severity: low
+    status: accepted
+    description: >
+      The API is intended to be east-west only, called by components running on beeblebox.
+      Caddy proxies the whole app, so /v1 also answers on the LAN (:8447) and on the tailnet
+      (:8090/litellm and :8092) alongside the console. Every route is key-authenticated, so
+      this widens who may present a key rather than removing the check. Narrowing it means an
+      allowlist on those sites — the pattern the :8095 site already uses for weather-mcp.
+    plain_language: >
+      The AI gateway can be called from more places than intended, though a key is still
+      needed to use it.
   - id: gap-flat-east-west
     name: No isolation between co-located workloads
     severity: medium
@@ -734,6 +759,7 @@ relationships:
   - { from: ac-weather-mcp,  name: provides, to: as-weather-mcp }
   - { from: ac-weather-mcp,  name: provides, to: as-weather-gui }
   - { from: ac-litellm,      name: provides, to: as-litellm-ui }
+  - { from: ac-litellm,      name: provides, to: as-litellm-api }
   - { from: ac-cockpit,      name: provides, to: as-cockpit }
   - { from: ac-claudemock,   name: provides, to: as-claudemock }
   - { from: ac-tictactoe,    name: provides, to: as-demos-private }
@@ -745,7 +771,8 @@ relationships:
   - { from: as-n8n-editor,    name: delivers, to: bs-automation-endpoints }
   - { from: as-weather-mcp,   name: delivers, to: bs-automation-endpoints }
   - { from: as-weather-gui,   name: delivers, to: bs-automation-endpoints }
-  - { from: as-litellm-ui,    name: delivers, to: bs-llm-gateway }
+  - { from: as-litellm-ui,    name: delivers, to: bs-administration }
+  - { from: as-litellm-api,   name: delivers, to: bs-llm-gateway }
   - { from: as-cockpit,       name: delivers, to: bs-administration }
   - { from: as-lan-consoles,  name: delivers, to: bs-administration }
   - { from: as-claudemock,    name: delivers, to: bs-demonstrations }
@@ -759,6 +786,7 @@ relationships:
   - { from: as-claudemock,    name: exposed_via, to: et-public-funnel }
   - { from: as-weather-gui,   name: exposed_via, to: et-tailnet }
   - { from: as-litellm-ui,    name: exposed_via, to: et-tailnet }
+  - { from: as-litellm-api,   name: exposed_via, to: et-tailnet }
   - { from: as-cockpit,       name: exposed_via, to: et-tailnet }
   - { from: as-demos-private, name: exposed_via, to: et-tailnet }
   - { from: as-lan-consoles,  name: exposed_via, to: et-lan }
@@ -822,6 +850,7 @@ relationships:
   - { from: ctl-access-gate,        name: implements, to: p-tiered-exposure }
   - { from: ctl-tailnet-identity,   name: protects,   to: as-cockpit }
   - { from: ctl-tailnet-identity,   name: protects,   to: as-litellm-ui }
+  - { from: ctl-tailnet-identity,   name: protects,   to: as-litellm-api }
   - { from: ctl-tailnet-identity,   name: protects,   to: as-weather-gui }
   - { from: ctl-tailnet-identity,   name: implements, to: p-tiered-exposure }
   - { from: ctl-rootless,           name: protects,   to: n-beeblebox }
@@ -848,6 +877,7 @@ relationships:
   - { from: gap-single-node,             name: affects, to: n-beeblebox }
   - { from: gap-single-node,             name: affects, to: bs-blog }
   - { from: gap-no-alerting,             name: affects, to: bs-administration }
+  - { from: gap-litellm-api-reach,       name: affects, to: bs-llm-gateway }
   - { from: gap-residential-connectivity, name: affects, to: bs-blog }
   - { from: gap-no-secret-rotation,      name: affects, to: ds-secrets }
   - { from: gap-public-demo-surface,     name: affects, to: ac-claudemock }

@@ -108,7 +108,7 @@ layers:
       attributes:
         endpoint:  { type: string }
         protocol:  { type: enum, values: [https, http, mcp] }
-        auth:      { type: enum, values: [none, basic, oauth, edge-identity, network-identity] }
+        auth:      { type: enum, values: [none, basic, api-key, oauth, edge-identity, network-identity] }
 
   # ---------------------------------------------------------------------- Data
   # Phase C (data). The split matters for backup reasoning: DataEntity carries the
