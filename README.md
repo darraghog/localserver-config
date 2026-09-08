@@ -100,7 +100,8 @@ Uses `envs/local.env` and deploys on this machine.
 | litellm | 4000 (host-internal), 8447, 8092 (tailnet front, loopback) | LLM proxy + Postgres; serves under `/litellm` (`SERVER_ROOT_PATH`) |
 | weather-mcp | 8094 (host-internal), 8448, 8095 (public front, loopback) | MCP tool server plus a private GUI |
 | wordpress | 8096 (host-internal), 8449, 8097 (public front, loopback) | thelearningcto.com blog — WordPress + MariaDB, public via Cloudflare Tunnel |
-| tls-proxy | LAN TLS 8443–8449 and 9443; loopback-only 8090 (tailnet path router), 8092 (litellm), 8095 (weather public front), 8097 (wordpress public front) | Caddy HTTPS reverse proxy |
+| gqldb | 3052 (host-internal), 8450, 8098 (tailnet front, loopback); 60061 (host-internal, gRPC) | Ultipa GQLDB graph database + web console, two containers in one pod |
+| tls-proxy | LAN TLS 8443–8450 and 9443; loopback-only 8090 (tailnet path router), 8092 (litellm), 8098 (gqldb), 8095 (weather public front), 8097 (wordpress public front) | Caddy HTTPS reverse proxy |
 | Cockpit | 9090 (internal), 9443 (TLS) | Podman container/pod management UI |
 
 ## URLs
@@ -122,13 +123,17 @@ HTTPS through Caddy, using the private CA (trust `certs/ca.pem` — see [docs/tl
 | https://&lt;host&gt;:8447 | litellm — admin UI at `/ui/`, API at `/v1` (Caddy adds the `/litellm` root path) |
 | https://&lt;host&gt;:8448 | weather-mcp GUI |
 | https://&lt;host&gt;:8449 | wordpress |
+| https://&lt;host&gt;:8450 | gqldb — GQLDB Manager console (own login; not network-trusted) |
 | https://&lt;host&gt;:9443/cockpit/ | Cockpit (Linux system user credentials) |
 
 Credentials come from `.env` — there are no defaults, and `deploy.sh` refuses to deploy n8n or
 WordPress without them.
 
-Ports `8090`, `8092`, `8095` and `8097` are **not** in that table on purpose: they bind loopback
+Ports `8090`, `8092`, `8095`, `8097` and `8098` are **not** in that table on purpose: they bind loopback
 only and exist to be mounted by Tailscale or Cloudflare, not visited directly.
+
+`60061` is absent for a different reason: it is the graph database's raw gRPC port, which is
+not HTTP and has no front door at all. Its only caller is the console container beside it.
 
 Examples: `https://myserver:8443`, `https://myserver.example.com:8443` (after DNS or `/etc/hosts` points at the Podman host).
 

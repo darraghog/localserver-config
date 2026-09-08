@@ -107,7 +107,7 @@ layers:
       description: A network-reachable interface provided by a component.
       attributes:
         endpoint:  { type: string }
-        protocol:  { type: enum, values: [https, http, mcp] }
+        protocol:  { type: enum, values: [https, http, mcp, grpc] }
         auth:      { type: enum, values: [none, basic, api-key, oauth, edge-identity, network-identity] }
 
   # ---------------------------------------------------------------------- Data

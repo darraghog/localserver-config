@@ -18,6 +18,8 @@ weeks.
 | `wordpress_wordpress-data` | file copy | the **whole** `/var/www/html`: WordPress core, `wp-content` (uploads/themes/plugins) *and* `wp-config.php`. A DB restore alone gives you a blog with no images |
 | `n8n_n8n-data` | file copy | n8n instance data |
 | `weather-mcp_oauth-store` | file copy | issued OAuth tokens |
+| GQLDB graphs (`gqldb`) | `BACKUP DATABASE` | the graph store; the server writes and verifies its own per-graph archives while serving |
+| GQLDB Manager store | cold file copy | saved connections + console users; the container is stopped for the copy |
 | `.env` | file copy | **see below** |
 | `~/.cloudflared/` | file copy | tunnel credentials + origin cert |
 | `certs/` | file copy | local CA (regenerable, but cheap to keep) |
@@ -34,6 +36,13 @@ gitignored, so this backup is its only copy.
 `litellm_litellm-postgres` and `wordpress_wordpress-db` are never copied as files. Copying a running
 database's data directory without a filesystem snapshot produces a torn image that often will not
 restore. `scripts/restic.sh` mounts only the non-database volumes so this cannot happen by accident.
+
+**3. Restoring the graph database resets its admin password.** `RESTORE DATABASE` overwrites
+`__system__`, which is where GQLDB keeps its RBAC users — so after a restore the admin password is
+the one that was in force **when the backup was taken**, not whatever `GQLDB_ADMIN_PASSWORD` the
+container was started with. This is verified behaviour, not a guess: a restore into a fresh
+instance rejected the new container's password and accepted the backup's. Expect it, or you will
+conclude the restore failed when it actually worked.
 
 Because the snapshot contains `.env`, **restic's client-side encryption is load-bearing**, not a
 nicety: anyone with the Azure storage key still cannot read the backup without `RESTIC_PASSWORD`.
@@ -135,6 +144,44 @@ the `N8N_ENCRYPTION_KEY` inside it. Then recreate the container so it re-reads t
 (`./scripts/start-stack.sh n8n up`); a plain restart does not.
 
 LiteLLM is the same with `-U litellm -d litellm`, into a **PG 16** instance.
+
+### GQLDB
+
+The archive is a *directory* per run (one `<graph>.gqlbackup.tar.gz` each, plus
+`db_backup_meta.json` and `meta.json`), not a single file. Stage it where the container can see it
+and restore with the `OVERWRITE` keyword — without it the restore stops at the first graph that
+already exists:
+
+```bash
+podman cp ~/restic-work/restore/backup/dumps/gqldb gqldb_gqldb_1:/restore
+podman exec -i gqldb_gqldb_1 sh -c '
+  S=$(jq -nc --arg u admin --arg p "$GQLDB_RBAC_ADMIN_PASSWORD" "{username:\$u,password:\$p}" |
+      grpcurl -plaintext -import-path /opt/gqldb -proto gqldb.proto -d @ \
+        127.0.0.1:60061 gqldb.SessionService/Login | jq -r .sessionId)
+  jq -nc "{gql:\"RESTORE DATABASE FROM \\\"/restore\\\" OVERWRITE\"}" |
+    grpcurl -plaintext -import-path /opt/gqldb -proto gqldb.proto \
+      -H "session-id: $S" -d @ 127.0.0.1:60061 gqldb.QueryService/Gql'
+```
+
+Then log in with the password **from the backup** (see gotcha 3 above) and check the data is there.
+
+Community Edition allows **2 user graphs** (`__system__` does not count — measured, the server
+refuses the third with `database limit exceeded: current 2, limit 2`). A restore that would exceed
+that fails, so restoring alongside existing graphs may need one dropped first.
+
+The console's own store is backed up as a whole-volume tar (`gqldb-manager.tar`, taken with the
+container stopped). Restore it the same way, with the stack down:
+
+```bash
+./scripts/start-stack.sh gqldb down
+podman volume rm gqldb_manager-data
+podman volume import gqldb_manager-data ~/restic-work/restore/backup/dumps/gqldb-manager.tar
+./scripts/start-stack.sh gqldb up
+```
+
+`.env` must be restored first: the saved connection passwords inside that store are encrypted with
+`MANAGER_ENCRYPTION_KEY`, exactly as n8n's credentials depend on `N8N_ENCRYPTION_KEY`. Without it
+the console starts fine and every saved connection is undecryptable — delete and re-create them.
 
 ### Rebuilding the host from nothing
 

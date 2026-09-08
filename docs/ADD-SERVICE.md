@@ -136,6 +136,21 @@ Podman injects `host.containers.internal` into every container automatically, an
 
 Use plain HTTP and the backend port directly. **Do not route east-west traffic through Caddy** — the `:844x` sites serve the private CA, so every consumer container would need `NODE_EXTRA_CA_CERTS` or an equivalent, and the cert's SANs do not cover container-visible hostnames. Caddy is for north-south traffic (browsers, external callers), not for one app calling another.
 
+**A non-HTTP service gets no Caddy site at all.** `compose/gqldb` is the worked example: the graph
+database speaks raw gRPC (HTTP/2 with its own session-id metadata auth), so there is nothing for a
+`reverse_proxy` to usefully terminate, and its only consumer is the console container beside it.
+Two consequences worth copying:
+
+- `scripts/lib/post-deploy-caddy.sh` reads the **first** `ports:` entry in `compose.yaml` to find
+  the stack's front door. A stack whose first published port has no Caddy site is skipped with
+  *"No Caddy site for &lt;stack&gt;; skip verify"* — correct here, since a gRPC port is not
+  curl-able. If such a stack *also* has a web UI, declare the **web service first** so the deploy
+  still verifies something. `compose/gqldb/compose.yaml` does exactly that, with a comment saying
+  why the order must not be tidied.
+- Two services in one compose file share a pod (`pod_<stack>`), but podman-compose creates it with
+  `SharedNamespaces: []` and no infra container — a **grouping, not a shared network namespace**.
+  They reach each other by service DNS name (`gqldb:60061`), never on `127.0.0.1`.
+
 Verify from any running container:
 
 ```bash

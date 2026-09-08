@@ -7,4 +7,5 @@ litellm
 claude-mock-test
 weather-mcp
 wordpress
+gqldb
 tls-proxy

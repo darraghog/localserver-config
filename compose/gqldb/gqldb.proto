@@ -1,0 +1,972 @@
+syntax = "proto3";
+
+package gqldb;
+
+option go_package = "github.com/zhangjsff/gqldb-grpc/proto";
+option csharp_namespace = "Gqldb.Proto";
+
+// =============================================================================
+// Enums
+// =============================================================================
+
+// PropertyType defines the type of a property value.
+enum PropertyType {
+  PROPERTY_TYPE_UNSET = 0;
+  PROPERTY_TYPE_INT32 = 1;
+  PROPERTY_TYPE_UINT32 = 2;
+  PROPERTY_TYPE_INT64 = 3;
+  PROPERTY_TYPE_UINT64 = 4;
+  PROPERTY_TYPE_FLOAT = 5;
+  PROPERTY_TYPE_DOUBLE = 6;
+  PROPERTY_TYPE_STRING = 7;
+  PROPERTY_TYPE_DATETIME = 8;       // Deprecated, use TIMESTAMP
+  PROPERTY_TYPE_TIMESTAMP = 9;
+  PROPERTY_TYPE_TEXT = 10;
+  PROPERTY_TYPE_BLOB = 11;
+  PROPERTY_TYPE_POINT = 12;
+  PROPERTY_TYPE_DECIMAL = 13;
+  PROPERTY_TYPE_LIST = 14;
+  PROPERTY_TYPE_SET = 15;
+  PROPERTY_TYPE_MAP = 16;
+  PROPERTY_TYPE_NULL = 17;
+  PROPERTY_TYPE_BOOL = 18;
+  PROPERTY_TYPE_LOCAL_DATETIME = 19;
+  PROPERTY_TYPE_ZONED_DATETIME = 20;
+  PROPERTY_TYPE_DATE = 21;
+  PROPERTY_TYPE_ZONED_TIME = 22;
+  PROPERTY_TYPE_LOCAL_TIME = 23;
+  PROPERTY_TYPE_YEAR_TO_MONTH = 24;
+  PROPERTY_TYPE_DAY_TO_SECOND = 25;
+  PROPERTY_TYPE_RECORD = 26;
+  PROPERTY_TYPE_POINT3D = 27;
+  PROPERTY_TYPE_VECTOR = 28;
+  PROPERTY_TYPE_TABLE = 29;
+  PROPERTY_TYPE_PATH = 30;   // Graph path with nodes and edges
+  PROPERTY_TYPE_ERROR = 31;  // Error value for TRY/CATCH handling
+  PROPERTY_TYPE_NODE = 32;   // Graph node
+  PROPERTY_TYPE_EDGE = 33;   // Graph edge
+}
+
+// GraphType defines the type of a graph.
+enum GraphType {
+  GRAPH_TYPE_OPEN = 0;      // Schema-less graph
+  GRAPH_TYPE_CLOSED = 1;    // Schema-enforced graph
+  GRAPH_TYPE_ONTOLOGY = 2;  // Ontology-enabled graph
+}
+
+// HealthStatus for health check responses.
+enum HealthStatus {
+  HEALTH_STATUS_UNKNOWN = 0;
+  HEALTH_STATUS_SERVING = 1;
+  HEALTH_STATUS_NOT_SERVING = 2;
+  HEALTH_STATUS_SERVICE_UNKNOWN = 3;
+}
+
+// =============================================================================
+// Core Messages
+// =============================================================================
+
+// TypedValue represents a typed value for wire transmission.
+message TypedValue {
+  PropertyType type = 1;
+  bytes data = 2;
+  bool is_null = 3;
+}
+
+// Parameter represents a named parameter for queries.
+message Parameter {
+  string name = 1;
+  TypedValue value = 2;
+}
+
+// Row represents a single row in query results.
+message Row {
+  repeated TypedValue values = 1;
+}
+
+// =============================================================================
+// Session Service
+// =============================================================================
+
+service SessionService {
+  // Login authenticates a user and creates a session.
+  rpc Login(LoginRequest) returns (LoginResponse);
+  // Logout terminates a session.
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  // Ping keeps a session alive and checks connectivity.
+  rpc Ping(PingRequest) returns (PingResponse);
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+  string default_graph = 3;  // Optional default graph
+}
+
+message LoginResponse {
+  uint64 session_id = 1;
+  string server_version = 2;
+  repeated string roles = 3;
+  // Cluster extensions (field numbers 10+ for backward compatibility)
+  bool is_cluster = 10;
+  string cluster_id = 11;
+  int32 partition_count = 12;
+  // Capability tokens advertising supported features. Drivers test for
+  // membership instead of parsing server_version (which is fragile across
+  // build placeholders, pre-release suffixes, calendar versions, etc.).
+  // Tokens are stable identifiers in snake_case; never reused for a different
+  // meaning. Older servers omit this field — drivers must treat the empty
+  // case as "no capabilities advertised" and fall back to feature defaults.
+  // See server_bugs_open20.md #6 for the original ask and the token list.
+  repeated string capabilities = 20;
+  // Session's current graph immediately after Login. Equals
+  // req.default_graph when the request supplied (and validated) one,
+  // otherwise empty. Lets new drivers seed their local "current graph"
+  // cache without a follow-up USE GRAPH round-trip. Old drivers that
+  // do not read this field are unaffected (proto3 additive).
+  string current_graph = 21;
+  // Wall-clock timing of the Login handler. See GqlResponse for the
+  // canonical contract. Login does meaningful work — credential
+  // validation + session creation — so TimeCost is operationally
+  // useful for spotting auth-path latency regressions.
+  int64 time_cost_ns = 22;
+  int64 disk_cost_ns = 23;
+  int64 compute_cost_ns = 24;
+}
+
+message LogoutRequest {
+  // Session is identified from metadata header
+}
+
+message LogoutResponse {
+  bool success = 1;
+  // Wall-clock timing of the Logout handler. See GqlResponse for the
+  // canonical contract.
+  int64 time_cost_ns = 2;
+  int64 disk_cost_ns = 3;
+  int64 compute_cost_ns = 4;
+}
+
+message PingRequest {
+  // Session is identified from metadata header
+}
+
+message PingResponse {
+  int64 latency_ns = 1;
+}
+
+// =============================================================================
+// Query Service
+// =============================================================================
+
+service QueryService {
+  // Gql executes a GQL query and returns results.
+  rpc Gql(GqlRequest) returns (GqlResponse);
+  // GqlStream executes a GQL query and streams results.
+  rpc GqlStream(GqlRequest) returns (stream GqlResponse);
+  // Explain returns the execution plan for a query.
+  rpc Explain(GqlRequest) returns (ExplainResponse);
+  // Profile executes a query with profiling and returns statistics.
+  rpc Profile(GqlRequest) returns (ProfileResponse);
+}
+
+message GqlRequest {
+  string gql = 1;
+  string graph_name = 2;
+  repeated Parameter parameters = 3;
+  uint64 session_id = 4;
+  uint64 transaction_id = 5;
+  int32 timeout = 6;  // Timeout in seconds
+  bool read_only = 7;
+  int64 max_path_results = 8;  // Max paths from path queries (0 = unlimited)
+}
+
+// DmlStats reports per-category data-modification counts for a query. Per
+// ISO/IEC 39075, an INSERT/SET/REMOVE/DELETE/MERGE with no RETURN yields no
+// result rows; these counts are the response metadata that summarises what the
+// statement changed (mirrors the engine ResultSet's DMLStats). All zero for a
+// pure read. Proto3 additive: old drivers ignore it, old servers omit it — new
+// drivers must treat an absent / all-zero message as "not reported", not as
+// "changed nothing". rows_affected (GqlResponse field 6) remains the sum.
+message DmlStats {
+  int64 inserted_nodes = 1;
+  int64 inserted_edges = 2;
+  int64 deleted_nodes = 3;
+  int64 deleted_edges = 4;
+  int64 set_nodes = 5;  // nodes touched by SET / REMOVE / MERGE-on-match
+  int64 set_edges = 6;
+}
+
+message GqlResponse {
+  repeated string columns = 1;
+  repeated Row rows = 2;
+  int64 row_count = 3;
+  bool has_more = 4;
+  repeated string warnings = 5;
+  int64 rows_affected = 6;  // For DML operations (INSERT/UPDATE/DELETE)
+  // Session's current graph after this query has executed. Always
+  // populated on success; drivers should update their local "current
+  // graph" cache from this field unconditionally on successful Gql
+  // RPCs and stop client-side parsing of `USE GRAPH …` text (which
+  // fails on compound queries, multi-line forms, comments, and
+  // future syntax extensions). Old drivers ignore the field
+  // (proto3 additive).
+  //
+  // Population rules:
+  //   - Single `USE GRAPH X` succeeds            -> "X"
+  //   - Compound `USE GRAPH X; <stmt>...`        -> "X"
+  //   - `<stmt>...; USE GRAPH X` (USE last)      -> "X"
+  //   - Multiple `USE GRAPH a; ...; USE GRAPH b` -> "b" (last-write-wins)
+  //   - `DROP GRAPH X` of currently-selected     -> ""  (no graph
+  //     selected; driver should clear its cache and the next RPC
+  //     should not send graph_name)
+  //   - `DROP GRAPH Y` (Y != current)            -> session's
+  //     existing current graph, unchanged
+  //   - Any other successful query               -> session's
+  //     current graph at end of RPC
+  //
+  // Failure semantics (fail-fast):
+  //   - An embedded `USE GRAPH X` that fails (X does not exist,
+  //     RBAC denied, USE inside an active transaction) aborts the
+  //     RPC with a gRPC status error; no GqlResponse is sent and
+  //     current_graph is therefore not affected. Drivers update
+  //     their cache only on successful RPCs, so cache stays
+  //     consistent with server state.
+  //
+  // Transaction semantics:
+  //   - `USE GRAPH X` is rejected by the executor when issued
+  //     inside an active explicit transaction (BEGIN/COMMIT or
+  //     BEGIN/ROLLBACK). The "is current_graph rolled back?"
+  //     question is therefore moot for the GQL form. In autocommit
+  //     mode, USE GRAPH is not rolled back by any subsequent
+  //     ROLLBACK because USE GRAPH does not participate in
+  //     transactional semantics (matches SQL `USE database`).
+  //
+  // Request.graph_name precedence:
+  //   - When `Request.graph_name` is non-empty it overrides session
+  //     state for that single request only (matches PostgreSQL
+  //     `SET LOCAL`). Session state is unchanged. response.current_graph
+  //     reflects the *session* state — what the next call defaults
+  //     to — not the per-request override.
+  //
+  // Streaming:
+  //   - GqlStream populates current_graph only on the final batch
+  //     (has_more=false). Intermediate batches leave it empty so
+  //     drivers update their local cache once per RPC, not per
+  //     batch.
+  string current_graph = 7;
+
+  // Server-side timing of the underlying query, in nanoseconds. Values
+  // are read from the source DB's ResultSet (TimeCost/DiskCost/
+  // ComputeCost). Network and client-side time are NOT included —
+  // these measure only what the engine spent inside QueryContext.
+  //
+  //   - time_cost_ns:    total wall-clock for parse + plan + execute.
+  //   - disk_cost_ns:    subset of time_cost_ns spent in the storage /
+  //                      LSM layer (cursors, point lookups, index
+  //                      reads).
+  //   - compute_cost_ns: subset of time_cost_ns spent in the in-memory
+  //                      compute engine (k-hop, shortest path, algo.*
+  //                      procedures via the topology accelerator).
+  //                      Zero when the graph has compute DISABLED or
+  //                      the query path did not invoke the accelerator.
+  //
+  // The three are not mutually exclusive of all of time_cost_ns —
+  // (time_cost_ns - disk_cost_ns - compute_cost_ns) is the "other"
+  // bucket (parser, planner, RBAC, result marshaling).
+  //
+  // Streaming: populated only on the final batch (has_more=false),
+  // matching the current_graph / rows_affected pattern. Intermediate
+  // batches leave them zero — TimeCost is only valid after iteration
+  // has completed. Drivers should read the values from the final
+  // frame.
+  //
+  // Proto3 additive: pre-change drivers ignore these fields. Old
+  // servers omit them, so new drivers must treat zero as "not
+  // reported" and not "query took zero time".
+  int64 time_cost_ns = 8;
+  int64 disk_cost_ns = 9;
+  int64 compute_cost_ns = 10;
+
+  // Per-category data-modification counts (see DmlStats). Populated for
+  // data-modifying queries. A void modification (DELETE/SET/… with no RETURN)
+  // returns an empty table, so this is the authoritative "what changed"
+  // summary — clients should render it from here, NOT from result rows.
+  // Streaming: final batch only (has_more=false), matching rows_affected.
+  DmlStats dml_stats = 11;
+}
+
+message ExplainResponse {
+  string plan = 1;
+  // Engine-side timing trio. See GqlResponse (above) for the canonical
+  // contract — same semantics: time_cost_ns is total wall-clock inside
+  // QueryContext for the EXPLAIN call (parse + plan; EXPLAIN does not
+  // execute), with disk_cost_ns / compute_cost_ns as the storage /
+  // in-memory-engine subsets. Typically near-zero for Explain since no
+  // execution occurs.
+  int64 time_cost_ns = 2;
+  int64 disk_cost_ns = 3;
+  int64 compute_cost_ns = 4;
+}
+
+message ProfileResponse {
+  string profile = 1;
+  // Engine-side timing trio. See GqlResponse (above) for the canonical
+  // contract. Profile DOES execute the query, so these values mirror
+  // Gql's: time_cost_ns covers parse + plan + execute end-to-end.
+  int64 time_cost_ns = 2;
+  int64 disk_cost_ns = 3;
+  int64 compute_cost_ns = 4;
+}
+
+// =============================================================================
+// Data Service
+// =============================================================================
+
+service DataService {
+  // InsertNodes inserts multiple nodes into a graph.
+  rpc InsertNodes(InsertNodesRequest) returns (InsertNodesResponse);
+  // InsertEdges inserts multiple edges into a graph.
+  rpc InsertEdges(InsertEdgesRequest) returns (InsertEdgesResponse);
+  // Export streams graph data in JSON Lines format (nodes and/or edges).
+  rpc Export(ExportRequest) returns (stream ExportResponse);
+}
+
+message NodeData {
+  string id = 1;                          // Optional custom node ID (if empty, auto-generated)
+  repeated string labels = 2;
+  map<string, TypedValue> properties = 3;
+}
+
+message EdgeData {
+  string label = 1;
+  string from_node_id = 2;
+  string to_node_id = 3;
+  map<string, TypedValue> properties = 4;
+  string id = 5;                          // Optional custom edge ID; requires EDGE_ID enabled on the target graph (if empty, auto-generated; rejected if EDGE_ID is disabled)
+}
+
+// InsertMode selects duplicate-`_id` semantics for INSERT/UPSERT
+// operations.
+//
+//   - INSERT_MODE_NORMAL:    error if `_id` already exists.
+//   - INSERT_MODE_OVERWRITE: REPLACE existing entity wholesale on
+//     duplicate `_id`. Existing fields not in the write are LOST.
+//   - INSERT_MODE_UPSERT:    MERGE new properties into existing entity
+//     on duplicate `_id`. Existing fields not in the write are
+//     PRESERVED; properties in the write OVERWRITE existing values.
+//
+// REPLACE and MERGE are different semantics; the single enum makes
+// the mutually-exclusive choice explicit (replaces the previous pair
+// of `overwrite`/`upsert` boolean flags).
+enum InsertMode {
+  INSERT_MODE_NORMAL = 0;
+  INSERT_MODE_OVERWRITE = 1;
+  INSERT_MODE_UPSERT = 2;
+}
+
+// BulkCreateNodesOptions configures bulk node creation behavior.
+message BulkCreateNodesOptions {
+  // mode selects duplicate-`_id` semantics. Defaults to
+  // INSERT_MODE_NORMAL (zero value).
+  InsertMode mode = 1;
+}
+
+// BulkCreateEdgesOptions configures bulk edge creation behavior.
+// Edge INSERT_MODE_OVERWRITE and INSERT_MODE_UPSERT require EDGE_ID
+// enabled on the target graph.
+message BulkCreateEdgesOptions {
+  bool skip_invalid_nodes = 1;    // Skip edges where source/target node doesn't exist
+  InsertMode mode = 2;             // duplicate-`_id` semantics; defaults to NORMAL
+}
+
+message InsertNodesRequest {
+  string graph_name = 1;
+  repeated NodeData nodes = 2;
+  BulkCreateNodesOptions options = 3;  // Optional: overwrite option (not supported in bulk import)
+  string bulk_import_session_id = 4;   // Required: use StartBulkImport to get a session
+}
+
+message InsertNodesResponse {
+  bool success = 1;
+  repeated string node_ids = 2;
+  int64 node_count = 3;
+  string message = 4;
+  // Wall-clock timing of the InsertNodes handler. See GqlResponse for the
+  // canonical contract — InsertNodes does NOT go through QueryContext, so
+  // time_cost_ns is server-side wall-clock (handler entry → response
+  // construction, includes RBAC + validation + bulk-session work) and
+  // disk_cost_ns / compute_cost_ns are reported as 0 by this RPC.
+  int64 time_cost_ns = 5;
+  int64 disk_cost_ns = 6;
+  int64 compute_cost_ns = 7;
+}
+
+message InsertEdgesRequest {
+  string graph_name = 1;
+  repeated EdgeData edges = 2;
+  BulkCreateEdgesOptions options = 3;  // Optional: skip_invalid_nodes option
+  string bulk_import_session_id = 4;   // Required: use StartBulkImport to get a session
+}
+
+message InsertEdgesResponse {
+  bool success = 1;
+  repeated string edge_ids = 2;
+  int64 edge_count = 3;
+  string message = 4;
+  int64 skipped_count = 5;  // Number of edges skipped due to invalid nodes
+  // Wall-clock timing of the InsertEdges handler. See GqlResponse for the
+  // canonical contract — same semantics as InsertNodes: time_cost_ns is
+  // handler-side wall-clock, disk_cost_ns / compute_cost_ns are 0.
+  int64 time_cost_ns = 6;
+  int64 disk_cost_ns = 7;
+  int64 compute_cost_ns = 8;
+}
+
+// ExportRequest configures the streaming export.
+message ExportRequest {
+  string graph_name = 1;               // Required: graph to export
+  int32 batch_size = 2;                // Items per context check (default: 1000)
+  bool export_nodes = 3;               // Export nodes (default: true)
+  bool export_edges = 4;               // Export edges (default: true)
+  repeated string node_labels = 5;     // Filter nodes by labels (empty = all)
+  repeated string edge_labels = 6;     // Filter edges by labels (empty = all)
+  bool include_metadata = 7;           // Include metadata header (default: true)
+}
+
+// ExportResponse streams JSON Lines data.
+message ExportResponse {
+  bytes data = 1;                      // JSON Lines chunk
+  bool is_final = 2;                   // True for final message with stats
+  ExportStats stats = 3;               // Populated in final message
+}
+
+// ExportStats contains export statistics.
+message ExportStats {
+  int64 nodes_exported = 1;
+  int64 edges_exported = 2;
+  int64 bytes_written = 3;
+  int64 duration_ms = 4;
+  // Wall-clock timing of the Export handler. See GqlResponse for the
+  // canonical contract. time_cost_ns supersedes duration_ms (nanosecond
+  // precision vs millisecond); duration_ms is retained for back-compat
+  // with older drivers. disk_cost_ns / compute_cost_ns are 0 — Export
+  // doesn't go through QueryContext.
+  //
+  // Streaming contract: ExportStats is only populated on the final
+  // ExportResponse frame (is_final=true). Intermediate frames have no
+  // stats sub-message at all, so the timing trio degenerates to "absent"
+  // for those frames — mirrors the GqlStream final-frame-only pattern.
+  int64 time_cost_ns = 5;
+  int64 disk_cost_ns = 6;
+  int64 compute_cost_ns = 7;
+}
+
+// =============================================================================
+// Graph Service
+// =============================================================================
+
+service GraphService {
+  // CreateGraph creates a new graph.
+  rpc CreateGraph(CreateGraphRequest) returns (CreateGraphResponse);
+  // DropGraph deletes a graph.
+  rpc DropGraph(DropGraphRequest) returns (DropGraphResponse);
+  // UseGraph sets the current graph for a session.
+  rpc UseGraph(UseGraphRequest) returns (UseGraphResponse);
+  // ListGraphs returns all available graphs.
+  rpc ListGraphs(ListGraphsRequest) returns (ListGraphsResponse);
+  // GetGraphInfo returns detailed information about a graph.
+  rpc GetGraphInfo(GetGraphInfoRequest) returns (GetGraphInfoResponse);
+}
+
+message CreateGraphRequest {
+  string name = 1;
+  GraphType graph_type = 2;
+  string description = 3;
+}
+
+message CreateGraphResponse {
+  bool success = 1;
+  string message = 2;
+  // Wall-clock timing of the CreateGraph handler. See GqlResponse for the
+  // canonical contract — handler does engine work (CREATE GRAPH via
+  // QueryContext) but timing is reported as server-side wall-clock so the
+  // caller sees end-to-end latency (validation + engine + pool ops).
+  // disk_cost_ns / compute_cost_ns are 0 (the engine ResultSet is
+  // discarded; only wall-clock is captured).
+  int64 time_cost_ns = 3;
+  int64 disk_cost_ns = 4;
+  int64 compute_cost_ns = 5;
+}
+
+message DropGraphRequest {
+  string name = 1;
+  bool if_exists = 2;
+}
+
+message DropGraphResponse {
+  bool success = 1;
+  string message = 2;
+  // Wall-clock timing of the DropGraph handler. Same semantics as
+  // CreateGraphResponse — wall-clock includes engine drop + pool
+  // teardown. See GqlResponse for the canonical contract.
+  int64 time_cost_ns = 3;
+  int64 disk_cost_ns = 4;
+  int64 compute_cost_ns = 5;
+}
+
+message UseGraphRequest {
+  string name = 1;
+  uint64 session_id = 2 [deprecated = true];  // Deprecated: use metadata session-id header instead
+}
+
+message UseGraphResponse {
+  bool success = 1;
+  string message = 2;
+  // Wall-clock timing of the UseGraph handler. UseGraph doesn't go
+  // through QueryContext (it uses SetGraphContext), so this is pure
+  // server-side wall-clock. disk_cost_ns / compute_cost_ns are 0.
+  int64 time_cost_ns = 3;
+  int64 disk_cost_ns = 4;
+  int64 compute_cost_ns = 5;
+}
+
+message ListGraphsRequest {}
+
+message ListGraphsResponse {
+  repeated GraphInfo graphs = 1;
+  // Wall-clock timing of the ListGraphs handler. See GqlResponse for
+  // the canonical contract. Wall-clock includes the SHOW GRAPHS engine
+  // call + RBAC filtering.
+  int64 time_cost_ns = 2;
+  int64 disk_cost_ns = 3;
+  int64 compute_cost_ns = 4;
+}
+
+message GetGraphInfoRequest {
+  string name = 1;
+}
+
+message GetGraphInfoResponse {
+  GraphInfo info = 1;
+  // Wall-clock timing of the GetGraphInfo handler. See GqlResponse for
+  // the canonical contract.
+  int64 time_cost_ns = 2;
+  int64 disk_cost_ns = 3;
+  int64 compute_cost_ns = 4;
+}
+
+message GraphInfo {
+  string name = 1;
+  GraphType graph_type = 2;
+  int64 node_count = 3;
+  int64 edge_count = 4;
+  string description = 5;
+}
+
+// =============================================================================
+// Transaction Service
+// =============================================================================
+
+service TransactionService {
+  // Begin starts a new transaction.
+  rpc Begin(BeginRequest) returns (BeginResponse);
+  // Commit commits a transaction.
+  rpc Commit(CommitRequest) returns (CommitResponse);
+  // Rollback aborts a transaction.
+  rpc Rollback(RollbackRequest) returns (RollbackResponse);
+  // ListTransactions returns active transactions.
+  rpc ListTransactions(ListTransactionsRequest) returns (ListTransactionsResponse);
+}
+
+message BeginRequest {
+  uint64 session_id = 1 [deprecated = true];  // Deprecated: use metadata session-id header instead
+  string graph_name = 2;
+  bool read_only = 3;
+  int32 timeout = 4;  // Timeout in seconds, 0 = no timeout
+}
+
+message BeginResponse {
+  uint64 transaction_id = 1;
+  string message = 2;
+  // Wall-clock timing of the Begin handler. See GqlResponse for the
+  // canonical contract. Begin grabs a pool connection and registers a
+  // transaction — typically sub-millisecond. Disk/Compute = 0.
+  int64 time_cost_ns = 3;
+  int64 disk_cost_ns = 4;
+  int64 compute_cost_ns = 5;
+}
+
+message CommitRequest {
+  uint64 session_id = 1 [deprecated = true];  // Deprecated: use metadata session-id header instead
+  uint64 transaction_id = 2;
+}
+
+message CommitResponse {
+  bool success = 1;
+  string message = 2;
+  // Wall-clock timing of the Commit handler. NOTE: this captures the
+  // storage flush wall-clock, NOT the transaction lifespan from Begin
+  // through Commit — drivers tracking total transaction time should
+  // sum across the per-RPC times themselves. See GqlResponse for the
+  // canonical contract.
+  int64 time_cost_ns = 3;
+  int64 disk_cost_ns = 4;
+  int64 compute_cost_ns = 5;
+}
+
+message RollbackRequest {
+  uint64 session_id = 1 [deprecated = true];  // Deprecated: use metadata session-id header instead
+  uint64 transaction_id = 2;
+}
+
+message RollbackResponse {
+  bool success = 1;
+  string message = 2;
+  // Wall-clock timing of the Rollback handler. See GqlResponse for the
+  // canonical contract.
+  int64 time_cost_ns = 3;
+  int64 disk_cost_ns = 4;
+  int64 compute_cost_ns = 5;
+}
+
+message ListTransactionsRequest {
+  uint64 session_id = 1 [deprecated = true];  // Deprecated: use metadata session-id header instead
+  bool all_transactions = 2;  // If true and user is admin, list all transactions; otherwise list only current session's transactions
+}
+
+message ListTransactionsResponse {
+  repeated TransactionInfo transactions = 1;
+  // Wall-clock timing of the ListTransactions handler. See GqlResponse
+  // for the canonical contract.
+  int64 time_cost_ns = 2;
+  int64 disk_cost_ns = 3;
+  int64 compute_cost_ns = 4;
+}
+
+message TransactionInfo {
+  uint64 transaction_id = 1;
+  uint64 session_id = 2;
+  string graph_name = 3;
+  bool read_only = 4;
+  int64 created_at = 5;   // Unix timestamp
+  int64 duration_ms = 6;
+  string internal_tx_id = 7;  // Internal ultipa-gqldb transaction ID
+}
+
+// =============================================================================
+// Health Service (gRPC Health Checking Protocol)
+// =============================================================================
+
+service Health {
+  // Check returns the serving status of the service.
+  rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
+  // Watch streams serving status changes.
+  rpc Watch(HealthCheckRequest) returns (stream HealthCheckResponse);
+}
+
+message HealthCheckRequest {
+  string service = 1;
+}
+
+message HealthCheckResponse {
+  HealthStatus status = 1;
+}
+
+// =============================================================================
+// Admin Service
+// =============================================================================
+
+service AdminService {
+  // WarmupParser pre-allocates parser instances for better performance.
+  rpc WarmupParser(WarmupParserRequest) returns (WarmupParserResponse);
+  // GetCacheStats returns cache statistics.
+  rpc GetCacheStats(GetCacheStatsRequest) returns (CacheStatsResponse);
+  // ClearCache clears specified caches.
+  rpc ClearCache(ClearCacheRequest) returns (ClearCacheResponse);
+  // GetStatistics returns database statistics.
+  rpc GetStatistics(GetStatisticsRequest) returns (GetStatisticsResponse);
+  // InvalidatePermissionCache invalidates RBAC permission cache.
+  rpc InvalidatePermissionCache(InvalidatePermissionCacheRequest) returns (InvalidatePermissionCacheResponse);
+  // Compact triggers manual compaction of the database storage.
+  rpc Compact(CompactRequest) returns (CompactResponse);
+  // WaitForComputeTopology waits for the computing engine topology to be ready.
+  rpc WaitForComputeTopology(WaitForComputeTopologyRequest) returns (WaitForComputeTopologyResponse);
+  // GetSystemMetrics returns system-level metrics (CPU, memory, disk I/O, storage, network).
+  rpc GetSystemMetrics(GetSystemMetricsRequest) returns (GetSystemMetricsResponse);
+}
+
+message WarmupParserRequest {
+  int32 count = 1;  // Number of parser instances to pre-allocate
+}
+
+message WarmupParserResponse {
+  bool success = 1;
+  string message = 2;
+  // Wall-clock timing. See GqlResponse for the canonical contract.
+  int64 time_cost_ns = 3;
+  int64 disk_cost_ns = 4;
+  int64 compute_cost_ns = 5;
+}
+
+// CacheType specifies which cache to query or clear.
+enum CacheType {
+  CACHE_TYPE_ALL = 0;
+  CACHE_TYPE_AST = 1;
+  CACHE_TYPE_PLAN = 2;
+}
+
+message GetCacheStatsRequest {
+  CacheType cache_type = 1;
+}
+
+message CacheStatsResponse {
+  ASTCacheStats ast_stats = 1;
+  PlanCacheStats plan_stats = 2;
+  // Wall-clock timing. See GqlResponse for the canonical contract.
+  int64 time_cost_ns = 3;
+  int64 disk_cost_ns = 4;
+  int64 compute_cost_ns = 5;
+}
+
+message ASTCacheStats {
+  uint64 hits = 1;
+  uint64 misses = 2;
+  uint64 evictions = 3;
+  int32 entries = 4;
+  double hit_rate = 5;
+}
+
+message PlanCacheStats {
+  int32 size = 1;
+  int32 capacity = 2;
+  uint64 hits = 3;
+  uint64 misses = 4;
+  double hit_rate = 5;
+}
+
+message ClearCacheRequest {
+  CacheType cache_type = 1;
+}
+
+message ClearCacheResponse {
+  bool success = 1;
+  string message = 2;
+  // Wall-clock timing. See GqlResponse for the canonical contract.
+  int64 time_cost_ns = 3;
+  int64 disk_cost_ns = 4;
+  int64 compute_cost_ns = 5;
+}
+
+message GetStatisticsRequest {
+  string graph_name = 1;  // Optional: specific graph, empty = current graph
+}
+
+message GetStatisticsResponse {
+  uint64 node_count = 1;
+  uint64 edge_count = 2;
+  map<string, uint64> label_counts = 3;
+  map<string, uint64> edge_label_counts = 4;
+  // Wall-clock timing. See GqlResponse for the canonical contract.
+  int64 time_cost_ns = 5;
+  int64 disk_cost_ns = 6;
+  int64 compute_cost_ns = 7;
+}
+
+message InvalidatePermissionCacheRequest {
+  string username = 1;  // Optional: specific user, empty = all users
+}
+
+message InvalidatePermissionCacheResponse {
+  bool success = 1;
+  // Wall-clock timing. See GqlResponse for the canonical contract.
+  int64 time_cost_ns = 2;
+  int64 disk_cost_ns = 3;
+  int64 compute_cost_ns = 4;
+}
+
+message CompactRequest {
+  // Empty - compacts the entire database
+}
+
+message CompactResponse {
+  bool success = 1;
+  string message = 2;
+  // Wall-clock timing. See GqlResponse for the canonical contract.
+  // Compact is one of the slowest admin RPCs — TimeCost is operationally
+  // meaningful for spotting growing storage compactions.
+  int64 time_cost_ns = 3;
+  int64 disk_cost_ns = 4;
+  int64 compute_cost_ns = 5;
+}
+
+message WaitForComputeTopologyRequest {
+  string graph_name = 1;      // Graph to check (required)
+  int64 timeout_ms = 2;       // Timeout in milliseconds (0 = check current status)
+}
+
+message WaitForComputeTopologyResponse {
+  bool ready = 1;             // true if topology is ready, false if timeout/not enabled
+  string message = 2;         // Additional status message
+  // Wall-clock timing. See GqlResponse for the canonical contract.
+  // TimeCost captures how long the caller waited for the topology to
+  // become ready (or for the timeout to fire).
+  int64 time_cost_ns = 3;
+  int64 disk_cost_ns = 4;
+  int64 compute_cost_ns = 5;
+}
+
+message GetSystemMetricsRequest {}
+
+message GetSystemMetricsResponse {
+  CpuMetrics cpu = 1;
+  MemoryMetrics memory = 2;
+  DiskIOMetrics disk_io = 3;
+  StorageMetrics storage = 4;
+  NetworkMetrics network = 5;
+  // Wall-clock timing. See GqlResponse for the canonical contract.
+  int64 time_cost_ns = 6;
+  int64 disk_cost_ns = 7;
+  int64 compute_cost_ns = 8;
+}
+
+message CpuMetrics {
+  double process_percent = 1;  // CPU usage of this process (0-100 per core)
+  double system_percent = 2;   // Overall system CPU usage (0-100)
+  int32 num_cores = 3;         // Number of logical CPU cores
+}
+
+message MemoryMetrics {
+  // Process memory (Go runtime)
+  uint64 process_rss = 1;       // Resident set size in bytes
+  uint64 heap_alloc = 2;        // Heap bytes allocated and in use
+  uint64 heap_sys = 3;          // Heap bytes obtained from OS
+  uint64 stack_in_use = 4;      // Stack bytes in use
+  uint64 total_alloc = 5;       // Cumulative bytes allocated (monotonic)
+  uint32 num_gc = 6;            // Number of completed GC cycles
+  // System memory
+  uint64 system_total = 7;      // Total physical memory in bytes
+  uint64 system_available = 8;  // Available memory in bytes
+  uint64 system_used = 9;       // Used memory in bytes
+  double system_used_percent = 10; // System memory usage percent
+}
+
+message DiskIOMetrics {
+  uint64 read_bytes = 1;    // Total bytes read by process
+  uint64 write_bytes = 2;   // Total bytes written by process
+  uint64 read_count = 3;    // Number of read operations
+  uint64 write_count = 4;   // Number of write operations
+}
+
+message StorageMetrics {
+  string db_path = 1;          // Database directory path
+  uint64 db_size_bytes = 2;    // Total size of database files on disk
+  uint64 volume_total = 3;     // Total bytes on the volume
+  uint64 volume_free = 4;      // Free bytes on the volume
+  uint64 volume_used = 5;      // Used bytes on the volume
+}
+
+message NetworkMetrics {
+  uint64 bytes_sent = 1;       // Total bytes sent (all interfaces)
+  uint64 bytes_recv = 2;       // Total bytes received (all interfaces)
+  uint64 packets_sent = 3;     // Total packets sent
+  uint64 packets_recv = 4;     // Total packets received
+}
+
+// =============================================================================
+// Bulk Import Service
+// =============================================================================
+
+service BulkImportService {
+  // StartBulkImport starts a bulk import session for optimized high-throughput inserts.
+  rpc StartBulkImport(StartBulkImportRequest) returns (StartBulkImportResponse);
+  // Checkpoint flushes all accumulated data to disk for durability.
+  rpc Checkpoint(CheckpointRequest) returns (CheckpointResponse);
+  // EndBulkImport ends the session with a final checkpoint.
+  rpc EndBulkImport(EndBulkImportRequest) returns (EndBulkImportResponse);
+  // AbortBulkImport cancels the session without final sync.
+  rpc AbortBulkImport(AbortBulkImportRequest) returns (AbortBulkImportResponse);
+  // GetBulkImportStatus returns the current status of a bulk import session.
+  rpc GetBulkImportStatus(GetBulkImportStatusRequest) returns (GetBulkImportStatusResponse);
+}
+
+message StartBulkImportRequest {
+  string graph_name = 1;
+  int64 checkpoint_every = 2;  // Records between auto-checkpoints (0 = manual only)
+  int64 estimated_nodes = 3;   // Hint for pre-allocating node ID cache
+  int64 estimated_edges = 4;   // Hint for edge batch sizing
+  int64 memtable_size = 5;     // Memtable size in bytes before flush (default: 64MB)
+  int32 max_memtables = 6;     // Max immutable memtables before stall (default: 4)
+}
+
+message StartBulkImportResponse {
+  bool success = 1;
+  string session_id = 2;  // UUID for the session
+  string message = 3;
+  // Wall-clock timing. See GqlResponse for the canonical contract.
+  int64 time_cost_ns = 4;
+  int64 disk_cost_ns = 5;
+  int64 compute_cost_ns = 6;
+}
+
+message CheckpointRequest {
+  string session_id = 1;
+}
+
+message CheckpointResponse {
+  bool success = 1;
+  int64 record_count = 2;
+  int64 last_checkpoint_count = 3;
+  string message = 4;
+  // Wall-clock timing. See GqlResponse for the canonical contract.
+  // Checkpoint flushes to disk — TimeCost is operationally meaningful.
+  int64 time_cost_ns = 5;
+  int64 disk_cost_ns = 6;
+  int64 compute_cost_ns = 7;
+}
+
+message EndBulkImportRequest {
+  string session_id = 1;
+}
+
+message EndBulkImportResponse {
+  bool success = 1;
+  int64 total_records = 2;
+  string message = 3;
+  // Wall-clock timing. See GqlResponse for the canonical contract.
+  // EndBulkImport does a final flush — TimeCost is operationally
+  // meaningful for large bulk loads.
+  int64 time_cost_ns = 4;
+  int64 disk_cost_ns = 5;
+  int64 compute_cost_ns = 6;
+}
+
+message AbortBulkImportRequest {
+  string session_id = 1;
+}
+
+message AbortBulkImportResponse {
+  bool success = 1;
+  string message = 2;
+  // Wall-clock timing. See GqlResponse for the canonical contract.
+  int64 time_cost_ns = 3;
+  int64 disk_cost_ns = 4;
+  int64 compute_cost_ns = 5;
+}
+
+message GetBulkImportStatusRequest {
+  string session_id = 1;
+}
+
+message GetBulkImportStatusResponse {
+  bool is_active = 1;
+  string graph_name = 2;
+  int64 record_count = 3;
+  int64 last_checkpoint_count = 4;
+  int64 created_at = 5;  // Unix timestamp
+  int64 last_activity = 6;  // Unix timestamp
+  // Wall-clock timing. See GqlResponse for the canonical contract.
+  int64 time_cost_ns = 7;
+  int64 disk_cost_ns = 8;
+  int64 compute_cost_ns = 9;
+}

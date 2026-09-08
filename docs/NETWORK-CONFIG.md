@@ -225,6 +225,22 @@ cockpit is `no-strip` (its asset scheme already uses `/cockpit/$checksum/...` in
 stripping breaks it — it also needs `UrlRoot = /cockpit` in `/etc/cockpit/cockpit.conf`, set by
 `scripts/sudo/setup-cockpit.sh`), and litellm is `not-path-mounted` at all — see its own section below.
 
+A third, and the cleanest example of the criterion failing outright: **gqldb is
+`not-path-mounted`** and cannot be fixed the way litellm was. Its built client fetches an
+absolute `/assets/index-*.js`, and the server has no base-path setting to move the app under a
+prefix — the entire env surface is `AUTH_MODE`, `CORS_ORIGIN`, `DEFAULT_ADMIN_*`, `DESKTOP_MODE`,
+`ENCRYPTION_KEY`, `GQLDB_*`, `HOST`, `JWT_*`, `PORT`, `SYNC_SECRET`, `USER_CENTER_API_URL`, with
+no `ROOT_PATH` equivalent. `handle_path` would serve the HTML and then 404 the bundle at the
+router root; `handle` would hand the app a prefix it cannot interpret. So it gets a dedicated
+root mount on `:8098`, and the router's index page links to it instead of mounting it:
+
+```bash
+ssh <server> tailscale serve --bg --https=8098 http://127.0.0.1:8098
+```
+
+That the app is genuinely unfixable here is what separates it from litellm: litellm *had* a
+server-side prefix setting and the earlier verdict simply had not tried it.
+
 
 **Path-stripping footgun:** `handle_path` (and the old Funnel-era `tailscale serve --set-path`) strips the mount prefix before forwarding to the backend — a request to `/tictactoe/api/reset` arrives at the backend as `/api/reset`. That's fine for backends that don't need to know their own mount prefix, but a real footgun for ones that *do*: n8n's MCP webhook was once path-mounted this way and silently broke, because the stripped path no longer matched the webhook's registered ID (see n8n section below), and litellm's admin UI hit the same problem in a different way until `SERVER_ROOT_PATH` moved the whole app under its own prefix (see below). **Before path-mounting a new service, check whether its frontend/backend makes any absolute-root-path requests (assets *or* API calls) or otherwise depends on seeing its own mount prefix** — if so, either fix the app (preferred, see the tictactoe `BASE` pattern) or give it its own dedicated root mount/port instead.
 

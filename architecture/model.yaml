@@ -285,6 +285,21 @@ ApplicationComponent:
     routing: strip
     lifecycle: demonstration
     description: Static practice-exam application; state held entirely in the browser.
+  - id: ac-gqldb
+    name: Ultipa GQLDB
+    stack: compose/gqldb
+    image: locally built
+    source: >
+      Two pinned upstream artifacts, neither of which this repo builds from source:
+      the ultipa-gqldb 6.2.131 server binary from download.ultipa.com (sha256-pinned) and
+      the GQLDB Manager 1.0.99 .deb (vendor-supplied; the upstream GitHub repo is private).
+      scripts/check-updates.py cannot see either pin - both are recorded in
+      compose/gqldb/README.md and reviewed by hand.
+    routing: not-path-mounted
+    lifecycle: experimental
+    description: >
+      GQL graph database plus its web console, as two containers in one pod. The database
+      speaks raw gRPC and is never path-mounted; the console is a normal HTTPS site.
 
 ApplicationService:
   - id: as-blog-public
@@ -354,12 +369,36 @@ ApplicationService:
     protocol: https
     auth: network-identity
     description: Demo apps on the tailnet path router.
+  - id: as-gqldb-manager
+    name: GQLDB Manager console
+    endpoint: https://beeblebox.taile98462.ts.net:8098/
+    protocol: https
+    auth: basic
+    description: >
+      Web console for the graph database - browsing graphs, running GQL, managing users.
+      Given its own entry rather than folded into as-lan-consoles because it authenticates
+      callers itself rather than relying on the network it is reachable from. On a dedicated
+      port rather than the :8090 path router because its client fetches an absolute
+      /assets/... bundle and the server has no base-path setting, so no prefix mount can
+      work; the router's index page links here instead. The LAN door on :8450 is the
+      break-glass path covered by as-lan-consoles.
+  - id: as-gqldb
+    name: GQLDB gRPC endpoint
+    endpoint: grpc://127.0.0.1:60061
+    protocol: grpc
+    auth: basic
+    description: >
+      The database wire protocol: RBAC login returns a session id carried in gRPC metadata.
+      Deliberately unpublished beyond the host - its only caller is the console beside it.
   - id: as-lan-consoles
     name: LAN service endpoints
-    endpoint: https://beeblebox:8443-8449, :9443
+    endpoint: https://beeblebox:8443-8450, :9443
     protocol: https
     auth: network-identity
-    description: Direct per-service HTTPS ports on the home LAN, using a private CA.
+    description: >
+      Direct per-service HTTPS ports on the home LAN, using a private CA. Includes the GQLDB
+      console's :8450 break-glass door; its designed route is the tailnet port in
+      as-gqldb-manager.
 
 # ==================================================================== DATA ===
 DataEntity:
@@ -395,6 +434,28 @@ DataEntity:
     recoverability: recoverable
     description: Tokens issued by the weather MCP authorisation server; reissuable.
     plain_language: Access passes handed to AI tools; they can simply be reissued.
+  - id: de-graph-data
+    name: Graph datasets
+    classification: internal
+    recoverability: irreplaceable
+    description: >
+      Nodes, edges, labels and indexes held in GQLDB graphs, plus the RBAC users in
+      __system__. Built up interactively rather than loaded from a source of record.
+    plain_language: >
+      The graphs themselves. Built by hand over time, so there is nowhere to reload them
+      from if they are lost.
+  - id: de-manager-config
+    name: Manager connections and users
+    classification: secret
+    recoverability: recoverable
+    description: >
+      Saved database connections and console logins. Connection passwords are encrypted at
+      rest with ENCRYPTION_KEY, the same arrangement as N8N_ENCRYPTION_KEY in
+      de-workflow-definitions - without that key they cannot be read again, and the recovery
+      is to delete and re-create the connection rather than to recover the secret.
+    plain_language: >
+      Which databases the console knows about and who may log in. Scrambled with a key kept
+      in the secrets file; if that key is lost the saved logins are simply re-entered.
   - id: de-platform-secrets
     name: Platform secrets
     classification: secret
@@ -437,6 +498,20 @@ DataStore:
     technology: Podman volume
     backup_method: file-copy
     description: Small JSON store of issued tokens.
+  - id: ds-gqldb
+    name: GQLDB graph store
+    technology: Ultipa GQLDB 6.2.131 (LSM)
+    backup_method: logical-dump
+    description: >
+      BACKUP DATABASE has the server write its own verified archive while serving; the LSM
+      directory is never file-copied.
+  - id: ds-manager
+    name: GQLDB Manager store
+    technology: GQLDB embedded via NAPI (LSM), Podman volume
+    backup_method: file-copy
+    description: >
+      The console's own embedded store. It has no dump command, so the container is stopped
+      for the copy - a cold copy, not a copy of a running database directory.
   - id: ds-secrets
     name: Secrets and credentials
     technology: Host filesystem (.env, ~/.cloudflared, certs/)
@@ -764,6 +839,8 @@ relationships:
   - { from: ac-claudemock,   name: provides, to: as-claudemock }
   - { from: ac-tictactoe,    name: provides, to: as-demos-private }
   - { from: ac-helloworld,   name: provides, to: as-lan-consoles }
+  - { from: ac-gqldb,       name: provides, to: as-gqldb-manager }
+  - { from: ac-gqldb,       name: provides, to: as-gqldb }
 
   # Service -> business service
   - { from: as-blog-public,   name: delivers, to: bs-blog }
@@ -790,6 +867,8 @@ relationships:
   - { from: as-cockpit,       name: exposed_via, to: et-tailnet }
   - { from: as-demos-private, name: exposed_via, to: et-tailnet }
   - { from: as-lan-consoles,  name: exposed_via, to: et-lan }
+  - { from: as-gqldb-manager, name: exposed_via, to: et-tailnet }
+  - { from: as-gqldb,         name: exposed_via, to: et-loopback }
 
   # Tier enforcement
   - { from: et-public-cloudflare, name: enforced_by, to: ep-cloudflare }
@@ -805,6 +884,8 @@ relationships:
   - { from: ac-n8n,         name: manages, to: de-workflow-definitions }
   - { from: ac-litellm,     name: manages, to: de-llm-usage }
   - { from: ac-weather-mcp, name: manages, to: de-oauth-tokens }
+  - { from: ac-gqldb,       name: manages, to: de-graph-data }
+  - { from: ac-gqldb,       name: manages, to: de-manager-config }
   - { from: de-blog-content,         name: persisted_in, to: ds-wordpress-db }
   - { from: de-media-assets,         name: persisted_in, to: ds-wp-content }
   - { from: de-workflow-definitions, name: persisted_in, to: ds-n8n-db }
@@ -812,6 +893,8 @@ relationships:
   - { from: de-llm-usage,            name: persisted_in, to: ds-litellm-db }
   - { from: de-oauth-tokens,         name: persisted_in, to: ds-oauth-store }
   - { from: de-platform-secrets,     name: persisted_in, to: ds-secrets }
+  - { from: de-graph-data,           name: persisted_in, to: ds-gqldb }
+  - { from: de-manager-config,       name: persisted_in, to: ds-manager }
 
   # Deployment
   - { from: ac-wordpress,   name: deployed_on, to: n-beeblebox }
@@ -822,6 +905,7 @@ relationships:
   - { from: ac-tictactoe,   name: deployed_on, to: n-beeblebox }
   - { from: ac-helloworld,  name: deployed_on, to: n-beeblebox }
   - { from: ac-claudemock,  name: deployed_on, to: n-beeblebox }
+  - { from: ac-gqldb,       name: deployed_on, to: n-beeblebox }
 
   # Dependencies
   - { from: ac-wordpress,   name: depends_on, to: ts-podman }

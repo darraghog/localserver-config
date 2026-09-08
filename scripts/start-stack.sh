@@ -45,6 +45,10 @@ run_up() {
   local force_recreate=false
   # env_file keys (API keys) are not applied on a plain `up` when the container already exists
   [[ "$SERVICE" == "litellm" ]] && force_recreate=true
+  # Same reason: the manager reads ENCRYPTION_KEY, JWT_SECRET and its admin password
+  # from the environment at startup, so a rotated secret in .env does not reach a
+  # container that already exists.
+  [[ "$SERVICE" == "gqldb" ]] && force_recreate=true
   # The Caddyfile is bind-mounted as a *file*. rsync (and most editors) replace a file by
   # writing a temp copy and renaming it, which leaves the container bound to the old inode:
   # `caddy reload` then re-reads the stale config and reports success. Recreating is the

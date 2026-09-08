@@ -1,0 +1,53 @@
+# GQLDB Manager 1.0.99 - the web console, run headless.
+#
+# Despite shipping as a desktop .deb, this is not an Electron-only app: its package.json is
+# a workspace of server + client + electron, where the server is plain Express serving a
+# built React client, and electron is only a shell around it. server/dist/index.js guards
+# its startup with `require.main === module` and installs its own SIGTERM/SIGINT handlers,
+# so `node server/dist/index.js` is a first-class way to run it. No X11, no Xvfb.
+#
+# Debian, not Alpine, and this is not a preference: the bundled native modules
+# (ultipagqldb.node, libultipagqldb.so, oracledb, koffi) are glibc builds needing
+# GLIBC_2.34+. On musl they will not load at all.
+FROM docker.io/library/node:22-bookworm-slim AS build
+
+# The .deb is vendor-supplied and gitignored - the upstream GitHub repo is private and
+# there is no apt source, so this file is the only artifact. compose/gqldb/build.sh checks
+# it is present and matches its recorded sha256 before this ever runs.
+COPY *.deb /tmp/manager.deb
+
+# dpkg-deb ships in the base image. The payload lands under "/opt/GQLDB Manager"
+# (the space is real, hence the quoting throughout).
+RUN dpkg-deb -x /tmp/manager.deb /tmp/pkg
+
+# The application code lives inside app.asar, an Electron archive that plain Node cannot
+# require() through, so it has to be unpacked.
+#
+# `npx @electron/asar extract` does NOT work on this package: it also copies entries flagged
+# "unpacked" from the sibling app.asar.unpacked/ tree, and electron-builder pruned the
+# non-Linux platform binaries (koffi win32_arm64 koffi.exp/.lib) from disk while leaving them
+# in the archive index - so the official tool dies with ENOENT on files Electron would never
+# open on Linux. extract-asar.js skips unpacked entries and lets the overlay below supply
+# them, which is what Electron does at runtime. It also removes a network dependency from
+# the build.
+COPY extract-asar.js /tmp/extract-asar.js
+RUN node /tmp/extract-asar.js "/tmp/pkg/opt/GQLDB Manager/resources/app.asar" /app
+
+# app.asar.unpacked holds every file that could not live inside the archive - the native
+# .node/.so modules. Electron resolves these in preference to the archived copies; laying
+# them over the extracted tree reproduces that resolution for plain Node.
+RUN cp -a "/tmp/pkg/opt/GQLDB Manager/resources/app.asar.unpacked/." /app/
+
+FROM docker.io/library/node:22-bookworm-slim
+COPY --from=build /app /app
+
+# /data holds the console's own embedded GQLDB store (_manager graph) plus its uploads,
+# backups and user-backups siblings. Created and chowned here so podman's copy-up gives
+# the named volume this ownership on first mount - see Dockerfile.gqldb for the same note.
+RUN useradd -r -u 10001 -s /usr/sbin/nologin manager \
+ && mkdir -p /data \
+ && chown -R 10001:10001 /data /app
+USER 10001:10001
+WORKDIR /app
+EXPOSE 3052
+CMD ["node", "server/dist/index.js"]

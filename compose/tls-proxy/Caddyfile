@@ -3,13 +3,15 @@
 	auto_https off
 }
 # TLS reverse proxy - :8443 (hello-world), :8444 (n8n), :8445 (tic-tac-toe), :8446 (claude-mock-test),
-# :8447 (litellm), :8448 (weather-mcp), :8449 (wordpress), :9443 (cockpit)
+# :8447 (litellm), :8448 (weather-mcp), :8449 (wordpress), :8450 (gqldb manager), :9443 (cockpit)
 # :8097 is the loopback-only public front for wordpress, served by Cloudflare Tunnel
 # (NOT Tailscale Funnel — Funnel can't serve a custom domain). See the :8097 block below.
 # :8090 is a loopback-only, plain-HTTP tailnet path router
 # (cockpit/tictactoe/helloworld/claudemock/weather).
 # :8092 is litellm's dedicated tailnet-only port (root-mounted — see the :8092 block below
 # for why it can't be path-mounted on :8090). See docs/NETWORK-CONFIG.md.
+# :8098 is the GQLDB Manager's dedicated tailnet-only port, root-mounted for the same
+# class of reason — see the :8098 block below.
 # New ":PORT {" sites here are picked up by scripts/setup-windows-podman-lan-ports.ps1 on Windows.
 #
 # Three address forms appear below and they are NOT interchangeable:
@@ -79,6 +81,13 @@
   bind 0.0.0.0
   tls /certs/server.pem /certs/server-key.pem
   reverse_proxy {env.HOST_INTERNAL_IP}:8096
+}
+# GQLDB Manager console. The graph database itself is NOT proxied: it speaks raw gRPC on
+# 60061 and stays loopback-only, reached over the compose network by the console beside it.
+:8450 {
+  bind 0.0.0.0
+  tls /certs/server.pem /certs/server-key.pem
+  reverse_proxy {env.HOST_INTERNAL_IP}:3052
 }
 :9443 {
   bind 0.0.0.0
@@ -185,6 +194,27 @@
     header_down Location "https://127.0.0.1/" "https://beeblebox.taile98462.ts.net:8092/"
     header_down Location "https://localhost/" "https://beeblebox.taile98462.ts.net:8092/"
   }
+}
+# GQLDB Manager, tailnet-only. Root-mounted on its own port rather than path-mounted on
+# the :8090 router, and that is forced, not preferred: the console's built client requests
+# its bundle from an absolute /assets/index-*.js, and the server exposes NO base-path
+# setting — the full env surface is AUTH_MODE, CORS_ORIGIN, DEFAULT_ADMIN_*, DESKTOP_MODE,
+# ENCRYPTION_KEY, GQLDB_*, HOST, JWT_*, PORT, SYNC_SECRET, USER_CENTER_API_URL, and nothing
+# resembling ROOT_PATH. Under handle_path the app would serve its HTML and then 404 every
+# asset at the router root; under handle it would see a prefix it cannot interpret. This is
+# exactly the case docs/NETWORK-CONFIG.md tells you to give a dedicated mount instead, and
+# the same shape as litellm before SERVER_ROOT_PATH existed.
+#
+# Plain HTTP and loopback-bound like :8090 and :8092: Tailscale terminates TLS in front.
+# Reached from the router's index page, which links here rather than path-mounting.
+#
+# Placed AFTER the :84xx TLS sites on purpose. scripts/lib/caddy-site-ports.awk maps a
+# backend port to the FIRST site that proxies it, and post-deploy-caddy.sh then probes that
+# site over HTTPS. Declared earlier, this plain-HTTP site would win the match for :3052 and
+# every deploy would fail with HTTP 000. litellm's :8092 sits after :8447 for the same reason.
+:8098 {
+  bind 127.0.0.1
+  reverse_proxy {env.HOST_INTERNAL_IP}:3052
 }
 
 # Public front for the weather MCP server. The Tailscale Funnel mounts

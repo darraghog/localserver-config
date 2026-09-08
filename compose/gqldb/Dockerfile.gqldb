@@ -1,0 +1,52 @@
+# Ultipa GQLDB 6.2.131 Community Edition. A single static Go binary; gRPC only, no HTTP.
+#
+# The download is pinned by sha256 and verified in a separate stage, so a tampered or
+# truncated 66MB blob fails the build instead of being committed into a layer. The hash
+# was checked against the published checksums.sha256 AND against a known-good local
+# install. Bump GQLDB_VERSION and GQLDB_SHA256 together, never one alone -
+# scripts/check-updates.py cannot see this pin (see README.md).
+FROM docker.io/library/alpine:3.22 AS fetch
+ARG GQLDB_VERSION=6.2.131
+ARG GQLDB_SHA256=effc0f301040e25b0e04c1ed21bf484d6bc11ab325ef879913c01cac595139da
+RUN apk add --no-cache curl \
+ && curl -fsSL -o /tmp/ultipa-gqldb \
+      "https://download.ultipa.com/gqldb/v${GQLDB_VERSION}/ultipa-gqldb-${GQLDB_VERSION}-linux-amd64" \
+ && echo "${GQLDB_SHA256}  /tmp/ultipa-gqldb" | sha256sum -c - \
+ && chmod 0755 /tmp/ultipa-gqldb
+
+# grpcurl is not a debugging luxury here. This build registers gqldb.Health, NOT
+# grpc.health.v1, so grpc_health_probe cannot talk to it - grpcurl is what makes the
+# healthcheck possible, and what lets scripts/backup.sh drive BACKUP DATABASE with the
+# password on stdin instead of on a host-visible argv.
+FROM docker.io/fullstorydev/grpcurl:v1.9.3 AS grpcurl
+
+# Not FROM scratch despite the static binary: the healthcheck and the backup path both
+# need a shell and grpcurl in the runtime image.
+FROM docker.io/library/alpine:3.22
+# jq builds the healthcheck's login JSON so the password stays off argv and survives
+# quotes/backslashes; scripts/backup.sh uses it the same way.
+RUN apk add --no-cache jq
+COPY --from=fetch   /tmp/ultipa-gqldb /usr/local/bin/ultipa-gqldb
+COPY --from=grpcurl /bin/grpcurl      /usr/local/bin/grpcurl
+
+# gRPC reflection on this server sits BEHIND the auth interceptor, so grpcurl cannot
+# resolve a single method - not even SessionService/Login - without a session it has no way
+# to obtain. The proto is therefore vendored, not discovered at runtime. It ships in the
+# vendor's own npm package (@ultipa-graph/ultipa-driver, aliased gqldb-nodejs) and must be
+# refreshed alongside GQLDB_VERSION above; see README.md.
+COPY gqldb.proto      /opt/gqldb/gqldb.proto
+COPY healthcheck.sh   /usr/local/bin/healthcheck.sh
+
+# /data is the LSM store, /backups the landing zone for BACKUP DATABASE. Both are named
+# volumes. Creating and chowning them in the image is what makes podman's copy-up hand
+# each empty volume this ownership on first mount - without it the non-root user cannot
+# write. Same mechanism, same reason as compose/weather-mcp/Dockerfile.
+RUN adduser -S -u 10001 -H -s /sbin/nologin gqldb \
+ && mkdir -p /data /backups \
+ && chown -R 10001:10001 /data /backups \
+ && chmod 0755 /usr/local/bin/healthcheck.sh
+USER 10001:10001
+WORKDIR /data
+EXPOSE 60061
+# No HEALTHCHECK here - compose owns it, per the estate convention.
+ENTRYPOINT ["/usr/local/bin/ultipa-gqldb"]

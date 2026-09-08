@@ -2,6 +2,11 @@ certs/
 .env
 envs/
 libpod/
+# Vendor-supplied GQLDB Manager package. No apt source and the upstream repo is private,
+# so this is the only copy - but it is ~150MB and does not belong in git. Its sha256 is
+# recorded in compose/gqldb/manager.deb.sha256, which IS tracked.
+compose/gqldb/*.deb
+
 # Ephemeral venv for compose/*/build.sh (e.g. tic-tac-toe tests)
 compose/*/.build/
 __pycache__/

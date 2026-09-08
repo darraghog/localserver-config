@@ -1,0 +1,111 @@
+# Ultipa GQLDB 6.2.131 Community Edition + GQLDB Manager web console.
+#
+# Console:  ${HOST_INTERNAL_IP}:3052 -> Caddy :8450 -> https://<host>:8450
+# Database: ${HOST_INTERNAL_IP}:60061, raw gRPC. No Caddy site, deliberately: it is HTTP/2
+#           with bespoke session-id metadata auth, so a Caddy hop would terminate nothing
+#           useful, and ADD-SERVICE.md section 8 keeps east-west traffic off Caddy anyway.
+#
+# podman-compose puts both services in pod_gqldb, which is what "same pod" buys here - but
+# that pod reports SharedNamespaces: [] and has no infra container. It is a grouping, NOT a
+# shared network namespace. The console therefore reaches the database at the service name
+# gqldb:60061 and never at 127.0.0.1:60061, exactly as litellm reaches db:5432.
+#
+# "manager" is declared FIRST on purpose. scripts/lib/post-deploy-caddy.sh reads only the
+# first ports: entry in this file to find the stack's Caddy front door; listing gqldb first
+# would hand it 60061, which has no Caddy site, and every deploy would silently skip
+# verification. Start-up order comes from depends_on, not file order. Do not reorder.
+#
+# Community Edition ceilings: 1M nodes, 1M edges, 2 graphs, 2 cores.
+services:
+  manager:
+    build:
+      context: .
+      dockerfile: Dockerfile.manager
+    ports:
+      - "${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}:3052:3052"
+    volumes:
+      # Embedded _manager store plus uploads/, backups/, user-backups/. A named volume,
+      # not a bind: deploy-service.sh rsyncs with --delete and would wipe a writable bind
+      # under this stack directory on every deploy.
+      - manager-data:/data
+    environment:
+      PORT: "3052"
+      HOST: "0.0.0.0"
+      GQLDB_DATA_PATH: /data/manager.gdb
+      # Every value below has a dangerous default in the app's own config. DESKTOP_MODE is
+      # deliberately absent: setting it to 1 switches authMode to "desktop", which trusts
+      # the OS user and disables authentication outright.
+      AUTH_MODE: local/ldap
+      CORS_ORIGIN: ${MANAGER_CORS_ORIGIN:-https://beeblebox:8450}
+      # AES-256-CBC key for stored connection passwords - including this stack's own
+      # database admin password. Consumed as Buffer.from(key,'hex'), so it must be exactly
+      # 64 hex characters. Default is a hardcoded dev string; rotating it makes existing
+      # saved connections undecryptable (delete and re-create them). See README.md.
+      ENCRYPTION_KEY: ${MANAGER_ENCRYPTION_KEY:?MANAGER_ENCRYPTION_KEY must be set in .env - openssl rand -hex 32}
+      JWT_SECRET: ${MANAGER_JWT_SECRET:?MANAGER_JWT_SECRET must be set in .env - openssl rand -hex 32}
+      DEFAULT_ADMIN_PASSWORD: ${MANAGER_ADMIN_PASSWORD:?MANAGER_ADMIN_PASSWORD must be set in .env}
+    depends_on:
+      gqldb:
+        condition: service_healthy
+    restart: unless-stopped
+    # The app installs its own SIGTERM handler; init reaps anything npm/node leaves behind.
+    init: true
+    healthcheck:
+      # The image ships node and nothing else useful - no curl, no wget.
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3052/',r=>process.exit(r.statusCode<400?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  gqldb:
+    build:
+      context: .
+      dockerfile: Dockerfile.gqldb
+    # The ONLY argv. Reflection must stay on: grpcurl resolves methods by reflection for
+    # both the healthcheck and scripts/backup.sh, and no .proto is shipped anywhere.
+    # Everything else arrives as env, because -admin-pass would put the database password
+    # on a command line readable by every user on the host via ps.
+    command: ["-reflection=true"]
+    ports:
+      - "${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}:60061:60061"
+    volumes:
+      - gqldb-data:/data
+      - gqldb-backups:/backups
+    environment:
+      GQLDB_DATABASE_PATH: /data
+      # 0.0.0.0, never 127.0.0.1: pasta forwards to the container's eth0, so a
+      # loopback-bound server would be unreachable from the published port.
+      GQLDB_SERVER_ADDRESS: 0.0.0.0
+      GQLDB_SERVER_PORT: "60061"
+      # Explicit, never left to a default: without RBAC the database is open to anything
+      # that can reach the port.
+      GQLDB_RBAC_ENABLED: "true"
+      GQLDB_RBAC_ADMIN_PASSWORD: ${GQLDB_ADMIN_PASSWORD:?GQLDB_ADMIN_PASSWORD must be set in .env}
+      # The metrics listener also mounts /debug/pprof and is unauthenticated. Off.
+      GQLDB_METRICS_ENABLED: "false"
+      GQLDB_LOG_LEVEL: info
+      GQLDB_LOG_FORMAT: json
+    restart: unless-stopped
+    # SIGTERM runs a graceful gRPC stop and then flushes every open LSM store. Generous,
+    # because a SIGKILL mid-flush is the case that risks leaving a stale lock behind.
+    stop_grace_period: 60s
+    # -mem-limit-bytes sizes itself from the cgroup; with no limit that means the whole
+    # host. cpus matches the 2-core Community Edition licence. user@1000.service delegates
+    # cpu, memory and pids, so both are honoured here.
+    mem_limit: 4g
+    cpus: 2.0
+    healthcheck:
+      # See healthcheck.sh: this build registers gqldb.Health rather than grpc.health.v1,
+      # AND puts both reflection and Health/Check behind the auth interceptor, so the probe
+      # has to log in first. That is what makes it readiness rather than liveness.
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  gqldb-data: {}
+  gqldb-backups: {}
+  manager-data: {}
