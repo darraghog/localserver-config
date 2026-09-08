@@ -1,0 +1,21 @@
+[Unit]
+Description=LiteLLM compose stack
+Documentation=https://github.com/darraghog/localserver-config
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Unlike the other stacks, litellm gates on `condition: service_healthy` for its Postgres,
+# so `up` does not return until that healthcheck passes — up to ~60s (10s start_period plus
+# 10 retries at 5s). On a cold boot, with every other stack starting at the same time, that
+# is close enough to systemd's 90s default to risk a timeout, which would leave the stack
+# half-started.
+TimeoutStartSec=300
+Environment=PATH=__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=__REPO_ROOT__/scripts/start-stack.sh litellm up
+ExecStop=__REPO_ROOT__/scripts/start-stack.sh litellm down
+
+[Install]
+WantedBy=default.target
