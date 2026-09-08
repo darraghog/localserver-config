@@ -95,16 +95,40 @@ Uses `envs/local.env` and deploys on this machine.
 |-------|-------|-------------|
 | hello-world | 8080, 8443 | nginx test |
 | n8n | 5678, 8444 | Workflow automation (SQLite) |
+| tic-tac-toe | 8091 (host-internal), 8445 | Reference app proving path-based routing |
 | claude-mock-test | 8093 (host-internal), 8446 | Static Claude Professional Architect mock test (nginx) |
+| litellm | 4000 (host-internal), 8447, 8092 (tailnet front, loopback) | LLM proxy + Postgres; serves under `/litellm` (`SERVER_ROOT_PATH`) |
+| weather-mcp | 8094 (host-internal), 8448, 8095 (public front, loopback) | MCP tool server plus a private GUI |
 | wordpress | 8096 (host-internal), 8449, 8097 (public front, loopback) | thelearningcto.com blog — WordPress + MariaDB, public via Cloudflare Tunnel |
-| tls-proxy | 8443, 8444, 8446, 9443, 8090 (tailnet path router, loopback-only) | Caddy HTTPS reverse proxy |
+| tls-proxy | LAN TLS 8443–8449 and 9443; loopback-only 8090 (tailnet path router), 8092 (litellm), 8095 (weather public front), 8097 (wordpress public front) | Caddy HTTPS reverse proxy |
 | Cockpit | 9090 (internal), 9443 (TLS) | Podman container/pod management UI |
 
 ## URLs
 
-- http://&lt;host&gt;:8080, https://&lt;host&gt;:8443 — hello-world
-- http://&lt;host&gt;:5678, https://&lt;host&gt;:8444 — n8n (admin / changeme)
-- https://&lt;host&gt;:9443/cockpit/ — Cockpit (login with Linux system user credentials)
+Plain HTTP, published on the LAN by the stack itself — only these two; every other stack
+publishes to `HOST_INTERNAL_IP` and is reachable through Caddy or not at all:
+
+- http://&lt;host&gt;:8080 — hello-world
+- http://&lt;host&gt;:5678 — n8n
+
+HTTPS through Caddy, using the private CA (trust `certs/ca.pem` — see [docs/tls.md](docs/tls.md)):
+
+| URL | Service |
+|-----|---------|
+| https://&lt;host&gt;:8443 | hello-world |
+| https://&lt;host&gt;:8444 | n8n |
+| https://&lt;host&gt;:8445 | tic-tac-toe |
+| https://&lt;host&gt;:8446 | claude-mock-test |
+| https://&lt;host&gt;:8447 | litellm — admin UI at `/ui/`, API at `/v1` (Caddy adds the `/litellm` root path) |
+| https://&lt;host&gt;:8448 | weather-mcp GUI |
+| https://&lt;host&gt;:8449 | wordpress |
+| https://&lt;host&gt;:9443/cockpit/ | Cockpit (Linux system user credentials) |
+
+Credentials come from `.env` — there are no defaults, and `deploy.sh` refuses to deploy n8n or
+WordPress without them.
+
+Ports `8090`, `8092`, `8095` and `8097` are **not** in that table on purpose: they bind loopback
+only and exist to be mounted by Tailscale or Cloudflare, not visited directly.
 
 Examples: `https://myserver:8443`, `https://myserver.example.com:8443` (after DNS or `/etc/hosts` points at the Podman host).
 
@@ -115,13 +139,17 @@ Path names instead of a port per service — see [docs/NETWORK-CONFIG.md](docs/N
 **The list of services and their URLs is not repeated here.** It is data in
 [`architecture/model.yaml`](architecture/model.yaml) — the `as-*` application services, each with its
 `endpoint` and exposure tier — rendered by `architecture/overview.html`, and validated on every
-deploy. Three exposure tiers are in use:
+deploy. Four exposure tiers are in use:
 
 - **Tailnet-only, path router `:8090`** — most services; one port, a path each.
-- **Tailnet-only, dedicated port** — for services that cannot be path-mounted (see NETWORK-CONFIG.md).
+- **Tailnet-only, dedicated port** — kept as a fallback where path-mounting was hard-won: litellm
+  answers on `:8092` as well as at `/litellm` (see NETWORK-CONFIG.md).
 - **Public via Tailscale Funnel on `:443`** — keep public MCP/webhook endpoints on `:443`, not a
   dedicated port: hosted connector infra (e.g. claude.ai) has been observed failing to reach
   non-standard ports.
+- **Public via Cloudflare Tunnel on a custom domain** — Funnel can only ever serve
+  `*.ts.net`, so anything on its own domain needs the tunnel instead
+  ([`cloudflared/config.yml.in`](cloudflared/config.yml.in)).
 
 ## Cockpit
 
