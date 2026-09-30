@@ -27,7 +27,7 @@ def get(path):
     except OSError as e:
         print(f"FAIL cannot query prometheus: {e}", file=sys.stderr); sys.exit(1)
 
-expected = {"prometheus", "node", "probe-http", "probe-tcp", "tls-cert",
+expected = {"prometheus", "node", "probe-http", "probe-http-noredirect", "probe-tcp", "tls-cert",
             "alertmanager", "grafana", "caddy", "litellm"} - skip
 targets = get("/api/v1/targets?state=active")["data"]["activeTargets"]
 jobs = {t["labels"]["job"] for t in targets}
@@ -42,6 +42,13 @@ for t in targets:
 res = get("/api/v1/query?" + urllib.parse.urlencode({"query": 'probe_success{job!="tls-cert"} == 0'}))["data"]["result"]
 for r in res:
     print(f"FAIL probe failing: {r['metric'].get('instance')}", file=sys.stderr); rc = 1
+if "tls-cert" not in skip:
+    res = get("/api/v1/query?" + urllib.parse.urlencode({"query": 'probe_success{job="tls-cert"} == 1'}))["data"]["result"]
+    ok_inst = {r["metric"].get("instance") for r in res}
+    allp = get("/api/v1/query?" + urllib.parse.urlencode({"query": 'probe_success{job="tls-cert"}'}))["data"]["result"]
+    for r in allp:
+        if r["metric"].get("instance") not in ok_inst:
+            print(f"FAIL tls-cert probe failing: {r['metric'].get('instance')}", file=sys.stderr); rc = 1
 res = get("/api/v1/query?" + urllib.parse.urlencode({"query": 'ALERTS{alertname="Watchdog",alertstate="firing"}'}))["data"]["result"]
 if not res:
     print("FAIL Watchdog is not firing (rules not loaded?)", file=sys.stderr); rc = 1

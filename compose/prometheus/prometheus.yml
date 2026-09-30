@@ -30,7 +30,6 @@ scrape_configs:
           - http://host.containers.internal:8094/health   # weather-mcp
           - http://host.containers.internal:4000/litellm/health/liveliness
           - http://host.containers.internal:5678/healthz  # n8n
-          - http://host.containers.internal:8096/         # wordpress backend
           - http://host.containers.internal:8080/         # hello-world
           - http://host.containers.internal:8093/         # claude-mock-test
           - http://host.containers.internal:3052/         # gqldb console
@@ -43,6 +42,16 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: blackbox:9115
+
+  # WordPress redirects to its canonical URL; do not follow (the target may not be reachable from here).
+  - job_name: probe-http-noredirect
+    metrics_path: /probe
+    params:
+      module: [http_2xx_no_redirect]
+    static_configs:
+      - targets:
+          - http://host.containers.internal:8096/         # wordpress backend
+    relabel_configs: *blackbox_relabel
 
   - job_name: probe-tcp
     metrics_path: /probe

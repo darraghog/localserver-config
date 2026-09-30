@@ -4,6 +4,13 @@ modules:
     timeout: 10s
     http:
       preferred_ip_protocol: ip4
+  http_2xx_no_redirect:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      follow_redirects: false
+      valid_status_codes: [200, 301, 302]
   tcp_connect:
     prober: tcp
     timeout: 5s
