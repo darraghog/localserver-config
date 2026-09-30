@@ -23,7 +23,7 @@
       "Bash(./scripts/deploy-to-server.sh dev *)",
       "Bash(./tests/check-ports.sh *)",
       "Bash(./scripts/check-tls.sh)",
-      "Bash(journalctl -u cockpit-tls* --no-pager -n 60)",
+      "Bash(journalctl -u cockpit-tls --no-pager -n 60)",
       "Bash(journalctl --no-pager -n 200)",
       "Bash(journalctl --no-pager --since \"10 min ago\")",
       "Bash(timeout 8 journalctl -f)",
