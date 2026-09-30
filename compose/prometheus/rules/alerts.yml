@@ -119,15 +119,16 @@ groups:
         annotations:
           summary: "systemd user unit failed: {{ $labels.unit }}"
       # If the emitter stops, "no failed units" and "not checking" look identical.
+      # node-exporter labels the metric with the full in-container path, hence the regex.
       - alert: SystemdUnitMetricsStale
-        expr: time() - node_textfile_mtime_seconds{file="systemd_user_units.prom"} > 300
+        expr: time() - node_textfile_mtime_seconds{file=~".*/systemd_user_units.prom"} > 300
         for: 5m
         labels:
           severity: warn
         annotations:
           summary: "systemd user unit metrics are stale, so failed units would go unreported"
       - alert: SystemdUnitMetricsMissing
-        expr: absent(node_textfile_mtime_seconds{file="systemd_user_units.prom"})
+        expr: absent(node_textfile_mtime_seconds{file=~".*/systemd_user_units.prom"})
         for: 30m
         labels:
           severity: warn

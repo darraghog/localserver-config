@@ -208,7 +208,7 @@ tests:
     interval: 1m
     input_series:
       # last written at t=60s, never again
-      - series: 'node_textfile_mtime_seconds{file="systemd_user_units.prom",instance="node-exporter:9100"}'
+      - series: 'node_textfile_mtime_seconds{file="/textfile/systemd_user_units.prom",instance="node-exporter:9100"}'
         values: '60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60'
     alert_rule_test:
       - eval_time: 4m
@@ -219,7 +219,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warn
-              file: systemd_user_units.prom
+              file: /textfile/systemd_user_units.prom
               instance: node-exporter:9100
             exp_annotations:
               summary: "systemd user unit metrics are stale, so failed units would go unreported"
@@ -227,7 +227,7 @@ tests:
   - name: SystemdUnitMetricsStale stays quiet while the textfile is fresh
     interval: 1m
     input_series:
-      - series: 'node_textfile_mtime_seconds{file="systemd_user_units.prom",instance="node-exporter:9100"}'
+      - series: 'node_textfile_mtime_seconds{file="/textfile/systemd_user_units.prom",instance="node-exporter:9100"}'
         values: '0 60 120 180 240 300 360 420 480 540 600 660 720 780 840'
     alert_rule_test:
       - eval_time: 14m
@@ -248,6 +248,5 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warn
-              file: systemd_user_units.prom
             exp_annotations:
               summary: "no systemd user unit metrics: is localserver-unit-metrics.timer running?"
