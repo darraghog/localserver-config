@@ -785,14 +785,20 @@ Gap:
       Everything runs on one computer at home. If it fails, the services are down until
       it is rebuilt — though nothing is permanently lost.
   - id: gap-no-alerting
-    name: No monitoring or alerting
-    severity: medium
-    status: accepted
+    name: Alerting limited to probes, host resources and certificates
+    severity: low
+    status: mitigated
     description: >
-      Nothing reports failure. A failed weekly backup or a stopped stack is discovered by
-      looking, which means the detective controls only fire when someone remembers.
+      Prometheus probes every stack and public URL, watches host disk, memory and CPU and
+      the Caddy certificate, and Alertmanager posts failures to Slack #myagentchannel.
+      Still uncovered: backup age (the backup scripts emit no metric), application-level
+      errors in apps that expose no metrics, and a host-wide outage - the alert pipeline
+      runs on the host it watches (gap-single-node), so nothing reports that the whole box
+      is down. n8n and GQLDB are probe-only by decision: n8n's /metrics would be public on
+      the Funnel, and GQLDB's metrics listener exposes unauthenticated /debug/pprof.
     plain_language: >
-      Nothing tells me when something breaks — I have to go and check.
+      Something now tells me when a service, a website or the disk is in trouble. It cannot
+      tell me if the whole server is off, and it does not yet watch the backups.
   - id: gap-residential-connectivity
     name: Residential connectivity
     severity: medium
@@ -827,6 +833,8 @@ Gap:
       (:8090/litellm and :8092) alongside the console. Every route is key-authenticated, so
       this widens who may present a key rather than removing the check. Narrowing it means an
       allowlist on those sites — the pattern the :8095 site already uses for weather-mcp.
+      The one exception is /litellm/metrics, which is unauthenticated east-west for
+      Prometheus and is answered 404 by Caddy on :8447, :8092 and :8090.
     plain_language: >
       The AI gateway can be called from more places than intended, though a key is still
       needed to use it.

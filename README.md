@@ -101,7 +101,10 @@ Uses `envs/local.env` and deploys on this machine.
 | weather-mcp | 8094 (host-internal), 8448, 8095 (public front, loopback) | MCP tool server plus a private GUI |
 | wordpress | 8096 (host-internal), 8449, 8097 (public front, loopback) | thelearningcto.com blog — WordPress + MariaDB, public via Cloudflare Tunnel |
 | gqldb | 3052 (host-internal), 8450, 8098 (tailnet front, loopback); 60061 (host-internal, gRPC) | Ultipa GQLDB graph database + web console, two containers in one pod |
-| tls-proxy | LAN TLS 8443–8450 and 9443; loopback-only 8090 (tailnet path router), 8092 (litellm), 8098 (gqldb), 8095 (weather public front), 8097 (wordpress public front) | Caddy HTTPS reverse proxy |
+| prometheus | 8100 (host-internal) | Metrics, blackbox probes and alert rules; mounted at `/prometheus` on the `:8090` router |
+| alertmanager | 8101 (host-internal) | Alert routing to Slack |
+| grafana | 8102 (host-internal) | Dashboards, provisioned from git; mounted at `/grafana` on the `:8090` router |
+| tls-proxy | LAN TLS 8443–8450 and 9443; loopback-only 8090 (tailnet path router, incl. `/prometheus` and `/grafana`), 8092 (litellm), 8098 (gqldb), 8095 (weather public front), 8097 (wordpress public front); host-internal 8103 (Caddy metrics, Prometheus scrape only) | Caddy HTTPS reverse proxy |
 | Cockpit | 9090 (internal), 9443 (TLS) | Podman container/pod management UI |
 
 ## URLs
@@ -131,6 +134,10 @@ WordPress without them.
 
 Ports `8090`, `8092`, `8095`, `8097` and `8098` are **not** in that table on purpose: they bind loopback
 only and exist to be mounted by Tailscale or Cloudflare, not visited directly.
+
+`8100`–`8102` (monitoring stacks) and `8103` (Caddy metrics) bind `HOST_INTERNAL_IP`, not loopback, and
+are absent from the table too: `8100` and `8102` are reached through the `:8090` router, `8101` and
+`8103` only by Prometheus.
 
 `60061` is absent for a different reason: it is the graph database's raw gRPC port, which is
 not HTTP and has no front door at all. Its only caller is the console container beside it.

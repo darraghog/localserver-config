@@ -24,6 +24,8 @@ weeks.
 | `~/.cloudflared/` | file copy | tunnel credentials + origin cert |
 | `certs/` | file copy | local CA (regenerable, but cheap to keep) |
 
+The Prometheus TSDB and Grafana state are deliberately **not** backed up: metrics are disposable and Grafana is provisioned from git.
+
 ### The two things people get wrong
 
 **1. `.env` is the most important file in the backup.** It holds `N8N_ENCRYPTION_KEY`. Restore the

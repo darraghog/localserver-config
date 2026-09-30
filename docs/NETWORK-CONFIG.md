@@ -302,6 +302,28 @@ you consider path-mounting — the UI's own JS really does hardcode root-relativ
 1. **Static assets** are served from a fixed `/litellm-asset-prefix/_next/...` path baked into the build (litellm's own workaround for reverse-proxy deployments) — this is *not* relative to wherever you mount the app, so a plain `/litellm` path-mount 404s on every asset unless something also routes `/litellm-asset-prefix/*` to the backend.
 2. **API calls** (`/key/list`, `/global/activity`, `/model/cost_map/...`, everything the dashboard needs to show real data) are hardcoded root-relative in the JS bundle with no configurable base path at all — confirmed by grepping all 49 UI JS chunks for `PROXY_BASE_URL`/`basePath`/`assetPrefix` overrides and finding none.
 
+### Monitoring
+
+Prometheus, Alertmanager and Grafana are stacks on `8100`/`8101`/`8102` (host-internal). Prometheus and
+Grafana are mounted on the `:8090` router at `/prometheus` and `/grafana` with **no prefix strip**: each
+is started with its own sub-path (`--web.route-prefix=/prometheus`, Grafana's `serve_from_sub_path`), so
+stripping the prefix in Caddy would break their redirects and asset URLs. Alertmanager has no mount.
+
+Scrape addressing: containers reach host-published ports through `host.containers.internal`, and
+targets published only on `HOST_INTERNAL_IP` use that per-host address, not loopback. Caddy exposes its
+own metrics on a dedicated `:8103` site bound to `HOST_INTERNAL_IP` (only `/metrics`; the admin API on
+`:2019` is untouched). `scripts/setup-windows-podman-lan-ports.ps1` opens a firewall rule and portproxy
+for every `:PORT {` Caddy site regardless of `bind`, so `:8103` gets one pointing at `[::1]:8103` where
+nothing listens - the same known, harmless quirk as `:8090`, `:8092` and `:8098`.
+
+LiteLLM's `/litellm/metrics` needed `require_auth_for_metrics_endpoint: false` (otherwise it returns 401
+without the master key), so it is unauthenticated east-west and Caddy answers 404 for it on `:8447`,
+`:8092` and the `:8090` litellm handle. Rollout order: deploy litellm, then tls-proxy, then reload
+Prometheus.
+
+n8n is probe-only: its `/metrics` would be served on the public Funnel at `:443`, so it is not scraped.
+GQLDB is probe-only: its metrics listener also exposes unauthenticated `/debug/pprof`.
+
 ### n8n: root-mounted on public `:443`, not the path router
 
 n8n is deliberately **not** in the `:8090` router, and not on a path mount of any kind. Its `N8N_PATH` env var *can* move the whole app to a subpath, but it's a single whole-process setting — it would move n8n's UI, REST API, and **already-registered webhook/MCP URLs** (e.g. `/mcp/<id>`, `/webhook/<id>`) together, breaking any caller hitting today's root-mounted `N8N_WEBHOOK_URL`. A `handle_path`/redirect prefix-strip in Caddy has the same effect for the same reason. A true isolated `/n8n` editor-only mount would need a second n8n process (own `N8N_PATH`) against the same Postgres DB, which risks double-firing schedule/cron triggers without proper `N8N_EXECUTIONS_MODE=queue` + Redis (not set up today) — a larger follow-up, not part of this pattern.
