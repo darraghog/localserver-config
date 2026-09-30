@@ -65,6 +65,10 @@
   # (/litellm/health/liveliness) is probed both directly and through these sites.
   @unprefixed not path /litellm /litellm/*
   rewrite @unprefixed /litellm{uri}
+  # Prometheus scrapes litellm east-west on :4000; the metrics are unauthenticated
+  # (require_auth_for_metrics_endpoint: false), so never proxy them out.
+  @litellm_metrics path /litellm/metrics /litellm/metrics/*
+  respond @litellm_metrics 404
   reverse_proxy {env.HOST_INTERNAL_IP}:4000 {
     header_up X-Forwarded-Proto {scheme}
     header_up X-Forwarded-Host {hostport}
@@ -157,6 +161,8 @@
   # the server-side one. Confirmed 2026-09-08 by probing the image directly: with
   # SERVER_ROOT_PATH set, /litellm/ui/ returns 200 and the old root /ui/ returns 404.
   handle /litellm/* {
+    @litellm_metrics path /litellm/metrics /litellm/metrics/*
+    respond @litellm_metrics 404
     reverse_proxy {env.HOST_INTERNAL_IP}:4000
   }
   # Belt and braces: litellm builds have historically served UI assets from a fixed,
@@ -198,6 +204,10 @@
   # (/litellm/health/liveliness) is probed both directly and through these sites.
   @unprefixed not path /litellm /litellm/*
   rewrite @unprefixed /litellm{uri}
+  # Prometheus scrapes litellm east-west on :4000; the metrics are unauthenticated
+  # (require_auth_for_metrics_endpoint: false), so never proxy them out.
+  @litellm_metrics path /litellm/metrics /litellm/metrics/*
+  respond @litellm_metrics 404
   reverse_proxy {env.HOST_INTERNAL_IP}:4000 {
     header_up X-Forwarded-Proto https
     header_up X-Forwarded-Host {hostport}

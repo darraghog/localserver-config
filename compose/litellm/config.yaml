@@ -5,6 +5,11 @@ general_settings:
 litellm_settings:
   drop_params: true   # ignore unsupported params instead of erroring
   num_retries: 2
+  callbacks: ["prometheus"]
+  # Verified on main-stable: /metrics 401s without a Bearer master key by default. Prometheus
+  # scrapes east-west on :4000 without one, and tls-proxy 404s /litellm/metrics on every
+  # LAN/tailnet site, so drop the auth requirement.
+  require_auth_for_metrics_endpoint: false
 
 # No static model_list — STORE_MODEL_IN_DB=True (compose.yaml). All models are
 # managed via the Admin UI (Models tab) or the /model/new API, stored in
