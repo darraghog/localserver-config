@@ -1,0 +1,10 @@
+[Unit]
+Description=Export failed systemd user units as Prometheus textfile metrics
+Documentation=https://github.com/darraghog/localserver-config
+
+[Service]
+Type=oneshot
+Environment=PATH=__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=__REPO_ROOT__/scripts/emit-unit-metrics.sh
+
+# Deliberately NO [Install] section: driven by localserver-unit-metrics.timer.

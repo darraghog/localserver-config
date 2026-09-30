@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh the systemd user unit metrics every minute (see localserver-unit-metrics.service)
+Documentation=https://github.com/darraghog/localserver-config
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=1min
+AccuracySec=5s
+Unit=localserver-unit-metrics.service
+
+[Install]
+WantedBy=timers.target

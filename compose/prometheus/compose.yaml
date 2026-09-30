@@ -38,8 +38,12 @@ services:
     command:
       - --path.rootfs=/host
       - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/containers)($|/)
+      # Failed systemd USER units, written every minute by scripts/emit-unit-metrics.sh
+      # (node-exporter's systemd collector only sees the system bus).
+      - --collector.textfile.directory=/textfile
     volumes:
       - /:/host:ro,rslave
+      - ./textfile:/textfile:ro
     restart: unless-stopped
 
 volumes:

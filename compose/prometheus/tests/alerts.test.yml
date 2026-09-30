@@ -174,3 +174,80 @@ tests:
               instance: a
             exp_annotations:
               summary: "Alertmanager config reload failed"
+
+  - name: SystemdUserUnitFailed fires for a failed unit after 5m
+    interval: 1m
+    input_series:
+      - series: 'localserver_systemd_user_unit_failed{unit="localserver-backup.service",instance="node-exporter:9100"}'
+        values: '1 1 1 1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: SystemdUserUnitFailed
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: SystemdUserUnitFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warn
+              unit: localserver-backup.service
+              instance: node-exporter:9100
+            exp_annotations:
+              summary: "systemd user unit failed: localserver-backup.service"
+
+  - name: SystemdUserUnitFailed stays quiet when no unit is failed
+    interval: 1m
+    input_series:
+      - series: 'localserver_systemd_user_units_failed{instance="node-exporter:9100"}'
+        values: '0 0 0 0 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: SystemdUserUnitFailed
+        exp_alerts: []
+
+  - name: SystemdUnitMetricsStale fires when the textfile stops updating
+    interval: 1m
+    input_series:
+      # last written at t=60s, never again
+      - series: 'node_textfile_mtime_seconds{file="systemd_user_units.prom",instance="node-exporter:9100"}'
+        values: '60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: SystemdUnitMetricsStale
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: SystemdUnitMetricsStale
+        exp_alerts:
+          - exp_labels:
+              severity: warn
+              file: systemd_user_units.prom
+              instance: node-exporter:9100
+            exp_annotations:
+              summary: "systemd user unit metrics are stale, so failed units would go unreported"
+
+  - name: SystemdUnitMetricsStale stays quiet while the textfile is fresh
+    interval: 1m
+    input_series:
+      - series: 'node_textfile_mtime_seconds{file="systemd_user_units.prom",instance="node-exporter:9100"}'
+        values: '0 60 120 180 240 300 360 420 480 540 600 660 720 780 840'
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: SystemdUnitMetricsStale
+        exp_alerts: []
+
+  - name: SystemdUnitMetricsMissing fires when the textfile was never produced
+    interval: 1m
+    input_series:
+      - series: 'up{job="node"}'
+        values: '1+0x60'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: SystemdUnitMetricsMissing
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: SystemdUnitMetricsMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warn
+              file: systemd_user_units.prom
+            exp_annotations:
+              summary: "no systemd user unit metrics: is localserver-unit-metrics.timer running?"

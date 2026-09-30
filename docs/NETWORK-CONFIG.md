@@ -329,6 +329,15 @@ are skipped.
 n8n is probe-only: its `/metrics` would be served on the public Funnel at `:443`, so it is not scraped.
 GQLDB is probe-only: its metrics listener also exposes unauthenticated `/debug/pprof`.
 
+Failed systemd **user** units are alerted on too (`SystemdUserUnitFailed`). node-exporter's own
+systemd collector reads the system bus and cannot see user units, so
+`scripts/emit-unit-metrics.sh` writes a textfile metric every minute
+(`localserver-unit-metrics.timer`) into `compose/prometheus/textfile/`, which node-exporter mounts
+read-only. `SystemdUnitMetricsStale` and `SystemdUnitMetricsMissing` fire if that emitter stops, so
+a broken check cannot pass for "nothing is failing". The generated `.prom` file is untracked, and a
+deploy's `rsync --delete` removes it until the next minute's run, well inside the 5-minute staleness
+threshold.
+
 ### n8n: root-mounted on public `:443`, not the path router
 
 n8n is deliberately **not** in the `:8090` router, and not on a path mount of any kind. Its `N8N_PATH` env var *can* move the whole app to a subpath, but it's a single whole-process setting — it would move n8n's UI, REST API, and **already-registered webhook/MCP URLs** (e.g. `/mcp/<id>`, `/webhook/<id>`) together, breaking any caller hitting today's root-mounted `N8N_WEBHOOK_URL`. A `handle_path`/redirect prefix-strip in Caddy has the same effect for the same reason. A true isolated `/n8n` editor-only mount would need a second n8n process (own `N8N_PATH`) against the same Postgres DB, which risks double-firing schedule/cron triggers without proper `N8N_EXECUTIONS_MODE=queue` + Redis (not set up today) — a larger follow-up, not part of this pattern.

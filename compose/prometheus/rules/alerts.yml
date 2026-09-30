@@ -106,3 +106,30 @@ groups:
           severity: warn
         annotations:
           summary: "Host CPU over 90% for 15m"
+
+  - name: systemd
+    rules:
+      # Fed by scripts/emit-unit-metrics.sh via node-exporter's textfile collector. A oneshot
+      # user unit that fails just sits in "failed": the weekly backup did so for three weeks.
+      - alert: SystemdUserUnitFailed
+        expr: localserver_systemd_user_unit_failed == 1
+        for: 5m
+        labels:
+          severity: warn
+        annotations:
+          summary: "systemd user unit failed: {{ $labels.unit }}"
+      # If the emitter stops, "no failed units" and "not checking" look identical.
+      - alert: SystemdUnitMetricsStale
+        expr: time() - node_textfile_mtime_seconds{file="systemd_user_units.prom"} > 300
+        for: 5m
+        labels:
+          severity: warn
+        annotations:
+          summary: "systemd user unit metrics are stale, so failed units would go unreported"
+      - alert: SystemdUnitMetricsMissing
+        expr: absent(node_textfile_mtime_seconds{file="systemd_user_units.prom"})
+        for: 30m
+        labels:
+          severity: warn
+        annotations:
+          summary: "no systemd user unit metrics: is localserver-unit-metrics.timer running?"
