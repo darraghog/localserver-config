@@ -10,14 +10,9 @@
      "datasource": {"type": "prometheus", "uid": "prometheus"},
      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []},
      "targets": [{"refId": "A", "expr": "node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes", "legendFormat": "available"}]},
-    {"id": 3, "type": "timeseries", "title": "Root filesystem free", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+    {"id": 3, "type": "timeseries", "title": "Root filesystem free", "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
      "datasource": {"type": "prometheus", "uid": "prometheus"},
      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []},
-     "targets": [{"refId": "A", "expr": "node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}", "legendFormat": "free"}]},
-    {"id": 4, "type": "timeseries", "title": "Network throughput", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
-     "datasource": {"type": "prometheus", "uid": "prometheus"},
-     "fieldConfig": {"defaults": {"unit": "Bps"}, "overrides": []},
-     "targets": [{"refId": "A", "expr": "sum(rate(node_network_receive_bytes_total{device!~\"lo|veth.*|cni.*|podman.*\"}[5m]))", "legendFormat": "rx"},
-                 {"refId": "B", "expr": "sum(rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|cni.*|podman.*\"}[5m]))", "legendFormat": "tx"}]}
+     "targets": [{"refId": "A", "expr": "node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}", "legendFormat": "free"}]}
   ]
 }

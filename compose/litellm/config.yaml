@@ -7,8 +7,8 @@ litellm_settings:
   num_retries: 2
   callbacks: ["prometheus"]
   # Verified on main-stable: /metrics 401s without a Bearer master key by default. Prometheus
-  # scrapes east-west on :4000 without one, and tls-proxy 404s /litellm/metrics on every
-  # LAN/tailnet site, so drop the auth requirement.
+  # scrapes east-west on :4000 without one, and tls-proxy 404s /litellm/metrics on the three
+  # sites (:8447, :8092 and the :8090 litellm handle), so drop the auth requirement.
   require_auth_for_metrics_endpoint: false
 
 # No static model_list — STORE_MODEL_IN_DB=True (compose.yaml). All models are
