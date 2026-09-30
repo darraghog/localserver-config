@@ -1,0 +1,46 @@
+# Prometheus + blackbox_exporter + node_exporter. Tailnet-only via the :8090 router at
+# /prometheus (no-strip). Host-internal: ${HOST_INTERNAL_IP}:8100.
+# No --web.enable-lifecycle: its unauthenticated /-/reload would be open to every container.
+# Reload config with: podman kill --signal HUP prometheus_prometheus_1
+services:
+  prometheus:
+    image: docker.io/prom/prometheus:v3.5.0
+    ports:
+      - "${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}:8100:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=5GB
+      - --web.external-url=https://beeblebox.taile98462.ts.net:8090/prometheus/
+      - --web.route-prefix=/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9090/prometheus/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  blackbox:
+    image: docker.io/prom/blackbox-exporter:v0.27.0
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    volumes:
+      - ./blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    restart: unless-stopped
+
+  node-exporter:
+    image: docker.io/prom/node-exporter:v1.9.1
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/containers)($|/)
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+
+volumes:
+  prometheus-data: {}

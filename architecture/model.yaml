@@ -300,6 +300,15 @@ ApplicationComponent:
     description: >
       GQL graph database plus its web console, as two containers in one pod. The database
       speaks raw gRPC and is never path-mounted; the console is a normal HTTPS site.
+  - id: ac-prometheus
+    name: Prometheus
+    stack: compose/prometheus
+    image: prom/prometheus:v3.5.0 + prom/blackbox-exporter:v0.27.0 + prom/node-exporter:v1.9.1
+    routing: no-strip
+    lifecycle: production
+    description: >
+      Metrics store, rule evaluator and probe scheduler. Scrapes metric endpoints where an
+      application already exposes them and blackbox-probes the rest; changes no application.
 
 ApplicationService:
   - id: as-blog-public
@@ -399,6 +408,12 @@ ApplicationService:
       Direct per-service HTTPS ports on the home LAN, using a private CA. Includes the GQLDB
       console's :8450 break-glass door; its designed route is the tailnet port in
       as-gqldb-manager.
+  - id: as-prometheus
+    name: Prometheus UI and API
+    endpoint: https://beeblebox.taile98462.ts.net:8090/prometheus/
+    protocol: https
+    auth: network-identity
+    description: Query UI and API on the tailnet path router. Also answers east-west on the host-internal port.
 
 # ==================================================================== DATA ===
 DataEntity:
@@ -466,6 +481,11 @@ DataEntity:
     plain_language: >
       The master key file. Losing it makes several of the backups permanently unreadable,
       which is why it matters more than anything else here.
+  - id: de-monitoring-metrics
+    name: Monitoring time series
+    classification: internal
+    recoverability: recoverable
+    description: Fifteen days of scraped metrics. Disposable by design; nothing is lost that matters if it is.
 
 DataStore:
   - id: ds-wordpress-db
@@ -517,6 +537,11 @@ DataStore:
     technology: Host filesystem (.env, ~/.cloudflared, certs/)
     backup_method: file-copy
     description: Included in the encrypted snapshot; the reason encryption is load-bearing.
+  - id: ds-prometheus-tsdb
+    name: Prometheus TSDB
+    technology: Podman volume
+    backup_method: none
+    description: Deliberately not backed up - metrics are disposable and rebuilt from the next scrape.
 
 # ============================================================== TECHNOLOGY ===
 Node:
@@ -812,6 +837,7 @@ relationships:
   - { from: cap-administration,   name: realised_by, to: ac-cockpit }
   - { from: cap-remote-access,    name: realised_by, to: ac-cockpit }
   - { from: cap-data-protection,  name: realised_by, to: ac-wordpress }
+  - { from: cap-administration,   name: realised_by, to: ac-prometheus }
 
   # Business service -> capability, and -> consumer
   - { from: bs-blog,                 name: supports, to: cap-publishing }
@@ -841,6 +867,7 @@ relationships:
   - { from: ac-helloworld,   name: provides, to: as-lan-consoles }
   - { from: ac-gqldb,       name: provides, to: as-gqldb-manager }
   - { from: ac-gqldb,       name: provides, to: as-gqldb }
+  - { from: ac-prometheus,  name: provides, to: as-prometheus }
 
   # Service -> business service
   - { from: as-blog-public,   name: delivers, to: bs-blog }
@@ -854,6 +881,7 @@ relationships:
   - { from: as-lan-consoles,  name: delivers, to: bs-administration }
   - { from: as-claudemock,    name: delivers, to: bs-demonstrations }
   - { from: as-demos-private, name: delivers, to: bs-demonstrations }
+  - { from: as-prometheus,    name: delivers, to: bs-administration }
 
   # Service -> exposure tier (invariant: exactly one each)
   - { from: as-blog-public,   name: exposed_via, to: et-public-cloudflare }
@@ -869,6 +897,7 @@ relationships:
   - { from: as-lan-consoles,  name: exposed_via, to: et-lan }
   - { from: as-gqldb-manager, name: exposed_via, to: et-tailnet }
   - { from: as-gqldb,         name: exposed_via, to: et-loopback }
+  - { from: as-prometheus,    name: exposed_via, to: et-tailnet }
 
   # Tier enforcement
   - { from: et-public-cloudflare, name: enforced_by, to: ep-cloudflare }
@@ -886,6 +915,7 @@ relationships:
   - { from: ac-weather-mcp, name: manages, to: de-oauth-tokens }
   - { from: ac-gqldb,       name: manages, to: de-graph-data }
   - { from: ac-gqldb,       name: manages, to: de-manager-config }
+  - { from: ac-prometheus,  name: manages, to: de-monitoring-metrics }
   - { from: de-blog-content,         name: persisted_in, to: ds-wordpress-db }
   - { from: de-media-assets,         name: persisted_in, to: ds-wp-content }
   - { from: de-workflow-definitions, name: persisted_in, to: ds-n8n-db }
@@ -895,6 +925,7 @@ relationships:
   - { from: de-platform-secrets,     name: persisted_in, to: ds-secrets }
   - { from: de-graph-data,           name: persisted_in, to: ds-gqldb }
   - { from: de-manager-config,       name: persisted_in, to: ds-manager }
+  - { from: de-monitoring-metrics,   name: persisted_in, to: ds-prometheus-tsdb }
 
   # Deployment
   - { from: ac-wordpress,   name: deployed_on, to: n-beeblebox }
@@ -906,6 +937,7 @@ relationships:
   - { from: ac-helloworld,  name: deployed_on, to: n-beeblebox }
   - { from: ac-claudemock,  name: deployed_on, to: n-beeblebox }
   - { from: ac-gqldb,       name: deployed_on, to: n-beeblebox }
+  - { from: ac-prometheus,  name: deployed_on, to: n-beeblebox }
 
   # Dependencies
   - { from: ac-wordpress,   name: depends_on, to: ts-podman }
@@ -921,6 +953,7 @@ relationships:
   - { from: ac-tictactoe,   name: depends_on, to: ts-podman }
   - { from: ac-helloworld,  name: depends_on, to: ts-podman }
   - { from: ac-claudemock,  name: depends_on, to: ts-podman }
+  - { from: ac-prometheus,  name: depends_on, to: ts-podman }
 
   # Network
   - { from: n-beeblebox, name: connects, to: net-home-lan }
@@ -936,6 +969,7 @@ relationships:
   - { from: ctl-tailnet-identity,   name: protects,   to: as-litellm-ui }
   - { from: ctl-tailnet-identity,   name: protects,   to: as-litellm-api }
   - { from: ctl-tailnet-identity,   name: protects,   to: as-weather-gui }
+  - { from: ctl-tailnet-identity,   name: protects,   to: as-prometheus }
   - { from: ctl-tailnet-identity,   name: implements, to: p-tiered-exposure }
   - { from: ctl-rootless,           name: protects,   to: n-beeblebox }
   - { from: ctl-rootless,           name: implements, to: p-rootless }

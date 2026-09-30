@@ -1,0 +1,100 @@
+rule_files:
+  - ../rules/alerts.yml
+evaluation_interval: 1m
+
+tests:
+  - name: ProbeDown fires after 5m of failure
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="probe-http",instance="http://x/health"}'
+        values: '1 1 0 0 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: ProbeDown
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: ProbeDown
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              job: probe-http
+              instance: http://x/health
+            exp_annotations:
+              summary: "Probe failing: http://x/health"
+
+  - name: ProbeDown ignores the tls-cert job
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="tls-cert",instance="https://x"}'
+        values: '0 0 0 0 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ProbeDown
+        exp_alerts: []
+
+  - name: TargetDown fires after 5m
+    interval: 1m
+    input_series:
+      - series: 'up{job="caddy",instance="h:8103"}'
+        values: '1 0 0 0 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: TargetDown
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              job: caddy
+              instance: h:8103
+            exp_annotations:
+              summary: "Scrape target down: caddy h:8103"
+
+  - name: CertExpiringSoon warns under 14 days but not under 3
+    interval: 1m
+    input_series:
+      - series: 'probe_ssl_earliest_cert_expiry{job="tls-cert",instance="https://x"}'
+        values: '864000+0x180'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: CertExpiringSoon
+        exp_alerts:
+          - exp_labels:
+              severity: warn
+              job: tls-cert
+              instance: https://x
+            exp_annotations:
+              summary: "TLS certificate for https://x expires in under 14 days"
+      - eval_time: 2h
+        alertname: CertExpiryCritical
+        exp_alerts: []
+
+  - name: HostDiskFilling fires under 15 percent free
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/",instance="node"}'
+        values: '10+0x30'
+      - series: 'node_filesystem_size_bytes{mountpoint="/",instance="node"}'
+        values: '100+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HostDiskFilling
+        exp_alerts:
+          - exp_labels:
+              severity: warn
+              mountpoint: /
+              instance: node
+            exp_annotations:
+              summary: "Root filesystem has under 15% free"
+
+  - name: Watchdog always fires
+    interval: 1m
+    input_series:
+      - series: 'up{job="x"}'
+        values: '1+0x5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: Watchdog
+        exp_alerts:
+          - exp_labels:
+              severity: none
+            exp_annotations:
+              summary: "Alerting pipeline heartbeat"

@@ -1,0 +1,78 @@
+groups:
+  - name: availability
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Alerting pipeline heartbeat"
+      - alert: TargetDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Scrape target down: {{ $labels.job }} {{ $labels.instance }}"
+      - alert: ProbeDown
+        expr: probe_success{job!="tls-cert"} == 0
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Probe failing: {{ $labels.instance }}"
+      - alert: EndpointSlow
+        expr: probe_duration_seconds{job!="tls-cert"} > 5
+        for: 10m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Endpoint slow (>5s): {{ $labels.instance }}"
+
+  - name: certificates
+    rules:
+      - alert: CertExpiringSoon
+        expr: (probe_ssl_earliest_cert_expiry{job="tls-cert"} - time()) < 14 * 86400
+        for: 1h
+        labels:
+          severity: warn
+        annotations:
+          summary: "TLS certificate for {{ $labels.instance }} expires in under 14 days"
+      - alert: CertExpiryCritical
+        expr: (probe_ssl_earliest_cert_expiry{job="tls-cert"} - time()) < 3 * 86400
+        for: 1h
+        labels:
+          severity: page
+        annotations:
+          summary: "TLS certificate for {{ $labels.instance }} expires in under 3 days"
+
+  - name: host
+    rules:
+      - alert: HostDiskFilling
+        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.15
+        for: 10m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Root filesystem has under 15% free"
+      - alert: HostDiskFillingFast
+        expr: predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[6h], 24 * 3600) < 0
+        for: 30m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Root filesystem predicted full within 24h"
+      - alert: HostMemoryHigh
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 10m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host has under 10% memory available"
+      - alert: HostCpuHigh
+        expr: 1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.90
+        for: 15m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host CPU over 90% for 15m"

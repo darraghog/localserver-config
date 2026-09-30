@@ -8,4 +8,5 @@ claude-mock-test
 weather-mcp
 wordpress
 gqldb
+prometheus
 tls-proxy

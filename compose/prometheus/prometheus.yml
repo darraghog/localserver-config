@@ -1,0 +1,58 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: prometheus
+    metrics_path: /prometheus/metrics
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: node
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  - job_name: probe-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://host.containers.internal:8091/health   # tic-tac-toe
+          - http://host.containers.internal:8094/health   # weather-mcp
+          - http://host.containers.internal:4000/litellm/health/liveliness
+          - http://host.containers.internal:5678/healthz  # n8n
+          - http://host.containers.internal:8096/         # wordpress backend
+          - http://host.containers.internal:8080/         # hello-world
+          - http://host.containers.internal:8093/         # claude-mock-test
+          - http://host.containers.internal:3052/         # gqldb console
+          - https://thelearningcto.com/                   # public blog
+          - https://beeblebox.taile98462.ts.net/healthz   # n8n via public Funnel
+    relabel_configs: &blackbox_relabel
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  - job_name: probe-tcp
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    static_configs:
+      - targets:
+          - host.containers.internal:60061                # gqldb gRPC
+    relabel_configs: *blackbox_relabel
+
+  - job_name: tls-cert
+    metrics_path: /probe
+    params:
+      module: [tls_expiry]
+    static_configs:
+      - targets:
+          - https://host.containers.internal:8443         # Caddy private-CA cert
+    relabel_configs: *blackbox_relabel
