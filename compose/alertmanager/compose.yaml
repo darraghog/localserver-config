@@ -1,0 +1,27 @@
+# Alertmanager -> Slack #myagentchannel via chat.postMessage (bot token, same as the
+# slack-publish-myagentchannel skill). Host-internal only: no Caddy site, no tailnet path.
+# The token comes from .env; it is written to a 0600 file at start because Alertmanager
+# reads bearer credentials from a file, not from the environment.
+services:
+  alertmanager:
+    image: docker.io/prom/alertmanager:v0.28.1
+    ports:
+      - "${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}:8101:9093"
+    environment:
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:?SLACK_BOT_TOKEN must be set in .env}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - umask 077; printenv SLACK_BOT_TOKEN > /tmp/slack_token; exec /bin/alertmanager --config.file=/etc/alertmanager/alertmanager.yml --storage.path=/alertmanager
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9093/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  alertmanager-data: {}

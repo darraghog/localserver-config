@@ -9,4 +9,5 @@ weather-mcp
 wordpress
 gqldb
 prometheus
+alertmanager
 tls-proxy

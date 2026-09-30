@@ -309,6 +309,13 @@ ApplicationComponent:
     description: >
       Metrics store, rule evaluator and probe scheduler. Scrapes metric endpoints where an
       application already exposes them and blackbox-probes the rest; changes no application.
+  - id: ac-alertmanager
+    name: Alertmanager
+    stack: compose/alertmanager
+    image: prom/alertmanager:v0.28.1
+    routing: not-path-mounted
+    lifecycle: production
+    description: Groups Prometheus alerts and delivers them to Slack #myagentchannel.
 
 ApplicationService:
   - id: as-blog-public
@@ -414,8 +421,17 @@ ApplicationService:
     protocol: https
     auth: network-identity
     description: Query UI and API on the tailnet path router. Also answers east-west on the host-internal port.
+  - id: as-alertmanager
+    name: Alertmanager API
+    endpoint: http://127.0.0.1:8101
+    protocol: http
+    auth: none
+    description: >
+      Host-internal only; Prometheus is its only caller. No Caddy route, so it is not reachable
+      from the LAN or tailnet. Unauthenticated east-west like every published endpoint.
 
 # ==================================================================== DATA ===
+
 DataEntity:
   - id: de-blog-content
     name: Blog content
@@ -622,6 +638,14 @@ ExternalProvider:
     cost: free tier
     lock_in: medium
     description: Carries both the private tier and the machine-facing public tier.
+  - id: ep-slack
+    name: Slack
+    function: Alert delivery to #myagentchannel via chat.postMessage
+    cost: free tier
+    lock_in: low
+    description: >
+      Outbound-only HTTPS from Alertmanager. Substitutable by any notifier Alertmanager
+      supports; the bot token is the one secret involved.
   - id: ep-azure-blob
     name: Azure Blob Storage
     function: Off-site encrypted backup repository
@@ -820,6 +844,7 @@ relationships:
   # Principle -> what it governs
   - { from: p-no-inbound,      name: governs, to: ep-cloudflare }
   - { from: p-no-inbound,      name: governs, to: ep-tailscale }
+  - { from: p-no-inbound,      name: governs, to: ep-slack }
   - { from: p-tiered-exposure, name: governs, to: et-public-cloudflare }
   - { from: p-tiered-exposure, name: governs, to: et-public-funnel }
   - { from: p-tiered-exposure, name: governs, to: et-tailnet }
@@ -838,6 +863,7 @@ relationships:
   - { from: cap-remote-access,    name: realised_by, to: ac-cockpit }
   - { from: cap-data-protection,  name: realised_by, to: ac-wordpress }
   - { from: cap-administration,   name: realised_by, to: ac-prometheus }
+  - { from: cap-administration, name: realised_by, to: ac-alertmanager }
 
   # Business service -> capability, and -> consumer
   - { from: bs-blog,                 name: supports, to: cap-publishing }
@@ -868,6 +894,7 @@ relationships:
   - { from: ac-gqldb,       name: provides, to: as-gqldb-manager }
   - { from: ac-gqldb,       name: provides, to: as-gqldb }
   - { from: ac-prometheus,  name: provides, to: as-prometheus }
+  - { from: ac-alertmanager, name: provides, to: as-alertmanager }
 
   # Service -> business service
   - { from: as-blog-public,   name: delivers, to: bs-blog }
@@ -882,6 +909,7 @@ relationships:
   - { from: as-claudemock,    name: delivers, to: bs-demonstrations }
   - { from: as-demos-private, name: delivers, to: bs-demonstrations }
   - { from: as-prometheus,    name: delivers, to: bs-administration }
+  - { from: as-alertmanager,  name: delivers, to: bs-administration }
 
   # Service -> exposure tier (invariant: exactly one each)
   - { from: as-blog-public,   name: exposed_via, to: et-public-cloudflare }
@@ -898,6 +926,7 @@ relationships:
   - { from: as-gqldb-manager, name: exposed_via, to: et-tailnet }
   - { from: as-gqldb,         name: exposed_via, to: et-loopback }
   - { from: as-prometheus,    name: exposed_via, to: et-tailnet }
+  - { from: as-alertmanager,  name: exposed_via, to: et-loopback }
 
   # Tier enforcement
   - { from: et-public-cloudflare, name: enforced_by, to: ep-cloudflare }
@@ -938,6 +967,7 @@ relationships:
   - { from: ac-claudemock,  name: deployed_on, to: n-beeblebox }
   - { from: ac-gqldb,       name: deployed_on, to: n-beeblebox }
   - { from: ac-prometheus,  name: deployed_on, to: n-beeblebox }
+  - { from: ac-alertmanager, name: deployed_on, to: n-beeblebox }
 
   # Dependencies
   - { from: ac-wordpress,   name: depends_on, to: ts-podman }
@@ -954,6 +984,8 @@ relationships:
   - { from: ac-helloworld,  name: depends_on, to: ts-podman }
   - { from: ac-claudemock,  name: depends_on, to: ts-podman }
   - { from: ac-prometheus,  name: depends_on, to: ts-podman }
+  - { from: ac-alertmanager, name: depends_on, to: ts-podman }
+  - { from: ac-alertmanager, name: depends_on, to: ep-slack }
 
   # Network
   - { from: n-beeblebox, name: connects, to: net-home-lan }
