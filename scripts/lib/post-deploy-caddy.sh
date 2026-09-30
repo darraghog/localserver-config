@@ -66,7 +66,7 @@ caddy_backend_host_for_backend() {
   local out=""
   [[ -f "$caddyfile" ]] &&
     out="$(awk -f "$REPO_ROOT/scripts/lib/caddy-site-ports.awk" "$caddyfile" | awk -v be="$backend" '$2 == be { print $3; exit }')"
-  printf '%s' "${out:-127.0.0.1}"
+  printf '%s' "${out:-${HOST_INTERNAL_IP:-127.0.0.1}}"
 }
 
 # HTTPS path to curl on the Caddy front door (stack-specific).
@@ -78,6 +78,9 @@ caddy_verify_path_for_stack() {
     # already-prefixed path straight through instead of prefixing it twice.
     litellm) printf '%s' "/litellm/health/liveliness" ;;
     n8n) printf '%s' "/healthz" ;;
+    prometheus) printf '%s' "/prometheus/-/healthy" ;;
+    alertmanager) printf '%s' "/-/healthy" ;;
+    grafana) printf '%s' "/grafana/api/health" ;;
     # Not "/": that renders the Flask GUI template on every deploy poll. /health
     # is a no-I/O JSON probe and stays answerable without a bearer token.
     weather-mcp) printf '%s' "/health" ;;
@@ -129,6 +132,18 @@ verify_deployed_stacks_via_caddy() {
   for s in "$@"; do
     [[ "$s" == "tls-proxy" ]] && continue
     be="$(compose_first_published_host_port "$s" 2>/dev/null)" || continue
+    # Tailnet-only monitoring stacks have no LAN Caddy door (the :8090 router is plain HTTP),
+    # so probe the backend directly rather than an HTTPS front door that does not exist.
+    case "$s" in
+      prometheus|alertmanager|grafana)
+        if wait_for_stack_backend "$s" "$be"; then
+          echo "[post-deploy-caddy] OK $s (backend healthy; tailnet-only, no LAN Caddy door)"
+        else
+          failed=1
+        fi
+        continue
+        ;;
+    esac
     hp="$(caddy_https_port_for_backend "$be" 2>/dev/null)" || {
       echo "[post-deploy-caddy] No Caddy site for $s (backend :$be not in Caddyfile); skip verify"
       continue

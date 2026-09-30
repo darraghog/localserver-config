@@ -1,6 +1,9 @@
 {
 	# off = no ACME, no HTTP redirect (avoids bind :80)
 	auto_https off
+	servers {
+		metrics
+	}
 }
 # TLS reverse proxy - :8443 (hello-world), :8444 (n8n), :8445 (tic-tac-toe), :8446 (claude-mock-test),
 # :8447 (litellm), :8448 (weather-mcp), :8449 (wordpress), :8450 (gqldb manager), :9443 (cockpit)
@@ -12,6 +15,7 @@
 # for why it can't be path-mounted on :8090). See docs/NETWORK-CONFIG.md.
 # :8098 is the GQLDB Manager's dedicated tailnet-only port, root-mounted for the same
 # class of reason — see the :8098 block below.
+# :8103 is Caddy's host-internal metrics site (Prometheus scrape only).
 # New ":PORT {" sites here are picked up by scripts/setup-windows-podman-lan-ports.ps1 on Windows.
 #
 # Three address forms appear below and they are NOT interchangeable:
@@ -109,6 +113,8 @@
   redir /claudemock /claudemock/
   redir /weather /weather/
   redir /litellm /litellm/
+  redir /prometheus /prometheus/
+  redir /grafana /grafana/
 
   # No strip: Cockpit's own asset scheme uses "/cockpit/$checksum/..." as an internal
   # path convention — stripping the prefix here would break it. Requires UrlRoot=/cockpit
@@ -158,6 +164,14 @@
   # nothing if unused — no other service on this router claims that path.
   handle /litellm-asset-prefix/* {
     reverse_proxy {env.HOST_INTERNAL_IP}:4000
+  }
+  # No strip: prometheus runs with --web.route-prefix=/prometheus and grafana with
+  # serve_from_sub_path, so both expect to see their own prefix (same pattern as litellm).
+  handle /prometheus/* {
+    reverse_proxy {env.HOST_INTERNAL_IP}:8100
+  }
+  handle /grafana/* {
+    reverse_proxy {env.HOST_INTERNAL_IP}:8102
   }
   # n8n is NOT here — its registered webhook/MCP URLs (e.g. /mcp/<id>, /webhook/<id>) must
   # keep their exact path, and N8N_PATH is a whole-process setting (see "n8n: intentionally
@@ -215,6 +229,14 @@
 :8098 {
   bind 127.0.0.1
   reverse_proxy {env.HOST_INTERNAL_IP}:3052
+}
+
+# Prometheus scrape target for Caddy's own metrics. Bound to the host-internal address
+# (not 0.0.0.0, not loopback-for-tailscale): reachable by containers, not by the LAN or
+# tailnet. Only /metrics is served; the admin API on :2019 stays untouched.
+:8103 {
+  bind {env.HOST_INTERNAL_IP}
+  metrics /metrics
 }
 
 # Public front for the weather MCP server. The Tailscale Funnel mounts
