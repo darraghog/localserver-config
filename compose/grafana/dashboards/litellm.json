@@ -1,0 +1,18 @@
+{
+  "uid": "estate-litellm", "title": "LiteLLM", "schemaVersion": 39, "version": 1, "refresh": "30s",
+  "time": {"from": "now-24h", "to": "now"},
+  "panels": [
+    {"id": 1, "type": "timeseries", "title": "Requests per minute by model", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 0},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+     "targets": [{"refId": "A", "expr": "sum by (model) (rate(litellm_proxy_total_requests_metric_total[5m])) * 60", "legendFormat": "{{model}}"}]},
+    {"id": 2, "type": "timeseries", "title": "Failed requests per minute", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 0},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+     "targets": [{"refId": "A", "expr": "sum(rate(litellm_proxy_failed_requests_metric_total[5m])) * 60", "legendFormat": "failed"}]},
+    {"id": 3, "type": "timeseries", "title": "Spend (USD) by model", "gridPos": {"h": 9, "w": 24, "x": 0, "y": 9},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "fieldConfig": {"defaults": {"unit": "currencyUSD"}, "overrides": []},
+     "targets": [{"refId": "A", "expr": "sum by (model) (increase(litellm_spend_metric_total[1h]))", "legendFormat": "{{model}}"}]}
+  ]
+}

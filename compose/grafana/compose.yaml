@@ -1,0 +1,31 @@
+# Grafana. Tailnet-only, mounted no-strip on the :8090 router at /grafana. Everything is
+# provisioned from files in this directory; nothing is configured by hand in the UI.
+services:
+  grafana:
+    image: docker.io/grafana/grafana:12.1.0
+    ports:
+      - "${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}:8102:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set in .env}
+      GF_SERVER_ROOT_URL: https://beeblebox.taile98462.ts.net:8090/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning:ro
+      - ./dashboards:/var/lib/grafana-dashboards:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/grafana/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  grafana-data: {}

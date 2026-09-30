@@ -10,4 +10,5 @@ wordpress
 gqldb
 prometheus
 alertmanager
+grafana
 tls-proxy

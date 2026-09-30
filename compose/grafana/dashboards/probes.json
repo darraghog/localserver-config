@@ -1,0 +1,19 @@
+{
+  "uid": "estate-probes", "title": "Probes", "schemaVersion": 39, "version": 1, "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "panels": [
+    {"id": 1, "type": "stat", "title": "Endpoint status", "gridPos": {"h": 10, "w": 24, "x": 0, "y": 0},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}], "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+     "options": {"colorMode": "background", "textMode": "value_and_name"},
+     "targets": [{"refId": "A", "expr": "probe_success{job!=\"tls-cert\"}", "legendFormat": "{{instance}}"}]},
+    {"id": 2, "type": "timeseries", "title": "Probe duration", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 10},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+     "targets": [{"refId": "A", "expr": "probe_duration_seconds{job!=\"tls-cert\"}", "legendFormat": "{{instance}}"}]},
+    {"id": 3, "type": "stat", "title": "Certificate days remaining", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 10},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "fieldConfig": {"defaults": {"unit": "d", "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 3}, {"color": "green", "value": 14}]}, "color": {"mode": "thresholds"}}, "overrides": []},
+     "targets": [{"refId": "A", "expr": "(probe_ssl_earliest_cert_expiry{job=\"tls-cert\"} - time()) / 86400", "legendFormat": "{{instance}}"}]}
+  ]
+}

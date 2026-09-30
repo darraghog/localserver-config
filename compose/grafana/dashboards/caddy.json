@@ -1,0 +1,14 @@
+{
+  "uid": "estate-caddy", "title": "Caddy", "schemaVersion": 39, "version": 1, "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "panels": [
+    {"id": 1, "type": "timeseries", "title": "Requests per second by code", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 0},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+     "targets": [{"refId": "A", "expr": "sum by (code) (rate(caddy_http_requests_total[5m]))", "legendFormat": "{{code}}"}]},
+    {"id": 2, "type": "timeseries", "title": "Request duration p95", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 0},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+     "targets": [{"refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(caddy_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95"}]}
+  ]
+}

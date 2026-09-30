@@ -316,6 +316,13 @@ ApplicationComponent:
     routing: not-path-mounted
     lifecycle: production
     description: Groups Prometheus alerts and delivers them to Slack #myagentchannel.
+  - id: ac-grafana
+    name: Grafana
+    stack: compose/grafana
+    image: grafana/grafana:12.1.0
+    routing: no-strip
+    lifecycle: production
+    description: Dashboards over Prometheus. Datasource and dashboards are provisioned from git.
 
 ApplicationService:
   - id: as-blog-public
@@ -429,6 +436,12 @@ ApplicationService:
     description: >
       Host-internal only; Prometheus is its only caller. No Caddy route, so it is not reachable
       from the LAN or tailnet. Unauthenticated east-west like every published endpoint.
+  - id: as-grafana
+    name: Grafana
+    endpoint: https://beeblebox.taile98462.ts.net:8090/grafana/
+    protocol: https
+    auth: basic
+    description: Dashboards on the tailnet path router; authenticates callers itself.
 
 # ==================================================================== DATA ===
 
@@ -864,6 +877,7 @@ relationships:
   - { from: cap-data-protection,  name: realised_by, to: ac-wordpress }
   - { from: cap-administration,   name: realised_by, to: ac-prometheus }
   - { from: cap-administration, name: realised_by, to: ac-alertmanager }
+  - { from: cap-administration, name: realised_by, to: ac-grafana }
 
   # Business service -> capability, and -> consumer
   - { from: bs-blog,                 name: supports, to: cap-publishing }
@@ -895,6 +909,7 @@ relationships:
   - { from: ac-gqldb,       name: provides, to: as-gqldb }
   - { from: ac-prometheus,  name: provides, to: as-prometheus }
   - { from: ac-alertmanager, name: provides, to: as-alertmanager }
+  - { from: ac-grafana,         name: provides, to: as-grafana }
 
   # Service -> business service
   - { from: as-blog-public,   name: delivers, to: bs-blog }
@@ -910,6 +925,7 @@ relationships:
   - { from: as-demos-private, name: delivers, to: bs-demonstrations }
   - { from: as-prometheus,    name: delivers, to: bs-administration }
   - { from: as-alertmanager,  name: delivers, to: bs-administration }
+  - { from: as-grafana,         name: delivers, to: bs-administration }
 
   # Service -> exposure tier (invariant: exactly one each)
   - { from: as-blog-public,   name: exposed_via, to: et-public-cloudflare }
@@ -927,6 +943,7 @@ relationships:
   - { from: as-gqldb,         name: exposed_via, to: et-loopback }
   - { from: as-prometheus,    name: exposed_via, to: et-tailnet }
   - { from: as-alertmanager,  name: exposed_via, to: et-loopback }
+  - { from: as-grafana,         name: exposed_via, to: et-tailnet }
 
   # Tier enforcement
   - { from: et-public-cloudflare, name: enforced_by, to: ep-cloudflare }
@@ -968,6 +985,7 @@ relationships:
   - { from: ac-gqldb,       name: deployed_on, to: n-beeblebox }
   - { from: ac-prometheus,  name: deployed_on, to: n-beeblebox }
   - { from: ac-alertmanager, name: deployed_on, to: n-beeblebox }
+  - { from: ac-grafana,         name: deployed_on, to: n-beeblebox }
 
   # Dependencies
   - { from: ac-wordpress,   name: depends_on, to: ts-podman }
@@ -986,6 +1004,7 @@ relationships:
   - { from: ac-prometheus,  name: depends_on, to: ts-podman }
   - { from: ac-alertmanager, name: depends_on, to: ts-podman }
   - { from: ac-alertmanager, name: depends_on, to: ep-slack }
+  - { from: ac-grafana,         name: depends_on, to: ts-podman }
 
   # Network
   - { from: n-beeblebox, name: connects, to: net-home-lan }
@@ -1002,6 +1021,7 @@ relationships:
   - { from: ctl-tailnet-identity,   name: protects,   to: as-litellm-api }
   - { from: ctl-tailnet-identity,   name: protects,   to: as-weather-gui }
   - { from: ctl-tailnet-identity,   name: protects,   to: as-prometheus }
+  - { from: ctl-tailnet-identity,   name: protects,   to: as-grafana }
   - { from: ctl-tailnet-identity,   name: implements, to: p-tiered-exposure }
   - { from: ctl-rootless,           name: protects,   to: n-beeblebox }
   - { from: ctl-rootless,           name: implements, to: p-rootless }
