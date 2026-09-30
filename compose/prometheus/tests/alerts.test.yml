@@ -98,3 +98,79 @@ tests:
               severity: none
             exp_annotations:
               summary: "Alerting pipeline heartbeat"
+
+  - name: TlsProbeMissing fires when the series is absent, not when present
+    interval: 1m
+    input_series:
+      - series: 'up{job="x"}'
+        values: '1+0x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: TlsProbeMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warn
+              job: tls-cert
+            exp_annotations:
+              summary: "TLS expiry probe is not producing data"
+
+  - name: TlsProbeMissing stays quiet while the series exists
+    interval: 1m
+    input_series:
+      - series: 'probe_ssl_earliest_cert_expiry{job="tls-cert",instance="https://x"}'
+        values: '99999999999+0x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: TlsProbeMissing
+        exp_alerts: []
+
+  - name: TlsProbeFailing fires after 30m of failure
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="tls-cert",instance="https://x"}'
+        values: '0+0x60'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: TlsProbeFailing
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: TlsProbeFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warn
+              job: tls-cert
+              instance: https://x
+            exp_annotations:
+              summary: "TLS expiry probe failing: https://x"
+
+  - name: PrometheusConfigReloadFailed pages after 5m
+    interval: 1m
+    input_series:
+      - series: 'prometheus_config_last_reload_successful{job="prometheus",instance="p"}'
+        values: '1 0+0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: PrometheusConfigReloadFailed
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              job: prometheus
+              instance: p
+            exp_annotations:
+              summary: "Prometheus config reload failed"
+
+  - name: AlertmanagerConfigReloadFailed pages after 5m
+    interval: 1m
+    input_series:
+      - series: 'alertmanager_config_last_reload_successful{job="alertmanager",instance="a"}'
+        values: '1 0+0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: AlertmanagerConfigReloadFailed
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              job: alertmanager
+              instance: a
+            exp_annotations:
+              summary: "Alertmanager config reload failed"
