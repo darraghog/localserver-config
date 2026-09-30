@@ -321,6 +321,11 @@ without the master key), so it is unauthenticated east-west and Caddy answers 40
 `:8092` and the `:8090` litellm handle. Rollout order: deploy litellm, then tls-proxy, then reload
 Prometheus.
 
+Two new required variables, `SLACK_BOT_TOKEN` and `GRAFANA_ADMIN_PASSWORD`, must be present in every
+`envs/<env>.env` used with a full deploy: alertmanager and grafana fail loudly without them, and since
+`scripts/deploy.sh` stops at the first failing stack, the stacks after alertmanager (grafana, tls-proxy)
+are skipped.
+
 n8n is probe-only: its `/metrics` would be served on the public Funnel at `:443`, so it is not scraped.
 GQLDB is probe-only: its metrics listener also exposes unauthenticated `/debug/pprof`.
 
