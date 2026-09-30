@@ -32,6 +32,25 @@ cid() {
   printf '%s' "$id"
 }
 
+# Start a container so that it outlives this script's own systemd unit.
+#
+# Under localserver-backup.service (Type=oneshot, KillMode=control-group) a plain
+# `podman start` leaves the container's conmon and rootlessport inside the unit's cgroup.
+# When the script exits, systemd SIGTERMs them, podman's restart policy restarts the
+# container into the same dying cgroup, and 90s later (TimeoutStopSec) systemd SIGKILLs
+# conmon. The container is left dead with podman still reporting "Up", its port forward
+# gone, and no restart because podman never saw an exit. That is how the gqldb manager was
+# lost after the weekly backups of Sep 13, 20 and 27. A transient scope is a separate cgroup
+# that the unit's teardown does not touch.
+start_detached() {
+  if command -v systemd-run >/dev/null 2>&1 && [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
+    systemd-run --user --scope --quiet -- podman start "$@"
+  else
+    log "  WARN: no systemd user session; starting without a scope, so the container may not survive this script's unit"
+    podman start "$@"
+  fi
+}
+
 STAGE="$(mktemp -d "$HOME/.backup-stage.XXXXXX")"
 chmod 700 "$STAGE"
 # The staging dir holds plaintext database dumps; never leave it lying around.
@@ -160,7 +179,7 @@ gq_mgr_vol="$(podman inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}
 podman stop -t 60 "$gq_mgr" >/dev/null
 gq_mgr_rc=0
 podman volume export "$gq_mgr_vol" -o "$STAGE/gqldb-manager.tar" || gq_mgr_rc=$?
-podman start "$gq_mgr" >/dev/null
+start_detached "$gq_mgr" >/dev/null
 [[ "$gq_mgr_rc" -eq 0 ]] || fail "could not export the gqldb manager store ($gq_mgr_vol)"
 
 # An empty or metadata-only tar here would be the classic healthy-looking zero: the console

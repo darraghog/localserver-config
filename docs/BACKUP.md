@@ -172,7 +172,9 @@ refuses the third with `database limit exceeded: current 2, limit 2`). A restore
 that fails, so restoring alongside existing graphs may need one dropped first.
 
 The console's own store is backed up as a whole-volume tar (`gqldb-manager.tar`, taken with the
-container stopped). Restore it the same way, with the stack down:
+container stopped, then restarted inside a transient systemd scope so it outlives the
+backup unit; a plain `podman start` there gets the container killed when the unit ends). Restore it
+the same way, with the stack down:
 
 ```bash
 ./scripts/start-stack.sh gqldb down
