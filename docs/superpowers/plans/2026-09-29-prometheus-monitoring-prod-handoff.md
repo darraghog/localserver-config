@@ -41,7 +41,7 @@ target (beeblebox).
    (also copies `envs/prod.env` to the host's `.env`).
 4. Check before Alertmanager goes live with the real token, so hairpin/Funnel probe failures found here do
    not page on first start:
-   `ssh <host> 'cd ~/localserver-config && CHECK_SKIP_JOBS="alertmanager" ./scripts/check-monitoring.sh'`
+   `ssh <host> 'cd ~/localserver-config && CHECK_SKIP_JOBS="alertmanager caddy" ./scripts/check-monitoring.sh'`
    Triage every probe failure (section 2) before continuing. Prometheus already has Alertmanager as a
    configured target, so pages start the moment Alertmanager comes up.
 5. `./scripts/deploy-service.sh prod <host> alertmanager`
