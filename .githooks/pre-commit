@@ -11,6 +11,34 @@ set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
+# Validate the Prometheus and Alertmanager configs (rules, unit tests, amtool) when they are staged.
+# Skipped, with a notice, when podman is unavailable. Runs before the model check so that check's
+# early exits never bypass it.
+check_monitoring_configs() {
+  git diff --cached --name-only | grep -qE '^compose/(prometheus|alertmanager)/' || return 0
+  if ! command -v podman &>/dev/null; then
+    echo "[pre-commit] podman not found; skipping promtool/amtool validation." >&2
+    return 0
+  fi
+  local prom_img="docker.io/prom/prometheus:v3.5.0" am_img="docker.io/prom/alertmanager:v0.28.1"
+  local rc=0
+  # Mounted at /etc/prometheus because prometheus.yml references /etc/prometheus/rules/*.yml.
+  podman run --rm -v "$REPO_ROOT/compose/prometheus:/etc/prometheus:ro" --entrypoint promtool "$prom_img" \
+    check config /etc/prometheus/prometheus.yml || rc=1
+  podman run --rm -v "$REPO_ROOT/compose/prometheus:/etc/prometheus:ro" --entrypoint promtool "$prom_img" \
+    test rules /etc/prometheus/tests/alerts.test.yml || rc=1
+  podman run --rm -v "$REPO_ROOT/compose/alertmanager:/w:ro" --entrypoint amtool "$am_img" \
+    check-config /w/alertmanager.yml || rc=1
+  if [[ "$rc" -ne 0 ]]; then
+    echo "" >&2
+    echo "[pre-commit] promtool/amtool validation failed - commit refused." >&2
+    echo "[pre-commit] Fix the config, or commit with --no-verify if this is a WIP commit." >&2
+    return 1
+  fi
+}
+
+check_monitoring_configs || exit 1
+
 # Only worth running when something that shapes the model is staged.
 if ! git diff --cached --name-only | grep -qE '^(architecture/|compose/|scripts/arch-validate\.py)'; then
   exit 0
