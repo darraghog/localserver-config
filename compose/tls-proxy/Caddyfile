@@ -100,7 +100,7 @@
 # GQLDB gRPC door, for gqldb-cli and apps outside the pod: TLS here, h2c to the database on
 # 60061 (it speaks plaintext HTTP/2 only). Like every 0.0.0.0 door it answers on the LAN and on
 # the tailnet IP, so one site serves both tiers; RBAC login is the only credential, the
-# session id rides in gRPC metadata. Clients: gqldb-cli --ssl --ca certs/ca.pem -h <host>:8451.
+# session id rides in gRPC metadata. Clients: gqldb-cli --ssl --ca <server ca.pem> -h <host>:8451.
 # The h2c upstream is a transport block, not an h2c:// scheme: Caddy rejects placeholders in a
 # scheme-prefixed upstream address. The post-deploy probe (plain HTTPS GET) is unaffected: it
 # maps a stack's FIRST published port (gqldb: 3052) to the first site proxying it (:8450), and

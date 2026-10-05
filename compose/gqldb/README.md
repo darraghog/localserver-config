@@ -97,7 +97,11 @@ The trade accepted: any LAN or tailnet device can reach the login, with RBAC as 
 The SSH tunnel above remains the conservative route.
 
 ```bash
-gqldb-cli --ssl --ca certs/ca.pem -h beeblebox:8451 -u <user> -p -g <graph> -e "SHOW GRAPHS" --verbose
+# ca.pem must come from the server: a checkout's certs/ca.pem can be a different, older CA
+# with the same name. gqldb-cli also seems to verify against the system store, so a stale
+# "Localserver Local CA" there breaks it even with --ca (x509: unknown authority).
+scp beeblebox:localserver-config/certs/ca.pem ./prod-ca.pem
+gqldb-cli --ssl --ca prod-ca.pem -h beeblebox:8451 -u <user> -p -g <graph> -e "SHOW GRAPHS" --verbose
 ```
 
 - The name after `-h` must be in the server cert's SANs. `beeblebox` and the LAN IP already are;

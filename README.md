@@ -127,7 +127,7 @@ HTTPS through Caddy, using the private CA (trust `certs/ca.pem` — see [docs/tl
 | https://&lt;host&gt;:8448 | weather-mcp GUI |
 | https://&lt;host&gt;:8449 | wordpress |
 | https://&lt;host&gt;:8450 | gqldb — GQLDB Manager console (own login; not network-trusted) |
-| `<host>:8451` | gqldb gRPC over TLS (not a web page) — `gqldb-cli --ssl --ca certs/ca.pem -h <host>:8451 -u <user> -p` |
+| `<host>:8451` | gqldb gRPC over TLS (not a web page) — `gqldb-cli --ssl --ca <ca.pem copied from the server> -h <host>:8451 -u <user> -p` (see compose/gqldb/README.md) |
 | https://&lt;host&gt;:9443/cockpit/ | Cockpit (Linux system user credentials) |
 
 Credentials come from `.env` — there are no defaults, and `deploy.sh` refuses to deploy n8n or
