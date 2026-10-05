@@ -202,6 +202,7 @@ else
       --exclude='.env' \
       --exclude='envs/' \
       --exclude='cloudflared/config.yml' \
+      --exclude='cloudflare/' \
       --filter='P certs/' \
       --filter='P cloudflared/config.yml' \
       "$REPO_ROOT/" "$SSH_DEST:$REMOTE_PATH/"; then

@@ -1,0 +1,5 @@
+# cp terraform.tfvars.example terraform.tfvars   (gitignored)
+zone_id             = "<zone id>"
+account_id          = "<account id>"
+# waf_php_action    = "log"   # watch Security -> Events first, then "block"
+# probe_egress_ips  = ["<beeblebox public IP>"]   # run on beeblebox: curl -s https://api.ipify.org

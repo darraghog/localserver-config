@@ -173,6 +173,7 @@ else
     --exclude='.env' \
     --exclude='envs/' \
     --exclude='cloudflared/config.yml' \
+    --exclude='cloudflare/' \
     --filter='P certs/' \
     --filter='P cloudflared/config.yml' \
     "$REPO_ROOT/" "$SSH_DEST:$REMOTE_PATH/"; then
@@ -215,6 +216,21 @@ else
   ssh "${SSH_PORT_ARGS[@]}" "$SSH_DEST" "cd $REMOTE_PATH && chmod +x scripts/*.sh scripts/sudo/*.sh && ./scripts/deploy.sh"
 
   post_deploy_checks_remote
+
+  # Cloudflare edge config (WAF rule, Access, zone settings) is Terraform in cloudflare/ and runs
+  # from this machine, not the server. Plan only: a deploy reports drift but never changes the
+  # edge; apply is a deliberate `./scripts/cloudflare.sh apply`. Never fails the deploy.
+  if [[ "$ENV_NAME" == "prod" && -f "$REPO_ROOT/cloudflare/terraform.tfvars" ]]; then
+    echo ""
+    echo "[deploy] Cloudflare drift check (plan only)..."
+    rc=0
+    "$REPO_ROOT/scripts/cloudflare.sh" plan -detailed-exitcode -input=false -lock-timeout=10s >/dev/null 2>&1 || rc=$?
+    case "$rc" in
+      0) echo "[deploy] Cloudflare: in sync." ;;
+      2) echo "[deploy] WARNING: Cloudflare config differs from cloudflare/*.tf. Review: ./scripts/cloudflare.sh plan" ;;
+      *) echo "[deploy] WARNING: Cloudflare plan failed (token, init or state?). Run: ./scripts/cloudflare.sh plan" ;;
+    esac
+  fi
 
   echo ""
   echo "[deploy] Done."

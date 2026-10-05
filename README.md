@@ -7,6 +7,7 @@ Podman-based stack (hello-world, n8n, TLS proxy) for a single host or homelab.
 - **`scripts/`** — day-to-day updates: deploy stacks, certs, checks. **No sudo.**
 - **`scripts/sudo/`** — one-time or privileged host setup (Podman install, systemd linger, Cockpit, `/etc/hosts`).
 - **`compose/stack-order`** — ordered stack names for `./scripts/deploy.sh`; use `./scripts/deploy-stack.sh <name>` to update stacks independently.
+- **`cloudflare/`** — Terraform for thelearningcto.com's Cloudflare edge (WAF rule, Access gate on `/wp-admin` and `/wp-login.php`, Always Use HTTPS, IP allow for the uptime probe). Run from the laptop with `./scripts/cloudflare.sh`; see [cloudflare/README.md](cloudflare/README.md).
 - **`./scripts/add-service.sh`** — scaffolds a new `compose/<name>/` stack, a `localserver-<name>.service` unit, and a `stack-order` line (see [docs/ADD-SERVICE.md](docs/ADD-SERVICE.md)).
 
 ## Setup (once per host)
@@ -67,6 +68,11 @@ Remote deploy otherwise: syncs repo, copies `envs/<env>.env` as `.env`, regenera
 
 Uses `envs/local.env` and deploys on this machine.
 
+**Cloudflare edge (not part of the rsync deploy):** `cloudflare/` is excluded from the sync and
+applied separately from the laptop with `./scripts/cloudflare.sh plan|apply`. A prod
+`deploy-to-server.sh` run ends with a plan-only drift check that warns if the edge differs from
+the code; it never applies.
+
 ## Scripts
 
 | Path | Purpose |
@@ -82,6 +88,8 @@ Uses `envs/local.env` and deploys on this machine.
 | `scripts/start-stack.sh` | `up` / `down` for one stack (used by systemd and deploy scripts) |
 | `compose/stack-order` | Lines = stack directory names; order used by `deploy.sh` |
 | `scripts/deploy-to-server.sh` | `<env> <target> [<ssh-port>]` — remote sync+deploy, or **local** if target is this host; `DEPLOY_SSH_DEST`, `DEPLOY_SSH_PORT` |
+| `scripts/cloudflare.sh` | Run Terraform (containerised) against `cloudflare/`: `init`, `plan`, `apply`, `import`. Needs `CLOUDFLARE_API_TOKEN` in `.env` and `cloudflare/terraform.tfvars` |
+| `scripts/wp-cli.sh` | Run WP-CLI against the wordpress stack |
 | `scripts/check-tls.sh` | TLS diagnostic |
 | `scripts/check-updates.py` | Report pinned image tags vs newest published, plus compose ↔ `model.yaml` drift (read-only; `--offline`, `--stack`, `--strict`). Tests: `python3 -m unittest discover -s tests` |
 | `tests/check-ports.sh` | Port checks (WSL-side only — does not test Windows LAN reachability); use `--core-only` for 8080/5678 only; full list includes Caddy TLS + Cockpit |
@@ -164,6 +172,8 @@ deploy. Four exposure tiers are in use:
 - **Public via Cloudflare Tunnel on a custom domain** — Funnel can only ever serve
   `*.ts.net`, so anything on its own domain needs the tunnel instead
   ([`cloudflared/config.yml.in`](cloudflared/config.yml.in)).
+  The Cloudflare side of that path (WAF, Access, HTTPS) is Terraform in
+  [`cloudflare/`](cloudflare/README.md); never attach an "Everyone" Access policy to the admin apps.
 
 ## Cockpit
 
