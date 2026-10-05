@@ -1,9 +1,10 @@
 # Ultipa GQLDB 6.2.131 Community Edition + GQLDB Manager web console.
 #
 # Console:  ${HOST_INTERNAL_IP}:3052 -> Caddy :8450 -> https://<host>:8450
-# Database: ${HOST_INTERNAL_IP}:60061, raw gRPC. No Caddy site, deliberately: it is HTTP/2
-#           with bespoke session-id metadata auth, so a Caddy hop would terminate nothing
-#           useful, and ADD-SERVICE.md section 8 keeps east-west traffic off Caddy anyway.
+# Database: ${HOST_INTERNAL_IP}:60061, raw gRPC. East-west callers use it directly (ADD-SERVICE.md
+#           section 8 keeps east-west traffic off Caddy). Callers outside the host use Caddy's
+#           :8451, which terminates TLS and proxies h2c here; it is the only Caddy site on
+#           60061, and the probe still targets :8450 because it keys on the first published port (3052).
 #
 # podman-compose puts both services in pod_gqldb, which is what "same pod" buys here - but
 # that pod reports SharedNamespaces: [] and has no infra container. It is a grouping, NOT a
@@ -12,7 +13,7 @@
 #
 # "manager" is declared FIRST on purpose. scripts/lib/post-deploy-caddy.sh reads only the
 # first ports: entry in this file to find the stack's Caddy front door; listing gqldb first
-# would hand it 60061, which has no Caddy site, and every deploy would silently skip
+# would hand it 60061, which has no HTTPS GET-able Caddy site, and every deploy would silently skip
 # verification. Start-up order comes from depends_on, not file order. Do not reorder.
 #
 # Community Edition ceilings: 1M nodes, 1M edges, 2 graphs, 2 cores.

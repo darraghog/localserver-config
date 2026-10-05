@@ -88,11 +88,25 @@ Two things that bite:
 - **Reflection is authenticated on this server**, so `grpcurl` needs `-proto gqldb.proto` (vendored
   in this directory) even through the tunnel — it cannot discover methods on its own.
 
-If a persistent, tunnel-free route is ever wanted, the tailnet options are
-`tailscale serve --bg --tcp 60061 tcp://127.0.0.1:60061` (no compose change, no boot race) or a
-second `ports:` entry on the Tailscale IP (native, but reintroduces the `tailscale0` cold-boot
-race). Both make the database reachable by every tailnet device with RBAC as the only guard, which
-is why neither is the default.
+### Tunnel-free access: the `:8451` TLS door
+
+Decision changed 2026-09-30: `gqldb-cli` and apps outside the host can connect directly through
+Caddy's `:8451`, which terminates TLS (private CA) and proxies h2c to 60061. Like the other
+`0.0.0.0` doors it answers on the LAN and on the tailnet IP, so no `tailscale serve` is involved.
+The trade accepted: any LAN or tailnet device can reach the login, with RBAC as the only guard.
+The SSH tunnel above remains the conservative route.
+
+```bash
+gqldb-cli --ssl --ca certs/ca.pem -h beeblebox:8451 -u <user> -p -g <graph> -e "SHOW GRAPHS" --verbose
+```
+
+- The name after `-h` must be in the server cert's SANs. `beeblebox` and the LAN IP already are;
+  `beeblebox.taile98462.ts.net` and `100.97.127.79` are not until a deploy with
+  `DEPLOY_CERT_EXTRA_SANS="beeblebox.taile98462.ts.net 100.97.127.79"` regenerates the cert
+  (`ca.pem` is unchanged, so clients keep their copy).
+- Raise `--timeout` (default 30s) for long queries.
+- Not yet proven end to end: Caddy's h2c upstream to this server. The command above is the test.
+- Caddyfile changes need a `tls-proxy` restart on prod (bind-mounted file inode goes stale).
 
 Ultipa's Download Center also lists a **Backup and Restore** utility. This stack does not use it —
 backups go through the server's own `BACKUP DATABASE`, see docs/BACKUP.md — but it is worth knowing

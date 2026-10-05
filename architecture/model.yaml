@@ -413,6 +413,21 @@ ApplicationService:
     description: >
       The database wire protocol: RBAC login returns a session id carried in gRPC metadata.
       Deliberately unpublished beyond the host - its only caller is the console beside it.
+      Outside callers use as-gqldb-tls instead.
+  - id: as-gqldb-tls
+    name: GQLDB gRPC endpoint (TLS door)
+    endpoint: grpcs://beeblebox:8451
+    protocol: grpc
+    auth: basic
+    description: >
+      The same wire protocol behind a Caddy listener that terminates TLS (private CA) and
+      speaks h2c to the database, for gqldb-cli and apps outside the host. Bound 0.0.0.0 like
+      every :84xx door, so it answers on the LAN and on the tailnet IP (verified 2026-09-30
+      for :8450). The metamodel allows one tier per endpoint, so the wider one (tailnet) is
+      recorded; LAN reach is a side effect of the bind, not a separate route. RBAC login is
+      the only credential. The certificate must carry whatever name
+      the client dials - the short name is already a SAN, the ts.net FQDN is not unless added
+      via DEPLOY_CERT_EXTRA_SANS.
   - id: as-lan-consoles
     name: LAN service endpoints
     endpoint: https://beeblebox:8443-8450, :9443
@@ -915,6 +930,7 @@ relationships:
   - { from: ac-helloworld,   name: provides, to: as-lan-consoles }
   - { from: ac-gqldb,       name: provides, to: as-gqldb-manager }
   - { from: ac-gqldb,       name: provides, to: as-gqldb }
+  - { from: ac-gqldb,       name: provides, to: as-gqldb-tls }
   - { from: ac-prometheus,  name: provides, to: as-prometheus }
   - { from: ac-alertmanager, name: provides, to: as-alertmanager }
   - { from: ac-grafana,         name: provides, to: as-grafana }
@@ -949,6 +965,7 @@ relationships:
   - { from: as-lan-consoles,  name: exposed_via, to: et-lan }
   - { from: as-gqldb-manager, name: exposed_via, to: et-tailnet }
   - { from: as-gqldb,         name: exposed_via, to: et-loopback }
+  - { from: as-gqldb-tls,     name: exposed_via, to: et-tailnet }
   - { from: as-prometheus,    name: exposed_via, to: et-tailnet }
   - { from: as-alertmanager,  name: exposed_via, to: et-loopback }
   - { from: as-grafana,         name: exposed_via, to: et-tailnet }
