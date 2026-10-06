@@ -40,6 +40,15 @@ systemctl --user enable --now podman.socket
 
 log "Configuring cockpit.conf (reverse proxy origins)..."
 ORIGINS="https://${H}:9443 https://${H}.local:9443 https://localhost:9443 https://127.0.0.1:9443"
+# This file is rewritten on every run, and a browser whose Origin is not listed gets a working
+# login followed by a refused websocket (cockpit-ws logs "received request from bad Origin").
+# So the host's own tailnet name, which the :8090 path router and :9443 are reached by, is added
+# here rather than relying on every caller to remember COCKPIT_EXTRA_ORIGINS.
+if command -v tailscale >/dev/null 2>&1; then
+  TS_FQDN="$(tailscale status --self --json 2>/dev/null |
+    python3 -c 'import sys,json;print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))' 2>/dev/null || true)"
+  [[ -n "$TS_FQDN" ]] && ORIGINS="${ORIGINS} https://${TS_FQDN}:9443 https://${TS_FQDN}:8090"
+fi
 # COCKPIT_EXTRA_ORIGINS: space-separated full origins (scheme://host:port) for names
 # not covered above, e.g. a Tailscale MagicDNS FQDN:
 #   COCKPIT_EXTRA_ORIGINS="https://beeblebox.taile98462.ts.net:9443 https://beeblebox.taile98462.ts.net:8090" ./scripts/sudo/setup-cockpit.sh
