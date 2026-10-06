@@ -14,6 +14,18 @@ if ! dpkg -l cockpit &>/dev/null 2>&1; then
   sudo apt-get install -y cockpit cockpit-podman
 fi
 
+# The package default is ListenStream=9090 on every interface, which puts Cockpit's own login on
+# the LAN and tailnet beside the Caddy doors. Caddy reaches it at 127.0.0.1:9090 (host network),
+# so loopback is all it needs. The empty ListenStream= clears the packaged value first.
+log "Binding cockpit.socket to loopback..."
+sudo mkdir -p /etc/systemd/system/cockpit.socket.d
+sudo tee /etc/systemd/system/cockpit.socket.d/listen.conf > /dev/null << 'EOF'
+[Socket]
+ListenStream=
+ListenStream=127.0.0.1:9090
+EOF
+sudo systemctl daemon-reload
+
 log "Enabling and starting cockpit.socket..."
 sudo systemctl enable --now cockpit.socket
 
@@ -46,6 +58,6 @@ EOF
 log "Restarting cockpit.socket..."
 sudo systemctl restart cockpit.socket
 
-log "Done. Cockpit listening on :9090"
+log "Done. Cockpit listening on 127.0.0.1:9090 (Caddy fronts it on :9443 and :8090/cockpit)"
 log "Login at https://${H}:9443/cockpit/ or https://${H}.local:9443/cockpit/ with your Linux username and password."
 log "Also reachable tailnet-only via the path router: https://<tailnet-name>:8090/cockpit/ (see docs/NETWORK-CONFIG.md)."

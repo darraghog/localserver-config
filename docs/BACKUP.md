@@ -14,7 +14,7 @@ weeks.
 |---|---|---|
 | n8n Postgres (`n8n`) | `pg_dump` | workflows + credentials |
 | LiteLLM Postgres (`litellm`) | `pg_dump` | API keys, spend history |
-| WordPress MariaDB (`wordpress`) | `mariadb-dump --single-transaction` | the blog: 63 posts, 3 pages, 28 attachments |
+| WordPress MariaDB (`wordpress`) | `mariadb-dump --single-transaction` | the blog: 63 posts, 3 pages, 29 attachments |
 | `wordpress_wordpress-data` | file copy | the **whole** `/var/www/html`: WordPress core, `wp-content` (uploads/themes/plugins) *and* `wp-config.php`. A DB restore alone gives you a blog with no images |
 | `n8n_n8n-data` | file copy | n8n instance data |
 | `weather-mcp_oauth-store` | file copy | issued OAuth tokens |

@@ -423,8 +423,8 @@
     <h1>Beeblebox Architecture Model</h1>
     <p class="standfirst">A TOGAF-aligned metamodel for a one-server estate — what is worth capturing, what is deliberately left out, and the machine-checked model that keeps the description honest.</p>
     <div class="stamp">
-      <div><b>2026-08-30</b>Baseline date</div>
-      <div><b>93 / 155</b>Entities / relationships</div>
+      <div><b>2026-10-06</b>Baseline date</div>
+      <div><b>124 / 222</b>Entities / relationships</div>
       <div><b>16</b>Entity types</div>
       <div><b>Conformant</b>Validator status</div>
     </div>
@@ -434,8 +434,8 @@
   <section class="band">
     <div class="rail"><b>Context</b><span>Who this is for</span></div>
     <div class="col">
-      <h2>One server in a house, doing five jobs</h2>
-      <p class="lede">Everything described here runs on a single computer called <strong>beeblebox</strong>, sitting in a home office on a domestic broadband line. It publishes a public blog, runs automations that outside AI assistants can call, provides a private gateway to several AI providers, hosts a handful of demonstration applications, and backs all of it up to cloud storage once a week.</p>
+      <h2>One server in a house, doing seven jobs</h2>
+      <p class="lede">Everything described here runs on a single computer called <strong>beeblebox</strong>, sitting in a home office on a domestic broadband line. It publishes a public blog, runs automations that outside AI assistants can call, provides a private gateway to several AI providers and to a local model, hosts an experimental graph database, runs a few demonstration applications, watches all of it with its own monitoring, and backs the data up to cloud storage once a week.</p>
       <p>That is a small estate. It is also a real one: it has paying-attention consequences when it breaks, irreplaceable data, external users, and a public attack surface. The purpose of modelling it is not ceremony — it is to be able to answer, quickly and without opening a terminal, three questions that a non-technical stakeholder actually asks.</p>
       <ul class="plain">
         <li><strong>What would we lose?</strong> Which information could not be recreated, and where does it live.</li>
@@ -600,7 +600,7 @@
             </g>
           </svg>
         </div>
-        <figcaption><b>Figure 1 — The metamodel</b>Sixteen entity types across five TOGAF layers, joined by seventeen named relationship types. Solid boxes are TOGAF core; dashed boxes are the three extensions. The chain that matters runs top to bottom: a <span class="mono">Driver</span> motivates a <span class="mono">Principle</span>, which governs how a <span class="mono">Capability</span> is realised by a component, which provides a service, which is exposed at exactly one tier. Any claim in this document can be walked back up that chain.</figcaption>
+        <figcaption><b>Figure 1 — The metamodel</b>Sixteen entity types across five TOGAF layers, joined by eighteen named relationship types, of which the principal fifteen are drawn. Solid boxes are TOGAF core; dashed boxes are the three extensions. The chain that matters runs top to bottom: a <span class="mono">Driver</span> motivates a <span class="mono">Principle</span>, which governs how a <span class="mono">Capability</span> is realised by a component, which provides a service, which is exposed at exactly one tier. Any claim in this document can be walked back up that chain.</figcaption>
       </figure>
     </div>
   </section>
@@ -623,7 +623,7 @@
 
       <div class="note">
         <span class="tag">Modelling discipline</span>
-        <p>Four invariants are enforced mechanically, not by review. Every <span class="mono">ApplicationService</span> must declare exactly one exposure tier. Every <span class="mono">Capability</span> must be realised by something. Every <span class="mono">Control</span> must both protect an asset and implement a principle. And every <span class="mono">DataEntity</span> marked irreplaceable must reach a store that is actually backed up — the one invariant whose violation destroys the estate, so it is checked rather than assumed.</p>
+        <p>Five invariants are enforced mechanically, not by review. Every <span class="mono">ApplicationService</span> must declare exactly one exposure tier. Every <span class="mono">Capability</span> must be realised by something. Every <span class="mono">Control</span> must both protect an asset and implement a principle. Every <span class="mono">DataEntity</span> marked irreplaceable must reach a store that is actually backed up — the one invariant whose violation destroys the estate, so it is checked rather than assumed. And every component built locally from another project's source must name that source, so the dependency is recorded as data instead of narrated in prose that goes stale.</p>
       </div>
     </div>
   </section>
@@ -635,15 +635,15 @@
       <h2>What the model contains</h2>
       <div class="counts">
         <div><span class="n">3</span><span class="l">Drivers</span></div>
-        <div><span class="n">5</span><span class="l">Principles</span></div>
+        <div><span class="n">6</span><span class="l">Principles</span></div>
         <div><span class="n">7</span><span class="l">Capabilities</span></div>
-        <div><span class="n">8</span><span class="l">Components</span></div>
-        <div><span class="n">10</span><span class="l">Services</span></div>
-        <div><span class="n">6</span><span class="l">Data entities</span></div>
-        <div><span class="n">7</span><span class="l">Providers</span></div>
-        <div><span class="n">6</span><span class="l">Gaps</span></div>
+        <div><span class="n">13</span><span class="l">Components</span></div>
+        <div><span class="n">18</span><span class="l">Services</span></div>
+        <div><span class="n">10</span><span class="l">Data entities</span></div>
+        <div><span class="n">8</span><span class="l">Providers</span></div>
+        <div><span class="n">11</span><span class="l">Gaps</span></div>
       </div>
-      <p>Seven external providers against eight self-built components is the number worth pausing on. More than half of what makes this estate work is rented, not owned — DNS and edge identity, the private network, the backup store, the registrar, mail forwarding, the config repository, the model APIs. Modelling them as first-class entities makes the real dependency surface visible instead of leaving it implicit in configuration files.</p>
+      <p>Eight external providers beside thirteen components is the ratio worth pausing on, because the estate's real dependency surface is wider than the machine. DNS and edge identity, the private network, the alert channel, the backup store, the registrar, mail forwarding, the config repository and the model APIs are all rented rather than owned. Modelling them as first-class entities makes that surface visible instead of leaving it implicit in configuration files.</p>
 
       <h3>Information the estate is responsible for</h3>
       <div class="scroll">
@@ -656,7 +656,11 @@
             <tr><td>Workflow definitions &amp; credentials</td><td>Confidential</td><td>Irreplaceable</td><td>PostgreSQL 15</td></tr>
             <tr><td>LLM keys &amp; usage history</td><td>Secret</td><td>Irreplaceable</td><td>PostgreSQL 16</td></tr>
             <tr><td>Issued OAuth tokens</td><td>Secret</td><td>Recoverable</td><td>Volume</td></tr>
+            <tr><td>Graph datasets</td><td>Internal</td><td>Irreplaceable</td><td>GQLDB store</td></tr>
+            <tr><td>Manager connections &amp; users</td><td>Secret</td><td>Recoverable</td><td>Embedded store</td></tr>
             <tr><td>Platform secrets</td><td>Secret</td><td>Irreplaceable</td><td>Host filesystem</td></tr>
+            <tr><td>Alerting &amp; dashboard state</td><td>Internal</td><td>Recoverable</td><td>Volumes, not backed up</td></tr>
+            <tr><td>Monitoring time series</td><td>Internal</td><td>Recoverable</td><td>Prometheus, not backed up</td></tr>
           </tbody>
         </table>
       </div>
@@ -672,13 +676,13 @@
     <div class="rail"><b>View</b><span>Reachability</span></div>
     <div class="col">
       <h2>Who can reach what</h2>
-      <p>Every application listens only on the machine's own loopback address. Nothing is reachable from anywhere until a proxy has explicitly decided it should be — so publishing something is an act, not an accident. The tiers below are ordered from most open to most closed.</p>
+      <p>By default an application listens only on a host-internal address: the machine itself and the containers running on it can reach it, the house and the private network cannot. Nothing is reachable from further out until a proxy has explicitly decided it should be — so publishing something is an act, not an accident. A few components deliberately publish on every interface instead (the workflow engine, the hello-world demo and the local model server). That is a recorded, per-component decision made for development convenience, not drift, and the default remains the rule for anything new. The tiers below are ordered from most open to most closed.</p>
     </div>
 
     <div class="wide">
       <figure>
         <div class="frame">
-          <svg viewBox="0 0 940 430" role="img" aria-label="Reachability: three caller zones on the left route through named enforcement points into services, all of which listen only on host loopback.">
+          <svg viewBox="0 0 940 430" role="img" aria-label="Reachability: three caller zones on the left route through named enforcement points into services, which by default listen only on a host-internal address.">
             <defs>
               <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
@@ -733,7 +737,7 @@
               <text x="694" y="138" opacity="0.7" font-size="10">one demo app, holding no data</text>
 
               <rect x="680" y="190" width="250" height="58" fill="none" stroke="currentColor" stroke-width="1.4"/>
-              <text x="694" y="210">Admin console, AI gateway</text>
+              <text x="694" y="210">Consoles, AI gateway, databases</text>
               <text x="694" y="228" opacity="0.7" font-size="10">anything unauthenticated lives here</text>
 
               <rect x="680" y="310" width="250" height="58" fill="none" stroke="currentColor" stroke-width="1.4"/>
@@ -754,7 +758,7 @@
 
             <g>
               <line x1="680" y1="392" x2="930" y2="392" style="stroke:var(--t-loop)" stroke-width="2"/>
-              <text x="805" y="412" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" style="fill:var(--t-loop)">every service listens on loopback only</text>
+              <text x="805" y="412" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" style="fill:var(--t-loop)">default: host-internal only</text>
             </g>
           </svg>
         </div>
@@ -769,14 +773,14 @@
     <div class="col">
         <div class="scroll">
           <table>
-            <caption>The ten published services, by tier</caption>
+            <caption>The eighteen modelled services, by tier</caption>
             <thead><tr><th>Tier</th><th>Services</th><th>Authentication</th></tr></thead>
             <tbody>
-              <tr><td><span class="tier t-public">Public / Cloudflare</span></td><td>Blog, blog administration</td><td>None / email challenge at edge</td></tr>
-              <tr><td><span class="tier t-funnel">Public / Funnel</span></td><td>Workflow endpoints, tool transport, one demo</td><td>Password, OAuth, none</td></tr>
-              <tr><td><span class="tier t-tailnet">Private network</span></td><td>Admin console, AI gateway, tool GUI, demos</td><td>Device identity, then password</td></tr>
-              <tr><td><span class="tier t-lan">Home network</span></td><td>Per-service diagnostic ports</td><td>Network position</td></tr>
-              <tr><td><span class="tier t-loop">Loopback</span></td><td>Every application, underneath all of the above</td><td>Unreachable externally</td></tr>
+              <tr><td><span class="tier t-public">Public / Cloudflare</span></td><td>Blog, blog administration</td><td>None / email challenge at the edge, plus a WAF challenge on stray <span class="mono">.php</span> requests</td></tr>
+              <tr><td><span class="tier t-funnel">Public / Funnel</span></td><td>Workflow editor and webhooks, tool transport, one demo</td><td>Password, OAuth, none</td></tr>
+              <tr><td><span class="tier t-tailnet">Private network</span></td><td>Admin consoles (host, AI gateway, dashboards, graph database), AI gateway API, local model API, metrics, tool GUI, demos, graph database TLS door</td><td>Device identity, then password or key; the local model API has none</td></tr>
+              <tr><td><span class="tier t-lan">Home network</span></td><td>Per-service diagnostic ports, including a break-glass door to the graph console</td><td>Network position</td></tr>
+              <tr><td><span class="tier t-loop">Host-internal</span></td><td>Graph database wire protocol, alert manager, and every application by default</td><td>Unreachable from outside the host</td></tr>
             </tbody>
           </table>
         </div>
@@ -807,22 +811,25 @@
     <div class="rail"><b>Register</b><span>Known weaknesses</span></div>
     <div class="col">
       <h2>What is wrong with it</h2>
-      <p>All six gaps below are <em>accepted</em> rather than planned — they are understood, and the cost of fixing them currently exceeds the cost of living with them. Recording that judgement is the point.</p>
+      <p>Eleven gaps are recorded. Nine are <em>accepted</em> — understood, with the cost of fixing them currently exceeding the cost of living with them — and two are <em>mitigated</em>, each with its residual risk written down. Recording that judgement is the point.</p>
       <div class="scroll">
         <table>
-          <caption>Gap register, baseline 2026-08-30</caption>
-          <thead><tr><th></th><th>Gap</th><th>Consequence</th></tr></thead>
-          <tbody>
+          \1
             <tr><td><span class="sev s-high">High</span></td><td>Single point of failure</td><td>Every workload runs on one machine in one house. Backups make the data survivable; the service is not. Recovery is hours of rebuild.</td></tr>
-            <tr><td><span class="sev s-med">Med</span></td><td>No monitoring or alerting</td><td>Nothing reports failure. A failed backup or stopped service is found by looking — so the detective controls only fire when someone remembers.</td></tr>
             <tr><td><span class="sev s-med">Med</span></td><td>Residential connectivity</td><td>Availability is bounded by domestic broadband and household power.</td></tr>
             <tr><td><span class="sev s-med">Med</span></td><td>No secret rotation</td><td>Long-lived provider and storage keys with no rotation schedule.</td></tr>
+            <tr><td><span class="sev s-med">Med</span></td><td>Flat east-west traffic</td><td>Any container can reach any endpoint another publishes, so one compromised workload reaches the internal surface of all of them. Traded for not wiring every connection by hand.</td></tr>
+            <tr><td><span class="sev s-med">Med</span></td><td>Home directory shared over SMB <em>(mitigated)</em></td><td>One account's password gave read-write access to the master-key file. The share is removed; the remaining shares are still read-write for that one account.</td></tr>
+            <tr><td><span class="sev s-low">Low</span></td><td>Alerting limited <em>(mitigated)</em></td><td>Probes, host resources, failed units and certificates now alert to Slack. Backup age and a whole-host outage are still uncovered, because the alert pipeline runs on the machine it watches.</td></tr>
+            <tr><td><span class="sev s-low">Low</span></td><td>AI gateway reachable beyond its intent</td><td>Meant for callers on the host, it also answers on the home and private networks. Every route still needs a key.</td></tr>
+            <tr><td><span class="sev s-low">Low</span></td><td>Local model API unauthenticated</td><td>Bound to every interface so the gateway's container can reach it; any home or private-network device can run inference or manage models.</td></tr>
+            <tr><td><span class="sev s-low">Low</span></td><td>Edge state is local</td><td>Cloudflare's configuration is code, but its Terraform state is one gitignored file on the laptop and applies are manual.</td></tr>
             <tr><td><span class="sev s-low">Low</span></td><td>Demo apps published</td><td>One demonstration app is internet-facing. It holds no data, but it is attack surface earning nothing.</td></tr>
             <tr><td><span class="sev s-low">Low</span></td><td>No staging environment</td><td>Changes are validated by deploying to production and checking afterwards.</td></tr>
-          </tbody>
+          \2
         </table>
       </div>
-      <p>The first two compound each other, and that is the honest headline: the estate can lose its only server without losing its data, but nothing would tell anyone it had happened.</p>
+      <p>The first and the alerting gap still compound each other, and that is the honest headline: something now tells the operator when a service, a website or the disk is in trouble, but the alert pipeline lives on the machine it watches. The estate can lose its only server without losing its data, but nothing would say that the whole box had gone quiet.</p>
     </div>
   </section>
 
@@ -833,11 +840,11 @@
       <h2>Why this description should still be true next year</h2>
       <p>Architecture documents rot because nothing contradicts them when they drift. This one is held to the estate by three deliberate choices.</p>
       <p><strong>The model is the source, the document is the view.</strong> Entities and relationships live in version-controlled YAML beside the configuration they describe, in the same repository and the same commits. A change to the estate and a change to its description travel together or the difference is visible in review.</p>
-      <p><strong>Conformance is machine-checked.</strong> A validator enforces referential integrity, relationship typing, and the four invariants. It does not check that the model matches reality — nothing can — but it does refuse the specific decay that makes architecture models useless: dangling references, unclassified endpoints, controls attached to nothing.</p>
+      <p><strong>Conformance is machine-checked.</strong> A validator enforces referential integrity, relationship typing, and the five invariants. It does not check that the model matches reality — nothing can — but it does refuse the specific decay that makes architecture models useless: dangling references, unclassified endpoints, controls attached to nothing.</p>
       <p><strong>The plain-language explanation is part of the model.</strong> Every motivation and business entity carries a stakeholder-facing sentence as a required field, and the validator rejects it if missing. The non-technical narrative is therefore generated from the same rows as the technical one, and cannot drift from it at presentation time.</p>
       <div class="note">
         <span class="tag">Its honest limit</span>
-        <p>None of this proves the model is accurate. A validator confirms the description is internally coherent, not that it still matches what is running — that gap closes only by re-deriving the model from the live estate, which today is a manual act. It is the most valuable next step, and it is not done.</p>
+        <p>None of this proves the model is accurate. A validator confirms the description is internally coherent, not that it still matches what is running. The model was last re-derived by hand from the live estate on 2026-10-06 — containers and images, service units, the published routes, every listener, the edge's Terraform plan and the data counts — and that pass found drift in both directions, including an admin console listening on every interface and three units that had never started. Doing it by hand is the limit: until it is scripted, the model is only as current as the last time someone looked.</p>
       </div>
     </div>
   </section>

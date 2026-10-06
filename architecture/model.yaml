@@ -4,11 +4,15 @@
 # This is the BASELINE (as-is), not a target. Known weaknesses are modelled as Gaps
 # rather than omitted.
 #
-# Verified against the running estate 2026-08-30.
+# Verified against the running estate 2026-10-06: containers and image tags, systemd units,
+# Tailscale serve/funnel, Caddy listeners, Prometheus targets, the Cloudflare edge (terraform
+# plan clean), WordPress content counts, the host listeners and the Samba share configuration.
+# The WAF .php challenge was confirmed from outside the home network (private browsing on a
+# phone with wifi off), since the home egress IP is allow-listed and exempt from the rule.
 
 model:
   name: beeblebox estate
-  baseline_date: 2026-08-30
+  baseline_date: 2026-10-06
   metamodel_version: 1.0.0
 
 # =============================================================== MOTIVATION ===
@@ -80,7 +84,12 @@ Principle:
       Applications publish on a host-internal address that containers can reach and the LAN
       and tailnet cannot. Publishing is what makes an endpoint internally reachable, so a port
       left unpublished — a database, say — stays private by default. Internal endpoints must
-      not treat network position as authentication.
+      not treat network position as authentication. The bias is toward this pattern, but it is
+      not absolute: for development convenience a component may publish on 0.0.0.0 instead,
+      which also reaches the LAN and tailnet. That is an intentional decision taken per
+      network-accessible component and recorded on the component itself (n8n, hello-world and
+      Ollama today), not a gap, and a component with no such record is expected to follow the
+      principle.
     plain_language: >
       Applications on this server can talk to each other freely, without extra setup for each
       new pair. Nothing outside the server gains anything by it.
@@ -238,7 +247,11 @@ ApplicationComponent:
     image: n8nio/n8n:2.33.7 + postgres:15-alpine
     routing: not-path-mounted
     lifecycle: production
-    description: Workflow automation engine; publishes webhook and MCP trigger endpoints.
+    description: >
+      Workflow automation engine; publishes webhook and MCP trigger endpoints. Intentional
+      east-west exception (p-open-east-west): publishes 5678 on 0.0.0.0 rather than the
+      host-internal address, so the raw editor also answers on the LAN and tailnet beside
+      the Funnel and the Caddy door. Basic auth still applies.
   - id: ac-litellm
     name: LiteLLM
     stack: compose/litellm
@@ -260,7 +273,11 @@ ApplicationComponent:
     image: distribution package
     routing: no-strip
     lifecycle: production
-    description: Web administration console for the host and its containers.
+    description: >
+      Web administration console for the host and its containers. A system service whose
+      cockpit.socket Caddy reaches at 127.0.0.1:9090. scripts/sudo/setup-cockpit.sh binds the
+      socket to loopback with a systemd drop-in (applied and verified 2026-10-06; the packaged
+      default is all interfaces), so Cockpit's own login is reachable only through Caddy.
   - id: ac-tictactoe
     name: Tic-tac-toe
     stack: compose/tic-tac-toe
@@ -276,7 +293,9 @@ ApplicationComponent:
     source: in-repo
     routing: strip
     lifecycle: demonstration
-    description: Smoke-test endpoint used by deployment health checks.
+    description: >
+      Smoke-test endpoint used by deployment health checks. Intentional east-west exception
+      (p-open-east-west): publishes 8080 on 0.0.0.0, so it answers raw on the LAN and tailnet.
   - id: ac-claudemock
     name: Claude mock test
     stack: compose/claude-mock-test
@@ -300,6 +319,17 @@ ApplicationComponent:
     description: >
       GQL graph database plus its web console, as two containers in one pod. The database
       speaks raw gRPC and is never path-mounted; the console is a normal HTTPS site.
+  - id: ac-ollama
+    name: Ollama
+    stack: (host package, not containerised)
+    image: ollama 0.35.0 (system service)
+    routing: not-path-mounted
+    lifecycle: production
+    description: >
+      Local model server behind the LLM gateway, listening on 0.0.0.0:11434 (OLLAMA_HOST in the
+      unit). Intentional east-west exception (p-open-east-west): litellm's container cannot
+      reach a loopback-only listener, so it binds all interfaces. Models are read from the
+      Samba Models share by the laptop's own Ollama.
   - id: ac-prometheus
     name: Prometheus
     stack: compose/prometheus
@@ -428,6 +458,15 @@ ApplicationService:
       the only credential. The certificate must carry whatever name
       the client dials - the short name is already a SAN, the ts.net FQDN is not unless added
       via DEPLOY_CERT_EXTRA_SANS.
+  - id: as-ollama
+    name: Ollama API
+    endpoint: http://beeblebox:11434
+    protocol: http
+    auth: none
+    description: >
+      Ollama's native API, unauthenticated, bound 0.0.0.0 so it answers on the LAN and on the
+      tailnet IP; the wider of the two (tailnet) is recorded. Its caller is litellm; gap-ollama-reach
+      records that anyone on either network can also call it.
   - id: as-lan-consoles
     name: LAN service endpoints
     endpoint: https://beeblebox:8443-8450, :9443
@@ -520,11 +559,17 @@ DataEntity:
     classification: secret
     recoverability: irreplaceable
     description: >
-      .env — N8N_ENCRYPTION_KEY, database passwords, provider API keys — plus tunnel
+      .env — N8N_ENCRYPTION_KEY, database passwords, provider API keys, the Cloudflare API
+      token used by cloudflare/ — plus tunnel
       credentials and the private CA. Gitignored, so it exists nowhere else.
     plain_language: >
       The master key file. Losing it makes several of the backups permanently unreadable,
       which is why it matters more than anything else here.
+  - id: de-monitoring-state
+    name: Alerting and dashboard state
+    classification: internal
+    recoverability: recoverable
+    description: Alertmanager silences and Grafana's own database. Configuration is in git; this is only runtime state.
   - id: de-monitoring-metrics
     name: Monitoring time series
     classification: internal
@@ -568,7 +613,8 @@ DataStore:
     backup_method: logical-dump
     description: >
       BACKUP DATABASE has the server write its own verified archive while serving; the LSM
-      directory is never file-copied.
+      directory is never file-copied. The archives are written to the gqldb-backups volume,
+      collected by backup.sh into the staging directory, and are not themselves a backup.
   - id: ds-manager
     name: GQLDB Manager store
     technology: GQLDB embedded via NAPI (LSM), Podman volume
@@ -581,6 +627,18 @@ DataStore:
     technology: Host filesystem (.env, ~/.cloudflared, certs/)
     backup_method: file-copy
     description: Included in the encrypted snapshot; the reason encryption is load-bearing.
+  - id: ds-alertmanager
+    name: Alertmanager state
+    technology: Podman volume
+    backup_method: none
+    description: Silences and the notification log; recreated empty if lost, at the cost of re-silencing.
+  - id: ds-grafana
+    name: Grafana state
+    technology: Podman volume
+    backup_method: none
+    description: >
+      Grafana's own database (sessions, users, ad-hoc edits). Datasource and dashboards are
+      provisioned from git, so only changes made in the UI are lost with it.
   - id: ds-prometheus-tsdb
     name: Prometheus TSDB
     technology: Podman volume
@@ -593,7 +651,11 @@ Node:
     name: beeblebox
     location: home
     spec: Ubuntu 26.04, 12 cores, 30 GB RAM, 1.1 TB NVMe
-    description: Sole server. Runs every application component.
+    description: >
+      Sole server. Runs every application component. Also runs host services that are not
+      modelled as components: SSH (:22), Samba (:139/:445) sharing /mnt/windows and its models and
+      games subfolders (password-only, no guest), xrdp (:3389), and CUPS (loopback :631). All but
+      CUPS listen on every interface.
   - id: n-laptop
     name: darragh-laptop
     location: home
@@ -613,11 +675,16 @@ TechnologyService:
   - id: ts-caddy
     name: Reverse proxy and TLS termination
     product: Caddy (host network)
-    description: Single ingress point; every tier's routing rules are expressed here.
+    description: >
+      Single ingress point; every tier's routing rules are expressed here. Also serves its
+      own /metrics on host-internal :8103, and Prometheus, Alertmanager and Grafana expose
+      theirs on :8101 and :8102, none reachable from the LAN or tailnet.
   - id: ts-systemd
     name: Service lifecycle and scheduling
     product: systemd user units with loginctl linger
-    description: Starts stacks at boot without login and drives the weekly backup timer.
+    description: >
+      Starts stacks at boot without login, drives the weekly backup timer, and runs the
+      unit-metrics timer whose textfile metric feeds the SystemdUserUnitFailed alerts.
   - id: ts-tailscale
     name: Mesh VPN and public funnel
     product: Tailscale
@@ -750,7 +817,11 @@ Control:
     type: preventive
     description: >
       Email OTP challenge at the edge for /wp-admin and /wp-login.php, so brute-force
-      traffic never reaches PHP.
+      traffic never reaches PHP. Two Access apps (one per path), each carrying only the
+      admin-email policy, managed in cloudflare/main.tf. Until 2026-10-05 both also carried an
+      "Everyone" allow policy, which admits anyone who completes an IdP login (including
+      One-time PIN with any inbox), so the gate was open; allow policies are OR'd, so the
+      Terraform deliberately attaches no other policy.
   - id: ctl-tailnet-identity
     name: Tailnet device identity
     type: preventive
@@ -787,6 +858,15 @@ Control:
     description: >
       Public fronts publish only what must be public — an allowlist for the MCP transport,
       and xmlrpc.php blocked outright.
+  - id: ctl-edge-waf
+    name: Cloudflare WAF and HTTPS enforcement
+    type: preventive
+    description: >
+      A custom WAF rule issues a managed challenge for requests to stray .php files
+      (wp-login.php, wp-cron.php, xmlrpc.php and /wp-admin/ excepted; the live action is
+      managed_challenge, not block - see waf_php_action in cloudflare/terraform.tfvars), a skip rule lets the blackbox uptime probe's
+      GET / past it, and always-use-https is on - the only place http to https happens,
+      because Caddy :8097 hardcodes X-Forwarded-Proto https. All in cloudflare/main.tf.
 
 Gap:
   - id: gap-single-node
@@ -800,12 +880,12 @@ Gap:
       Everything runs on one computer at home. If it fails, the services are down until
       it is rebuilt — though nothing is permanently lost.
   - id: gap-no-alerting
-    name: Alerting limited to probes, host resources and certificates
+    name: Alerting limited to probes, host resources, unit failures and certificates
     severity: low
     status: mitigated
     description: >
-      Prometheus probes every stack and public URL, watches host disk, memory and CPU and
-      the Caddy certificate, and Alertmanager posts failures to Slack #myagentchannel.
+      Prometheus probes every stack and public URL, watches host disk, memory and CPU, failed
+      systemd user units and the Caddy certificate, and Alertmanager posts failures to Slack #myagentchannel.
       Still uncovered: backup age (the backup scripts emit no metric), application-level
       errors in apps that expose no metrics, and a host-wide outage - the alert pipeline
       runs on the host it watches (gap-single-node), so nothing reports that the whole box
@@ -866,6 +946,46 @@ Gap:
     plain_language: >
       If one application on the server were broken into, it could talk to the others.
       Accepted in exchange for not having to wire up every connection by hand.
+  - id: gap-smb-home-share
+    name: Samba shares the operator's home directory read-write
+    severity: medium
+    status: mitigated
+    description: >
+      The DaraDoom share mapped /home/daradoom read-write, with force user daradoom, on every
+      interface and with no hosts allow, so it answers on the LAN and tailnet. There is no guest
+      access (map to guest = Never, anonymous tree connects were refused), but the one account's
+      password therefore gave read-write access to .env (the master keys) and ~/.ssh, including
+      authorized_keys, which turns SMB access into a shell as the account that owns every stack.
+      Mitigated 2026-10-06: the share is removed (the laptop only mounts Models), restrict
+      anonymous = 2 is set, and the include in smb.conf now sits below the global parameters, so
+      workgroup, disable netbios, socket options and multichannel take effect. Residual: the
+      remaining shares are still read-write for the same single account on the LAN and tailnet.
+    plain_language: >
+      One password used to open my whole home folder from anywhere on the home network, including
+      the file of master keys. That folder is no longer shared.
+  - id: gap-ollama-reach
+    name: Ollama API unauthenticated and reachable beyond litellm
+    severity: low
+    status: accepted
+    description: >
+      Ollama has no authentication and is bound 0.0.0.0 so litellm's container can reach it, so
+      any device on the LAN or tailnet can run inference or pull and delete models. Accepted as
+      part of the per-component east-west decision on ac-ollama; narrowing it means binding to
+      the host-internal address, which litellm can reach through pasta's host-loopback mapping.
+    plain_language: >
+      Anyone on my home network or my own devices can use the local AI model directly, without
+      going through the gateway or a key.
+  - id: gap-edge-state-local
+    name: Cloudflare edge state is local and applied by hand
+    severity: low
+    status: accepted
+    description: >
+      cloudflare/terraform.tfstate is a gitignored local file on the laptop and is not in
+      the backup; if lost, the edge must be re-imported. Applies are manual (deploy only
+      plans and warns on drift). The IP Access Rule allowing the probe's egress IP goes
+      stale when the residential address changes, and the zone's single custom-rules
+      ruleset is owned wholesale by Terraform, so any rule added in the dashboard is
+      removed by the next apply.
 
 # ============================================================ RELATIONSHIPS ===
 relationships:
@@ -894,6 +1014,7 @@ relationships:
   - { from: cap-publishing,       name: realised_by, to: ac-wordpress }
   - { from: cap-automation,       name: realised_by, to: ac-n8n }
   - { from: cap-ai-access,        name: realised_by, to: ac-litellm }
+  - { from: cap-ai-access,        name: realised_by, to: ac-ollama }
   - { from: cap-automation,       name: realised_by, to: ac-weather-mcp }
   - { from: cap-administration,   name: realised_by, to: ac-cockpit }
   - { from: cap-remote-access,    name: realised_by, to: ac-cockpit }
@@ -925,15 +1046,16 @@ relationships:
   - { from: ac-litellm,      name: provides, to: as-litellm-ui }
   - { from: ac-litellm,      name: provides, to: as-litellm-api }
   - { from: ac-cockpit,      name: provides, to: as-cockpit }
+  - { from: ac-ollama,       name: provides, to: as-ollama }
   - { from: ac-claudemock,   name: provides, to: as-claudemock }
   - { from: ac-tictactoe,    name: provides, to: as-demos-private }
-  - { from: ac-helloworld,   name: provides, to: as-lan-consoles }
-  - { from: ac-gqldb,       name: provides, to: as-gqldb-manager }
-  - { from: ac-gqldb,       name: provides, to: as-gqldb }
-  - { from: ac-gqldb,       name: provides, to: as-gqldb-tls }
+  - { from: ac-helloworld,   name: provides, to: as-demos-private }
+  - { from: ac-gqldb,        name: provides, to: as-gqldb-manager }
+  - { from: ac-gqldb,        name: provides, to: as-gqldb }
+  - { from: ac-gqldb,        name: provides, to: as-gqldb-tls }
   - { from: ac-prometheus,  name: provides, to: as-prometheus }
   - { from: ac-alertmanager, name: provides, to: as-alertmanager }
-  - { from: ac-grafana,         name: provides, to: as-grafana }
+  - { from: ac-grafana,       name: provides, to: as-grafana }
 
   # Service -> business service
   - { from: as-blog-public,   name: delivers, to: bs-blog }
@@ -943,13 +1065,14 @@ relationships:
   - { from: as-weather-gui,   name: delivers, to: bs-automation-endpoints }
   - { from: as-litellm-ui,    name: delivers, to: bs-administration }
   - { from: as-litellm-api,   name: delivers, to: bs-llm-gateway }
+  - { from: as-ollama,        name: delivers, to: bs-llm-gateway }
   - { from: as-cockpit,       name: delivers, to: bs-administration }
   - { from: as-lan-consoles,  name: delivers, to: bs-administration }
   - { from: as-claudemock,    name: delivers, to: bs-demonstrations }
   - { from: as-demos-private, name: delivers, to: bs-demonstrations }
   - { from: as-prometheus,    name: delivers, to: bs-administration }
   - { from: as-alertmanager,  name: delivers, to: bs-administration }
-  - { from: as-grafana,         name: delivers, to: bs-administration }
+  - { from: as-grafana,       name: delivers, to: bs-administration }
 
   # Service -> exposure tier (invariant: exactly one each)
   - { from: as-blog-public,   name: exposed_via, to: et-public-cloudflare }
@@ -960,6 +1083,7 @@ relationships:
   - { from: as-weather-gui,   name: exposed_via, to: et-tailnet }
   - { from: as-litellm-ui,    name: exposed_via, to: et-tailnet }
   - { from: as-litellm-api,   name: exposed_via, to: et-tailnet }
+  - { from: as-ollama,        name: exposed_via, to: et-tailnet }
   - { from: as-cockpit,       name: exposed_via, to: et-tailnet }
   - { from: as-demos-private, name: exposed_via, to: et-tailnet }
   - { from: as-lan-consoles,  name: exposed_via, to: et-lan }
@@ -968,7 +1092,7 @@ relationships:
   - { from: as-gqldb-tls,     name: exposed_via, to: et-tailnet }
   - { from: as-prometheus,    name: exposed_via, to: et-tailnet }
   - { from: as-alertmanager,  name: exposed_via, to: et-loopback }
-  - { from: as-grafana,         name: exposed_via, to: et-tailnet }
+  - { from: as-grafana,       name: exposed_via, to: et-tailnet }
 
   # Tier enforcement
   - { from: et-public-cloudflare, name: enforced_by, to: ep-cloudflare }
@@ -984,9 +1108,11 @@ relationships:
   - { from: ac-n8n,         name: manages, to: de-workflow-definitions }
   - { from: ac-litellm,     name: manages, to: de-llm-usage }
   - { from: ac-weather-mcp, name: manages, to: de-oauth-tokens }
-  - { from: ac-gqldb,       name: manages, to: de-graph-data }
-  - { from: ac-gqldb,       name: manages, to: de-manager-config }
+  - { from: ac-gqldb,        name: manages, to: de-graph-data }
+  - { from: ac-gqldb,        name: manages, to: de-manager-config }
   - { from: ac-prometheus,  name: manages, to: de-monitoring-metrics }
+  - { from: ac-alertmanager, name: manages, to: de-monitoring-state }
+  - { from: ac-grafana,     name: manages, to: de-monitoring-state }
   - { from: de-blog-content,         name: persisted_in, to: ds-wordpress-db }
   - { from: de-media-assets,         name: persisted_in, to: ds-wp-content }
   - { from: de-workflow-definitions, name: persisted_in, to: ds-n8n-db }
@@ -997,6 +1123,8 @@ relationships:
   - { from: de-graph-data,           name: persisted_in, to: ds-gqldb }
   - { from: de-manager-config,       name: persisted_in, to: ds-manager }
   - { from: de-monitoring-metrics,   name: persisted_in, to: ds-prometheus-tsdb }
+  - { from: de-monitoring-state,     name: persisted_in, to: ds-alertmanager }
+  - { from: de-monitoring-state,     name: persisted_in, to: ds-grafana }
 
   # Deployment
   - { from: ac-wordpress,   name: deployed_on, to: n-beeblebox }
@@ -1004,13 +1132,14 @@ relationships:
   - { from: ac-litellm,     name: deployed_on, to: n-beeblebox }
   - { from: ac-weather-mcp, name: deployed_on, to: n-beeblebox }
   - { from: ac-cockpit,     name: deployed_on, to: n-beeblebox }
+  - { from: ac-ollama,      name: deployed_on, to: n-beeblebox }
   - { from: ac-tictactoe,   name: deployed_on, to: n-beeblebox }
   - { from: ac-helloworld,  name: deployed_on, to: n-beeblebox }
   - { from: ac-claudemock,  name: deployed_on, to: n-beeblebox }
-  - { from: ac-gqldb,       name: deployed_on, to: n-beeblebox }
+  - { from: ac-gqldb,        name: deployed_on, to: n-beeblebox }
   - { from: ac-prometheus,  name: deployed_on, to: n-beeblebox }
   - { from: ac-alertmanager, name: deployed_on, to: n-beeblebox }
-  - { from: ac-grafana,         name: deployed_on, to: n-beeblebox }
+  - { from: ac-grafana,       name: deployed_on, to: n-beeblebox }
 
   # Dependencies
   - { from: ac-wordpress,   name: depends_on, to: ts-podman }
@@ -1020,16 +1149,19 @@ relationships:
   - { from: ac-n8n,         name: depends_on, to: ep-tailscale }
   - { from: ac-litellm,     name: depends_on, to: ts-podman }
   - { from: ac-litellm,     name: depends_on, to: ep-model-providers }
+  - { from: ac-litellm,     name: depends_on, to: ac-ollama }
   - { from: ac-weather-mcp, name: depends_on, to: ts-podman }
   - { from: ac-weather-mcp, name: depends_on, to: ep-tailscale }
   - { from: ac-cockpit,     name: depends_on, to: ts-caddy }
+  - { from: ac-gqldb,        name: depends_on, to: ts-podman }
+  - { from: ac-prometheus,  name: depends_on, to: ts-caddy }
   - { from: ac-tictactoe,   name: depends_on, to: ts-podman }
   - { from: ac-helloworld,  name: depends_on, to: ts-podman }
   - { from: ac-claudemock,  name: depends_on, to: ts-podman }
   - { from: ac-prometheus,  name: depends_on, to: ts-podman }
   - { from: ac-alertmanager, name: depends_on, to: ts-podman }
   - { from: ac-alertmanager, name: depends_on, to: ep-slack }
-  - { from: ac-grafana,         name: depends_on, to: ts-podman }
+  - { from: ac-grafana,       name: depends_on, to: ts-podman }
 
   # Network
   - { from: n-beeblebox, name: connects, to: net-home-lan }
@@ -1059,14 +1191,22 @@ relationships:
   - { from: ctl-offsite-copy,       name: protects,   to: ds-n8n-data }
   - { from: ctl-offsite-copy,       name: protects,   to: ds-oauth-store }
   - { from: ctl-offsite-copy,       name: protects,   to: ds-secrets }
+  - { from: ctl-offsite-copy,       name: protects,   to: ds-gqldb }
+  - { from: ctl-offsite-copy,       name: protects,   to: ds-manager }
   - { from: ctl-offsite-copy,       name: implements, to: p-tested-recovery }
   - { from: ctl-dump-verification,  name: protects,   to: ds-wordpress-db }
+  - { from: ctl-dump-verification,  name: protects,   to: ds-n8n-db }
+  - { from: ctl-dump-verification,  name: protects,   to: ds-litellm-db }
+  - { from: ctl-dump-verification,  name: protects,   to: ds-gqldb }
   - { from: ctl-dump-verification,  name: implements, to: p-tested-recovery }
   - { from: ctl-restore-rehearsal,  name: protects,   to: de-blog-content }
   - { from: ctl-restore-rehearsal,  name: implements, to: p-tested-recovery }
   - { from: ctl-published-surface,  name: protects,   to: as-weather-mcp }
   - { from: ctl-published-surface,  name: protects,   to: as-blog-public }
   - { from: ctl-published-surface,  name: implements, to: p-tiered-exposure }
+  - { from: ctl-edge-waf,           name: protects,   to: as-blog-public }
+  - { from: ctl-edge-waf,           name: protects,   to: as-blog-admin }
+  - { from: ctl-edge-waf,           name: implements, to: p-tiered-exposure }
 
   # Gaps
   - { from: gap-single-node,             name: affects, to: n-beeblebox }
@@ -1079,6 +1219,10 @@ relationships:
   - { from: gap-no-staging,              name: affects, to: n-beeblebox }
   - { from: gap-flat-east-west,          name: affects, to: ac-weather-mcp }
   - { from: gap-flat-east-west,          name: affects, to: n-beeblebox }
+  - { from: gap-edge-state-local,        name: affects, to: ep-cloudflare }
+  - { from: gap-ollama-reach,            name: affects, to: ac-ollama }
+  - { from: gap-smb-home-share,          name: affects, to: n-beeblebox }
+  - { from: gap-no-alerting,             name: affects, to: bs-domain-email }
 
   # Domain as an asset: this capability is realised by bought services, not built ones.
   - { from: cap-domain-services, name: realised_by, to: ep-amazon-registrar }
@@ -1103,5 +1247,3 @@ relationships:
   - { from: et-lan,               name: trust_zone, to: net-home-lan }
   - { from: et-loopback,          name: trust_zone, to: net-container }
 
-  # Email forwarding is the dependency most easily broken by a DNS migration.
-  - { from: gap-no-alerting, name: affects, to: bs-domain-email }
