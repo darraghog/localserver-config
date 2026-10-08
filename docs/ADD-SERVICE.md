@@ -191,6 +191,12 @@ platform's mechanisms, and the model holds which services use them.
   neutral to the projects that depend on it; the validator requires it.
 - An `ApplicationService` (`as-<name>`) per reachable endpoint, with an `exposed_via`
   relationship to exactly one exposure tier.
+- A `primarily_serves` relationship from the component to exactly one `Pillar` (`pl-cost`,
+  `pl-agility`, `pl-security`, `pl-resilience`, `pl-quality` or `pl-control`) — the domain that
+  would degrade first if it were removed — plus an `also_serves` for each other pillar it bears
+  on. A component that exists only to learn from states a `pillar_exemption` instead; the
+  validator requires one or the other. If the component is a cross-cutting means to a pillar
+  (monitoring, a gateway, a workflow engine), add an `enables` edge too, even if nothing uses it yet.
 
 Check it before committing (the `.githooks/pre-commit` hook does this for you):
 

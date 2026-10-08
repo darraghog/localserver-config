@@ -6,7 +6,7 @@
 # Value Streams, Organisation Units, Measures. Including them would produce impressive
 # empty tables, which is worse than not modelling them at all.
 #
-# Three entity types are declared extensions rather than TOGAF core. TOGAF explicitly
+# Four entity types are declared extensions rather than TOGAF core. TOGAF explicitly
 # permits metamodel extension; each is justified in its `rationale`.
 #
 # This file defines the SCHEMA. Instances live in model.yaml.
@@ -14,8 +14,8 @@
 
 meta:
   name: beeblebox-architecture-metamodel
-  version: 1.0.0
-  basis: TOGAF Content Metamodel (subset + 3 extensions)
+  version: 1.1.0
+  basis: TOGAF Content Metamodel (subset + 4 extensions)
   maintained_by: darraghog
   purpose: >
     Describe the homelab estate at a level a non-technical reader can follow, while
@@ -35,6 +35,13 @@ common_attributes:
       Business layer entities — the accessible view is generated from these fields rather
       than improvised at presentation time, so the plain-English story cannot drift from
       the technical model.
+  pillar_exemption:
+    type: string
+    required: false
+    note: >
+      Only on an entity whose type must name a primary pillar (see primarily_serves). States
+      why no non-functional domain drives it - in practice, that it exists for learning rather
+      than for any quality the estate needs. Mutually exclusive with primarily_serves.
 
 layers:
 
@@ -55,6 +62,24 @@ layers:
         statement:   { type: string, required: true }
         rationale:   { type: string, required: true }
         implication: { type: string, required: true, note: "what it forbids or forces" }
+    Pillar:
+      togaf: extension
+      rationale: >
+        TOGAF's Principle says what a design rule is; it has no vocabulary for the
+        non-functional domain a rule or component answers to. Without one, "why does this
+        exist" stops at a principle and cannot be asked across principles, components,
+        providers and controls at once. Pillars are the domains: they are what lets a review
+        ask which concerns the estate over-serves and which it barely serves. Two of the
+        three Drivers are not non-functional (learning, ownership), so a Pillar classifies
+        Principles and what realises them; it does not replace a Driver.
+      description: A non-functional domain that principles, components and controls answer to.
+      attributes:
+        characteristics: { type: string, required: true,
+                           note: "what the domain owns. The characteristics are what must be
+                                  disjoint between pillars; an entity may serve several" }
+        boundary_test:   { type: string, required: true,
+                           note: "the question that decides whether a concern belongs here or in
+                                  a neighbouring pillar" }
 
   # ------------------------------------------------------------------ Business
   # Phase B. Deliberately technology-free: these entities should still read true if
@@ -107,8 +132,8 @@ layers:
       description: A network-reachable interface provided by a component.
       attributes:
         endpoint:  { type: string }
-        protocol:  { type: enum, values: [https, http, mcp, grpc] }
-        auth:      { type: enum, values: [none, basic, api-key, oauth, edge-identity, network-identity] }
+        protocol:  { type: enum, values: [https, http, mcp, grpc, ssh, rdp, smb] }
+        auth:      { type: enum, values: [none, basic, api-key, ssh-key, oauth, edge-identity, network-identity] }
 
   # ---------------------------------------------------------------------- Data
   # Phase C (data). The split matters for backup reasoning: DataEntity carries the
@@ -198,6 +223,12 @@ layers:
 # The validator rejects any relationship whose endpoints fall outside these.
 relationships:
   - { name: motivates,    from: [Driver],               to: [Principle] }
+  - { name: primarily_serves, from: [Principle, ApplicationComponent, TechnologyService, ExternalProvider, DataEntity, Control, Node, ExposureTier], to: [Pillar],
+      note: "the pillar that would degrade first if this entity were removed. Exactly one per entity of these types, unless pillar_exemption is stated. DataStore is deliberately not classified: it takes its pillar from the DataEntity it persists" }
+  - { name: also_serves,  from: [Principle, ApplicationComponent, TechnologyService, ExternalProvider, DataEntity, Control, Node, ExposureTier], to: [Pillar],
+      note: "any further pillar the entity bears on in practice, whether it helps it or strains it (a component published on 0.0.0.0 serves Agility and strains Security). Describes what the entity does today" }
+  - { name: enables,      from: [ApplicationComponent, TechnologyService, ExternalProvider], to: [Pillar],
+      note: "a pillar this entity is a means to for the estate as a whole, whether or not anything in the estate uses it yet (observability, n8n, LiteLLM, LangSmith). An enabler may name its own primary pillar. Distinct from also_serves, which records present effect: an enabler nothing has adopted is still modelled, and the Gap that records its non-adoption is what keeps that honest" }
   - { name: governs,      from: [Principle],            to: [ApplicationComponent, ExposureTier, Control, TechnologyService, ExternalProvider, DataStore] }
   - { name: realised_by,  from: [Capability],           to: [ApplicationComponent, ExternalProvider] }
   - { name: supports,     from: [BusinessService],      to: [Capability] }
@@ -215,7 +246,8 @@ relationships:
   - { name: protects,     from: [Control],              to: [ApplicationService, DataStore, Node, DataEntity] }
   - { name: implements,   from: [Control],              to: [Principle] }
   - { name: connects,     from: [Node],                 to: [Network] }
-  - { name: affects,      from: [Gap],                  to: [ApplicationComponent, DataStore, Node, BusinessService, ExternalProvider] }
+  - { name: affects,      from: [Gap],                  to: [ApplicationComponent, DataStore, Node, BusinessService, ExternalProvider, Pillar],
+      note: "a Gap that affects a Pillar is a weakness in that whole domain rather than in one component - the way a missing capability (no AI evaluation) is recorded when no component exists to attach it to" }
 
 # Rules the validator enforces beyond referential integrity. These encode the modelling
 # discipline: without them the model degrades into an unconnected inventory.
@@ -237,3 +269,11 @@ invariants:
     why: A component this repo builds is owned by some other project. Naming that repo is what
          keeps this platform's docs neutral to its dependents - the dependency is recorded as
          data here instead of being narrated in prose that goes stale.
+  - id: every-classified-entity-serves-one-pillar
+    rule: Every Principle, ApplicationComponent, TechnologyService, ExternalProvider, DataEntity,
+          Control, Node and ExposureTier must have exactly one primarily_serves relationship, or
+          state a pillar_exemption instead (never both). An also_serves must name a different
+          pillar from the entity's primary, and an enables must not repeat an also_serves.
+    why: A thing no non-functional domain explains is either decoration or driven by something the
+         model has not named. Forcing one primary pillar is what makes a pillar-by-pillar review
+         possible; the exemption makes the exceptions visible as data rather than as silence.

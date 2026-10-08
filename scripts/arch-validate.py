@@ -31,7 +31,7 @@ MODEL = ROOT / "architecture" / "model.yaml"
 
 # Layers whose entities must carry plain_language: the non-technical view is generated
 # from these, so a missing one is a hole in the stakeholder-facing story.
-PLAIN_LANGUAGE_REQUIRED = {"Driver", "Principle", "Capability", "BusinessService", "Actor"}
+PLAIN_LANGUAGE_REQUIRED = {"Driver", "Principle", "Pillar", "Capability", "BusinessService", "Actor"}
 
 errors: list[str] = []
 warnings: list[str] = []
@@ -191,6 +191,43 @@ def main() -> int:
         if not outgoing.get((cid, "implements")):
             err(f"[no-orphan-controls] Control {cid} implements no Principle "
                 f"— an unexplained control")
+
+    # every-classified-entity-serves-one-pillar
+    # The classified types are read from the metamodel, so widening the rule is a one-line
+    # change there rather than a validator edit.
+    classified = set(rel_specs["primarily_serves"]["from"])
+    for eid, tname in instances.items():
+        if tname not in classified:
+            continue
+        primary = outgoing.get((eid, "primarily_serves"), [])
+        exempt = (entity_data[eid].get("pillar_exemption") or "").strip()
+        if exempt and primary:
+            err(f"[every-classified-entity-serves-one-pillar] {tname} {eid} states a "
+                f"pillar_exemption but also has a primary pillar — it is one or the other")
+        elif not exempt and len(primary) != 1:
+            err(f"[every-classified-entity-serves-one-pillar] {tname} {eid} has "
+                f"{len(primary)} primary pillars, expected exactly 1 (or a pillar_exemption "
+                f"saying why no non-functional domain drives it)")
+        also = outgoing.get((eid, "also_serves"), [])
+        if len(set(also)) != len(also):
+            err(f"[every-classified-entity-serves-one-pillar] {tname} {eid} lists the same "
+                f"secondary pillar more than once")
+        for pl in also:
+            if pl in primary:
+                err(f"[every-classified-entity-serves-one-pillar] {tname} {eid} names {pl} "
+                    f"as both its primary and a secondary pillar")
+        for pl in outgoing.get((eid, "enables"), []):
+            if pl in also:
+                err(f"[every-classified-entity-serves-one-pillar] {tname} {eid} both enables "
+                    f"and also_serves {pl} — an enabler's reach is recorded once")
+
+    # Advisory: a pillar nothing primarily serves is a domain the estate claims but does not
+    # yet act on. Not an error - the honest state of a pillar the estate has not built out.
+    served = {t for (f, n), ts in outgoing.items() if n == "primarily_serves" for t in ts}
+    for pid in by_type.get("Pillar", []):
+        if pid not in served:
+            warn(f"Pillar {pid} is primarily served by nothing — the estate names this "
+                 f"domain but no component, control or principle is yet driven by it")
 
     # Advisory: a principle nothing enforces is decoration, not architecture.
     implemented = {t for (f, n), ts in outgoing.items() if n == "implements" for t in ts}

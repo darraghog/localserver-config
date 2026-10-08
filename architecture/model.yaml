@@ -13,7 +13,7 @@
 model:
   name: beeblebox estate
   baseline_date: 2026-10-06
-  metamodel_version: 1.0.0
+  metamodel_version: 1.1.0
 
 # =============================================================== MOTIVATION ===
 Driver:
@@ -93,6 +93,28 @@ Principle:
     plain_language: >
       Applications on this server can talk to each other freely, without extra setup for each
       new pair. Nothing outside the server gains anything by it.
+  - id: p-ai-cost-to-value
+    name: AI spend is tied to value
+    description: Spend on AI computation is attributable to the value it produces and bounded by a budget set in advance.
+    statement: >
+      Spend on AI computation can be attributed to the value it produces, and is bounded by
+      an explicit budget set before it is incurred.
+    rationale: >
+      AI computation is metered per call and cheap per call, so its total is easy to lose track
+      of and hard to judge afterwards. A cost nobody can link to an outcome can be neither
+      defended nor cut intelligently, and unbounded metering turns a leaked key or a runaway
+      loop into an open-ended bill. Tokens are the unit actually consumed and outlast price and
+      provider changes better than currency does, so budgets are preferred in tokens.
+    implication: >
+      AI calls carry an identity (key, team, purpose) so spend can be grouped by what it was
+      for; spend that cannot be attributed to a purpose is a defect to fix, not an overhead to
+      absorb; every identity has a budget, in tokens where the platform can enforce one and in
+      currency otherwise. That makes the gateway the natural enforcement point, since it sees
+      every call that passes through it. Today only per-key spend is recorded, and no budget is
+      set (gap-no-spend-budget).
+    plain_language: >
+      Every pound or dollar spent on AI should be traceable to something worth having, and no
+      one project or key can spend without a limit agreed beforehand.
   - id: p-rootless
     name: Rootless by default
     description: Workloads hold no host privilege.
@@ -129,6 +151,72 @@ Principle:
     plain_language: >
       We regularly prove the backups actually work by restoring from them, rather than
       trusting that they do.
+
+# Non-functional domains. The characteristics are disjoint between pillars; an entity may serve
+# several (see also_serves). Each carries a boundary_test: the question that settles which
+# neighbouring pillar a concern belongs to. Two Drivers (d-currency, d-publish) are not
+# non-functional, so Pillars classify what realises a Principle rather than replacing a Driver.
+Pillar:
+  - id: pl-cost
+    name: Cost
+    description: Recurring spend and the resources the estate consumes.
+    characteristics: >
+      Recurring spend, metering, reliance on free tiers, and the hardware and capacity consumed;
+      for AI computation, attributing spend to the value it produces and bounding it with
+      budgets.
+    boundary_test: Is it about money, or about a resource being consumed?
+    plain_language: What it costs to keep this running, and how little that can be.
+  - id: pl-agility
+    name: Agility
+    description: The cost and speed of change, including the friction of integrating something new.
+    characteristics: >
+      Cost and speed of change, integration friction, and the effort of onboarding another
+      service or use case.
+    boundary_test: Does it make change cheaper or faster, or add friction to it?
+    plain_language: How easily something new can be added or an existing thing changed.
+  - id: pl-security
+    name: Information security
+    description: Preventing unauthorised access to, or action on, the estate and the data in it.
+    characteristics: >
+      Reachability, identity, isolation, hardening and credential hygiene, and the protection
+      of data against an adversary (encryption, secret handling). It excludes data governance,
+      which is Control and sovereignty.
+    boundary_test: >
+      Does it matter only because of an adversary? If it would still matter with none -
+      custody, residency, retention - it belongs to pl-control.
+    plain_language: Keeping the wrong people and programs out, and what they would find if they got in.
+  - id: pl-resilience
+    name: Resilience
+    description: Surviving and recovering from failure, running the estate day to day, and the headroom to grow.
+    characteristics: >
+      Backup, restore, rebuild and restart; operability (observing, deploying and repairing);
+      and scale - the architectural headroom to serve many users, use cases and locations.
+      Scale is a design property, not a deployed one: the estate is one node in one house and
+      is not expected to realise it (gap-single-node).
+    boundary_test: >
+      Does it bound the loss or downtime from a fault, make a fault visible and repairable,
+      or decide how far the design could grow?
+    plain_language: Staying up, getting back up when it falls, and being able to grow if it ever had to.
+  - id: pl-quality
+    name: AI output quality
+    description: Whether the output of model-backed components stays good over time.
+    characteristics: >
+      Correctness and usefulness of model output, drift and regression, evaluation at build
+      time and at runtime, and the effect of a model version changing underneath the estate.
+      It does not cover the reliability of the platform itself, which is Resilience.
+    boundary_test: Does it concern whether what a model produces stays good?
+    plain_language: Whether the answers the AI parts give are still good, and how we would know if they were not.
+  - id: pl-control
+    name: Control and sovereignty
+    description: Authority over the estate's assets, dependencies and behaviour, including compliance.
+    characteristics: >
+      Data custody, residency, retention and portability; lock-in and the ability to substitute
+      a provider; deterministic, auditable behaviour; and compliance with obligations imposed
+      from outside. No compliance obligation is currently modelled.
+    boundary_test: >
+      Would it still matter if no attacker existed? Is it about who holds authority over an
+      asset, a dependency or a behaviour?
+    plain_language: Owning the things that matter - the address, the data, the way it behaves - rather than renting them from someone who can change terms.
 
 # ================================================================= BUSINESS ===
 Capability:
@@ -303,6 +391,9 @@ ApplicationComponent:
     source: ~/dev/claude/mock-test (vendored by compose/claude-mock-test/sync-site.sh)
     routing: strip
     lifecycle: demonstration
+    pillar_exemption: >
+      Purpose-only (d-currency): a showcase application, kept deliberately. No non-functional
+      domain drives it, which is what gap-public-demo-surface records from the other side.
     description: Static practice-exam application; state held entirely in the browser.
   - id: ac-gqldb
     name: Ultipa GQLDB
@@ -353,6 +444,35 @@ ApplicationComponent:
     routing: no-strip
     lifecycle: production
     description: Dashboards over Prometheus. Datasource and dashboards are provisioned from git.
+
+  - id: ac-sshd
+    name: OpenSSH server
+    stack: (host package, not containerised)
+    image: distribution package
+    routing: not-path-mounted
+    lifecycle: production
+    description: >
+      Remote shell on :22, listening on every interface. The deploy path (rsync and ssh from
+      the laptop) and the operator's way in when Cockpit is not enough, so a host with no
+      working sshd can only be repaired at the keyboard.
+  - id: ac-samba
+    name: Samba
+    stack: (host package, not containerised)
+    image: distribution package
+    routing: not-path-mounted
+    lifecycle: production
+    description: >
+      File sharing on :139/:445, listening on every interface, password-only with no guest
+      access. Shares /mnt/windows and its models and games subfolders; the laptop's own Ollama
+      reads models from the Models share. The remaining shares are read-write for one account
+      (gap-smb-home-share).
+  - id: ac-xrdp
+    name: xrdp
+    stack: (host package, not containerised)
+    image: distribution package
+    routing: not-path-mounted
+    lifecycle: production
+    description: Remote desktop on :3389, listening on every interface.
 
 ApplicationService:
   - id: as-blog-public
@@ -498,6 +618,28 @@ ApplicationService:
     description: Dashboards on the tailnet path router; authenticates callers itself.
 
 # ==================================================================== DATA ===
+
+  - id: as-ssh
+    name: SSH
+    endpoint: ssh://beeblebox:22
+    protocol: ssh
+    auth: ssh-key
+    description: >
+      Operator shell and deploy transport. Answers on the LAN as well as the tailnet; tiered
+      with the other every-interface host services (compare as-ollama).
+  - id: as-samba
+    name: SMB file shares
+    endpoint: smb://beeblebox (:139, :445)
+    protocol: smb
+    auth: basic
+    description: >
+      Password-only shares, no guest. Answers on the LAN as well as the tailnet.
+  - id: as-xrdp
+    name: Remote desktop
+    endpoint: rdp://beeblebox:3389
+    protocol: rdp
+    auth: basic
+    description: Desktop login with a host account. Answers on the LAN as well as the tailnet.
 
 DataEntity:
   - id: de-blog-content
@@ -652,10 +794,9 @@ Node:
     location: home
     spec: Ubuntu 26.04, 12 cores, 30 GB RAM, 1.1 TB NVMe
     description: >
-      Sole server. Runs every application component. Also runs host services that are not
-      modelled as components: SSH (:22), Samba (:139/:445) sharing /mnt/windows and its models and
-      games subfolders (password-only, no guest), xrdp (:3389), and CUPS (loopback :631). All but
-      CUPS listen on every interface.
+      Sole server. Runs every application component, including the host services SSH, Samba
+      and xrdp (ac-sshd, ac-samba, ac-xrdp). Also runs CUPS (loopback :631), which is neither
+      critical nor reachable from outside the host and so is not modelled.
   - id: n-laptop
     name: darragh-laptop
     location: home
@@ -770,7 +911,25 @@ ExternalProvider:
     function: OpenAI, Anthropic and Google inference APIs consumed via LiteLLM
     cost: metered usage
     lock_in: low
-    description: Upstream model APIs; the only metered cost in the estate.
+    description: >
+      Upstream model APIs; the only metered cost in the estate. Reached only through LiteLLM,
+      across three providers, which is what keeps substitution cheap and lock-in low.
+
+  - id: ep-langsmith
+    name: LangSmith
+    function: Trace capture and automated evaluation (build time and runtime) for LLM applications
+    cost: per account plan; tier not recorded
+    lock_in: low
+    description: >
+      Operator's account, in use today by Python applications running outside the estate (the
+      development workstation), which send traces to it. No component deployed on beeblebox
+      uses it yet (gap-ai-evals-not-adopted). Reaching it from a container is outbound HTTPS
+      only, so p-no-inbound is unaffected, and it is the same path litellm already uses to reach
+      the model providers; the repo records no egress filtering. What it does change: prompts
+      and outputs leave the estate for a third party, so what a workflow or app sends is a
+      data-custody decision (pl-control), and each tracing client needs its own API key in
+      .env. LiteLLM has a LangSmith callback, which would make the gateway the single egress
+      point and the single key for every caller using it.
 
 # ============================================================== EXTENSIONS ===
 ExposureTier:
@@ -912,7 +1071,8 @@ Gap:
     status: accepted
     description: >
       claude-mock-test is served on the public Funnel. Accepted because it holds no data
-      and makes no outbound calls — but it is published surface earning nothing.
+      and makes no outbound calls, and because it is kept deliberately as a showcase — but it
+      is still published surface that no non-functional requirement calls for.
   - id: gap-no-staging
     name: No staging environment
     severity: low
@@ -986,6 +1146,43 @@ Gap:
       stale when the residential address changes, and the zone's single custom-rules
       ruleset is owned wholesale by Terraform, so any rule added in the dashboard is
       removed by the next apply.
+  - id: gap-ai-evals-not-adopted
+    name: Estate components are not traced or evaluated
+    severity: low
+    status: accepted
+    description: >
+      LangSmith is deployed (ep-langsmith) and Python applications outside the estate already
+      send traces to it, but nothing running on beeblebox does, and the LiteLLM gateway has no
+      LangSmith callback configured. So no estate component has its output traced or evaluated
+      at build time or runtime, and a provider changing a model, or an Ollama model replaced by
+      hand, would go unnoticed. LiteLLM's documented callback (`callbacks: ["langsmith"]`,
+      LANGSMITH_API_KEY, optional LANGSMITH_BASE_URL) is the lowest-effort route, covering every
+      caller through the gateway; see ep-langsmith for the networking and data-custody
+      implications. Runtime evaluation would build on the observability stack that already
+      serves Resilience.
+      The tool for checking the AI parts' answers exists and is in use elsewhere, but none of
+      the estate's own AI components use it yet.
+  - id: gap-no-spend-budget
+    name: AI spend is neither budgeted nor tied to value
+    severity: medium
+    status: planned
+    description: >
+      Model-provider usage is the only metered cost and nothing bounds it: LiteLLM records
+      spend per virtual key (de-llm-usage), but no limit is set, so a leaked or runaway key
+      spends until someone notices, and the model records spend per key rather than the value
+      that spend produced (p-ai-cost-to-value). The control is defined but not implemented.
+      Intended shape, per LiteLLM's documented budgets: a global `litellm_settings.max_budget`
+      and `budget_duration`, plus a `max_budget` and `budget_duration` on every virtual key, so
+      requests fail once a cap is crossed (enforced against spend in the existing Postgres,
+      ds-litellm-db); `team_id`, `key_alias` and `metadata` on keys to attribute spend to a
+      purpose; provider-side caps as a backstop; and an alert when spend nears a cap. The
+      principle prefers token budgets, but as I read LiteLLM's documentation it enforces only
+      a currency cap (`max_budget`) and per-minute rate limits (`tpm_limit`, `rpm_limit`), not
+      a cumulative token cap - a token budget would need enforcing elsewhere, or a currency
+      cap used as the nearest proxy. Amounts are the operator's to set. When implemented it
+      will be a Control implementing p-ai-cost-to-value.
+      Nothing stops the AI bill from running away if a key leaks, and nobody can yet say what
+      value a given key's spending bought. A monthly cap is designed but not switched on.
 
 # ============================================================ RELATIONSHIPS ===
 relationships:
@@ -996,6 +1193,7 @@ relationships:
   - { from: d-publish,   name: motivates, to: p-tiered-exposure }
   - { from: d-frugal,    name: motivates, to: p-no-inbound }
   - { from: d-frugal,    name: motivates, to: p-open-east-west }
+  - { from: d-frugal,    name: motivates, to: p-ai-cost-to-value }
 
   # Principle -> what it governs
   - { from: p-no-inbound,      name: governs, to: ep-cloudflare }
@@ -1006,6 +1204,9 @@ relationships:
   - { from: p-tiered-exposure, name: governs, to: et-tailnet }
   - { from: p-open-east-west,  name: governs, to: et-loopback }
   - { from: p-rootless,        name: governs, to: ts-podman }
+  - { from: p-ai-cost-to-value, name: governs, to: ac-litellm }
+  - { from: p-ai-cost-to-value, name: governs, to: ep-model-providers }
+  - { from: p-ai-cost-to-value, name: governs, to: ds-litellm-db }
   - { from: p-reproducible,    name: governs, to: ts-systemd }
   - { from: p-tested-recovery, name: governs, to: ts-restic }
   - { from: p-tested-recovery, name: governs, to: ds-secrets }
@@ -1022,6 +1223,8 @@ relationships:
   - { from: cap-administration,   name: realised_by, to: ac-prometheus }
   - { from: cap-administration, name: realised_by, to: ac-alertmanager }
   - { from: cap-administration, name: realised_by, to: ac-grafana }
+  - { from: cap-administration, name: realised_by, to: ac-sshd }
+  - { from: cap-remote-access,  name: realised_by, to: ac-xrdp }
 
   # Business service -> capability, and -> consumer
   - { from: bs-blog,                 name: supports, to: cap-publishing }
@@ -1056,6 +1259,9 @@ relationships:
   - { from: ac-prometheus,  name: provides, to: as-prometheus }
   - { from: ac-alertmanager, name: provides, to: as-alertmanager }
   - { from: ac-grafana,       name: provides, to: as-grafana }
+  - { from: ac-sshd,          name: provides, to: as-ssh }
+  - { from: ac-samba,         name: provides, to: as-samba }
+  - { from: ac-xrdp,          name: provides, to: as-xrdp }
 
   # Service -> business service
   - { from: as-blog-public,   name: delivers, to: bs-blog }
@@ -1073,6 +1279,8 @@ relationships:
   - { from: as-prometheus,    name: delivers, to: bs-administration }
   - { from: as-alertmanager,  name: delivers, to: bs-administration }
   - { from: as-grafana,       name: delivers, to: bs-administration }
+  - { from: as-ssh,           name: delivers, to: bs-administration }
+  - { from: as-xrdp,          name: delivers, to: bs-administration }
 
   # Service -> exposure tier (invariant: exactly one each)
   - { from: as-blog-public,   name: exposed_via, to: et-public-cloudflare }
@@ -1093,6 +1301,9 @@ relationships:
   - { from: as-prometheus,    name: exposed_via, to: et-tailnet }
   - { from: as-alertmanager,  name: exposed_via, to: et-loopback }
   - { from: as-grafana,       name: exposed_via, to: et-tailnet }
+  - { from: as-ssh,           name: exposed_via, to: et-tailnet }
+  - { from: as-samba,         name: exposed_via, to: et-tailnet }
+  - { from: as-xrdp,          name: exposed_via, to: et-tailnet }
 
   # Tier enforcement
   - { from: et-public-cloudflare, name: enforced_by, to: ep-cloudflare }
@@ -1140,6 +1351,9 @@ relationships:
   - { from: ac-prometheus,  name: deployed_on, to: n-beeblebox }
   - { from: ac-alertmanager, name: deployed_on, to: n-beeblebox }
   - { from: ac-grafana,       name: deployed_on, to: n-beeblebox }
+  - { from: ac-sshd,          name: deployed_on, to: n-beeblebox }
+  - { from: ac-samba,         name: deployed_on, to: n-beeblebox }
+  - { from: ac-xrdp,          name: deployed_on, to: n-beeblebox }
 
   # Dependencies
   - { from: ac-wordpress,   name: depends_on, to: ts-podman }
@@ -1208,6 +1422,170 @@ relationships:
   - { from: ctl-edge-waf,           name: protects,   to: as-blog-admin }
   - { from: ctl-edge-waf,           name: implements, to: p-tiered-exposure }
 
+  # Pillar classification: one primary pillar per classified entity, then any others it bears on.
+  # also_serves records an enabler (observability, n8n) or a trade-off (a 0.0.0.0 publish strains
+  # security while serving agility) alike. ac-claudemock states a pillar_exemption instead.
+  # DataStore is not classified directly; it takes its pillar from the DataEntity it persists.
+  # Principles
+  - { from: p-no-inbound, name: primarily_serves, to: pl-security }
+  - { from: p-no-inbound, name: also_serves, to: pl-cost }
+  - { from: p-tiered-exposure, name: primarily_serves, to: pl-security }
+  - { from: p-tiered-exposure, name: also_serves, to: pl-control }
+  - { from: p-open-east-west, name: primarily_serves, to: pl-agility }
+  - { from: p-open-east-west, name: also_serves, to: pl-security }
+  - { from: p-rootless, name: primarily_serves, to: pl-security }
+  - { from: p-reproducible, name: primarily_serves, to: pl-resilience }
+  - { from: p-reproducible, name: also_serves, to: pl-agility }
+  - { from: p-reproducible, name: also_serves, to: pl-control }
+  - { from: p-tested-recovery, name: primarily_serves, to: pl-resilience }
+  - { from: p-ai-cost-to-value, name: primarily_serves, to: pl-cost }
+  - { from: p-ai-cost-to-value, name: also_serves, to: pl-quality }
+
+  # Components
+  - { from: ac-wordpress, name: primarily_serves, to: pl-control }
+  - { from: ac-wordpress, name: also_serves, to: pl-resilience }
+  - { from: ac-wordpress, name: also_serves, to: pl-security }
+  - { from: ac-n8n, name: primarily_serves, to: pl-agility }
+  - { from: ac-n8n, name: enables, to: pl-agility }
+  - { from: ac-n8n, name: enables, to: pl-control }
+  - { from: ac-n8n, name: also_serves, to: pl-security }
+  - { from: ac-litellm, name: primarily_serves, to: pl-cost }
+  - { from: ac-litellm, name: enables, to: pl-cost }
+  - { from: ac-litellm, name: enables, to: pl-control }
+  - { from: ac-litellm, name: enables, to: pl-quality }
+  - { from: ac-litellm, name: also_serves, to: pl-security }
+  - { from: ac-weather-mcp, name: primarily_serves, to: pl-security }
+  - { from: ac-weather-mcp, name: also_serves, to: pl-agility }
+  - { from: ac-cockpit, name: primarily_serves, to: pl-resilience }
+  - { from: ac-cockpit, name: also_serves, to: pl-security }
+  - { from: ac-tictactoe, name: primarily_serves, to: pl-agility }
+  - { from: ac-helloworld, name: primarily_serves, to: pl-resilience }
+  - { from: ac-helloworld, name: also_serves, to: pl-agility }
+  - { from: ac-gqldb, name: primarily_serves, to: pl-resilience }
+  - { from: ac-gqldb, name: also_serves, to: pl-control }
+  - { from: ac-gqldb, name: also_serves, to: pl-security }
+  - { from: ac-ollama, name: primarily_serves, to: pl-control }
+  - { from: ac-ollama, name: also_serves, to: pl-cost }
+  - { from: ac-ollama, name: also_serves, to: pl-security }
+  - { from: ac-prometheus, name: primarily_serves, to: pl-resilience }
+  - { from: ac-prometheus, name: enables, to: pl-resilience }
+  - { from: ac-prometheus, name: enables, to: pl-security }
+  - { from: ac-prometheus, name: enables, to: pl-cost }
+  - { from: ac-prometheus, name: enables, to: pl-quality }
+  - { from: ac-alertmanager, name: primarily_serves, to: pl-resilience }
+  - { from: ac-alertmanager, name: enables, to: pl-resilience }
+  - { from: ac-alertmanager, name: enables, to: pl-security }
+  - { from: ac-alertmanager, name: enables, to: pl-cost }
+  - { from: ac-alertmanager, name: enables, to: pl-quality }
+  - { from: ac-grafana, name: primarily_serves, to: pl-resilience }
+  - { from: ac-grafana, name: enables, to: pl-resilience }
+  - { from: ac-grafana, name: enables, to: pl-security }
+  - { from: ac-grafana, name: enables, to: pl-cost }
+  - { from: ac-grafana, name: enables, to: pl-quality }
+  - { from: ac-sshd, name: primarily_serves, to: pl-resilience }
+  - { from: ac-sshd, name: also_serves, to: pl-security }
+  - { from: ac-samba, name: primarily_serves, to: pl-agility }
+  - { from: ac-samba, name: also_serves, to: pl-security }
+  - { from: ac-xrdp, name: primarily_serves, to: pl-resilience }
+  - { from: ac-xrdp, name: also_serves, to: pl-security }
+
+  # Technology services
+  - { from: ts-podman, name: primarily_serves, to: pl-security }
+  - { from: ts-podman, name: also_serves, to: pl-agility }
+  - { from: ts-podman, name: also_serves, to: pl-resilience }
+  - { from: ts-caddy, name: primarily_serves, to: pl-agility }
+  - { from: ts-caddy, name: also_serves, to: pl-security }
+  - { from: ts-caddy, name: also_serves, to: pl-resilience }
+  - { from: ts-systemd, name: primarily_serves, to: pl-resilience }
+  - { from: ts-systemd, name: also_serves, to: pl-agility }
+  - { from: ts-tailscale, name: primarily_serves, to: pl-security }
+  - { from: ts-tailscale, name: also_serves, to: pl-agility }
+  - { from: ts-tailscale, name: also_serves, to: pl-cost }
+  - { from: ts-tailscale, name: also_serves, to: pl-control }
+  - { from: ts-cloudflared, name: primarily_serves, to: pl-security }
+  - { from: ts-cloudflared, name: also_serves, to: pl-cost }
+  - { from: ts-cloudflared, name: also_serves, to: pl-control }
+  - { from: ts-restic, name: primarily_serves, to: pl-resilience }
+  - { from: ts-restic, name: also_serves, to: pl-security }
+  - { from: ts-restic, name: also_serves, to: pl-control }
+  - { from: ts-restic, name: also_serves, to: pl-cost }
+
+  # External providers
+  - { from: ep-cloudflare, name: primarily_serves, to: pl-security }
+  - { from: ep-cloudflare, name: also_serves, to: pl-control }
+  - { from: ep-cloudflare, name: also_serves, to: pl-cost }
+  - { from: ep-tailscale, name: primarily_serves, to: pl-security }
+  - { from: ep-tailscale, name: also_serves, to: pl-control }
+  - { from: ep-tailscale, name: also_serves, to: pl-cost }
+  - { from: ep-slack, name: primarily_serves, to: pl-resilience }
+  - { from: ep-slack, name: also_serves, to: pl-cost }
+  - { from: ep-azure-blob, name: primarily_serves, to: pl-resilience }
+  - { from: ep-azure-blob, name: also_serves, to: pl-cost }
+  - { from: ep-azure-blob, name: also_serves, to: pl-control }
+  - { from: ep-github, name: primarily_serves, to: pl-resilience }
+  - { from: ep-github, name: also_serves, to: pl-agility }
+  - { from: ep-github, name: also_serves, to: pl-control }
+  - { from: ep-amazon-registrar, name: primarily_serves, to: pl-control }
+  - { from: ep-amazon-registrar, name: also_serves, to: pl-cost }
+  - { from: ep-improvmx, name: primarily_serves, to: pl-control }
+  - { from: ep-improvmx, name: also_serves, to: pl-cost }
+  - { from: ep-improvmx, name: also_serves, to: pl-resilience }
+  - { from: ep-model-providers, name: primarily_serves, to: pl-cost }
+  - { from: ep-model-providers, name: also_serves, to: pl-control }
+  - { from: ep-model-providers, name: also_serves, to: pl-security }
+  - { from: ep-langsmith, name: primarily_serves, to: pl-quality }
+  - { from: ep-langsmith, name: enables, to: pl-quality }
+  - { from: ep-langsmith, name: also_serves, to: pl-control }
+  - { from: ep-langsmith, name: also_serves, to: pl-security }
+
+  # Data entities
+  - { from: de-blog-content, name: primarily_serves, to: pl-resilience }
+  - { from: de-blog-content, name: also_serves, to: pl-control }
+  - { from: de-media-assets, name: primarily_serves, to: pl-resilience }
+  - { from: de-media-assets, name: also_serves, to: pl-control }
+  - { from: de-workflow-definitions, name: primarily_serves, to: pl-resilience }
+  - { from: de-workflow-definitions, name: also_serves, to: pl-security }
+  - { from: de-llm-usage, name: primarily_serves, to: pl-resilience }
+  - { from: de-llm-usage, name: also_serves, to: pl-security }
+  - { from: de-llm-usage, name: also_serves, to: pl-cost }
+  - { from: de-oauth-tokens, name: primarily_serves, to: pl-security }
+  - { from: de-graph-data, name: primarily_serves, to: pl-resilience }
+  - { from: de-manager-config, name: primarily_serves, to: pl-security }
+  - { from: de-platform-secrets, name: primarily_serves, to: pl-resilience }
+  - { from: de-platform-secrets, name: also_serves, to: pl-security }
+  - { from: de-monitoring-state, name: primarily_serves, to: pl-resilience }
+  - { from: de-monitoring-metrics, name: primarily_serves, to: pl-resilience }
+  - { from: de-monitoring-metrics, name: also_serves, to: pl-cost }
+
+  # Controls
+  - { from: ctl-access-gate, name: primarily_serves, to: pl-security }
+  - { from: ctl-tailnet-identity, name: primarily_serves, to: pl-security }
+  - { from: ctl-rootless, name: primarily_serves, to: pl-security }
+  - { from: ctl-encrypted-backup, name: primarily_serves, to: pl-security }
+  - { from: ctl-encrypted-backup, name: also_serves, to: pl-control }
+  - { from: ctl-offsite-copy, name: primarily_serves, to: pl-resilience }
+  - { from: ctl-offsite-copy, name: also_serves, to: pl-control }
+  - { from: ctl-offsite-copy, name: also_serves, to: pl-cost }
+  - { from: ctl-dump-verification, name: primarily_serves, to: pl-resilience }
+  - { from: ctl-restore-rehearsal, name: primarily_serves, to: pl-resilience }
+  - { from: ctl-published-surface, name: primarily_serves, to: pl-security }
+  - { from: ctl-edge-waf, name: primarily_serves, to: pl-security }
+  - { from: ctl-edge-waf, name: also_serves, to: pl-resilience }
+
+  # Nodes
+  - { from: n-beeblebox, name: primarily_serves, to: pl-resilience }
+  - { from: n-laptop, name: primarily_serves, to: pl-agility }
+  - { from: n-mobile, name: primarily_serves, to: pl-security }
+
+  # Exposure tiers
+  - { from: et-public-cloudflare, name: primarily_serves, to: pl-security }
+  - { from: et-public-funnel, name: primarily_serves, to: pl-security }
+  - { from: et-tailnet, name: primarily_serves, to: pl-security }
+  - { from: et-lan, name: primarily_serves, to: pl-security }
+  - { from: et-lan, name: also_serves, to: pl-resilience }
+  - { from: et-loopback, name: primarily_serves, to: pl-security }
+  - { from: et-loopback, name: also_serves, to: pl-agility }
+
   # Gaps
   - { from: gap-single-node,             name: affects, to: n-beeblebox }
   - { from: gap-single-node,             name: affects, to: bs-blog }
@@ -1222,7 +1600,32 @@ relationships:
   - { from: gap-edge-state-local,        name: affects, to: ep-cloudflare }
   - { from: gap-ollama-reach,            name: affects, to: ac-ollama }
   - { from: gap-smb-home-share,          name: affects, to: n-beeblebox }
+  - { from: gap-smb-home-share,          name: affects, to: ac-samba }
   - { from: gap-no-alerting,             name: affects, to: bs-domain-email }
+
+  # Gaps by the pillar whose domain they weaken
+  - { from: gap-single-node, name: affects, to: pl-resilience }
+  - { from: gap-no-alerting, name: affects, to: pl-resilience }
+  - { from: gap-residential-connectivity, name: affects, to: pl-resilience }
+  - { from: gap-no-secret-rotation, name: affects, to: pl-security }
+  - { from: gap-public-demo-surface, name: affects, to: pl-security }
+  - { from: gap-no-staging, name: affects, to: pl-resilience }
+  - { from: gap-no-staging, name: affects, to: pl-agility }
+  - { from: gap-litellm-api-reach, name: affects, to: pl-security }
+  - { from: gap-flat-east-west, name: affects, to: pl-security }
+  - { from: gap-flat-east-west, name: affects, to: pl-resilience }
+  - { from: gap-smb-home-share, name: affects, to: pl-security }
+  - { from: gap-ollama-reach, name: affects, to: pl-security }
+  - { from: gap-edge-state-local, name: affects, to: pl-resilience }
+  - { from: gap-edge-state-local, name: affects, to: pl-control }
+  - { from: gap-ai-evals-not-adopted,     name: affects, to: pl-quality }
+  - { from: gap-ai-evals-not-adopted,     name: affects, to: ac-litellm }
+  - { from: gap-ai-evals-not-adopted,     name: affects, to: bs-llm-gateway }
+  - { from: gap-ai-evals-not-adopted,     name: affects, to: ep-langsmith }
+  - { from: gap-no-spend-budget,          name: affects, to: pl-cost }
+  - { from: gap-no-spend-budget,          name: affects, to: ep-model-providers }
+  - { from: gap-no-spend-budget,          name: affects, to: ac-litellm }
+  - { from: gap-no-spend-budget,          name: affects, to: bs-llm-gateway }
 
   # Domain as an asset: this capability is realised by bought services, not built ones.
   - { from: cap-domain-services, name: realised_by, to: ep-amazon-registrar }

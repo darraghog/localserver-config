@@ -424,8 +424,8 @@
     <p class="standfirst">A TOGAF-aligned metamodel for a one-server estate — what is worth capturing, what is deliberately left out, and the machine-checked model that keeps the description honest.</p>
     <div class="stamp">
       <div><b>2026-10-06</b>Baseline date</div>
-      <div><b>124 / 222</b>Entities / relationships</div>
-      <div><b>16</b>Entity types</div>
+      <div><b>140 / 406</b>Entities / relationships</div>
+      <div><b>17</b>Entity types</div>
       <div><b>Conformant</b>Validator status</div>
     </div>
   </header>
@@ -466,6 +466,7 @@
           <tbody>
             <tr><td><span class="mono">Driver</span></td><td>Core</td><td>Why does this estate exist at all?</td></tr>
             <tr><td><span class="mono">Principle</span></td><td>Core</td><td>What rule does this design decision follow from?</td></tr>
+            <tr><td><span class="mono">Pillar</span></td><td>Extension</td><td>Which non-functional domain does this answer to — cost, agility, security, resilience, AI output quality, or control?</td></tr>
             <tr><td><span class="mono">Capability</span></td><td>Core</td><td>What can it do, stated so it survives replacing every product?</td></tr>
             <tr><td><span class="mono">BusinessService</span></td><td>Core</td><td>What breaks for someone if this stops?</td></tr>
             <tr><td><span class="mono">Actor</span></td><td>Core</td><td>Who or what consumes it — including machine callers.</td></tr>
@@ -493,7 +494,7 @@
     <div class="wide">
       <figure>
         <div class="frame">
-          <svg viewBox="0 0 940 660" role="img" aria-label="The metamodel: sixteen entity types arranged in five TOGAF layers plus extensions, joined by named relationships that form a traceable chain from Driver down to Node.">
+          <svg viewBox="0 0 940 660" role="img" aria-label="The metamodel: seventeen entity types arranged in five TOGAF layers plus extensions, joined by named relationships that form a traceable chain from Driver down to Node.">
             <defs>
               <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
@@ -520,6 +521,8 @@
               <text x="180" y="66" text-anchor="middle">Driver</text>
               <rect x="330" y="40" width="150" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
               <text x="405" y="66" text-anchor="middle">Principle</text>
+              <rect x="540" y="40" width="130" height="42" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="5 3"/>
+              <text x="605" y="66" text-anchor="middle">Pillar</text>
 
               <!-- business -->
               <rect x="20" y="160" width="130" height="42" fill="none" stroke="currentColor" stroke-width="1.4"/>
@@ -562,6 +565,7 @@
 
             <g stroke="currentColor" stroke-width="1.3" fill="none" marker-end="url(#ar)">
               <line x1="250" y1="61" x2="325" y2="61"/>
+              <line x1="480" y1="61" x2="536" y2="61"/>
               <line x1="485" y1="160" x2="485" y2="90"/>
               <line x1="265" y1="160" x2="180" y2="118"/>
               <line x1="485" y1="202" x2="330" y2="278"/>
@@ -583,6 +587,7 @@
 
             <g font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.72">
               <text x="287" y="54" text-anchor="middle">motivates</text>
+              <text x="508" y="54" text-anchor="middle">serves</text>
               <text x="492" y="128" text-anchor="start">supports</text>
               <text x="212" y="132" text-anchor="middle">consumed_by</text>
               <text x="392" y="248" text-anchor="middle">realised_by</text>
@@ -600,17 +605,17 @@
             </g>
           </svg>
         </div>
-        <figcaption><b>Figure 1 — The metamodel</b>Sixteen entity types across five TOGAF layers, joined by eighteen named relationship types, of which the principal fifteen are drawn. Solid boxes are TOGAF core; dashed boxes are the three extensions. The chain that matters runs top to bottom: a <span class="mono">Driver</span> motivates a <span class="mono">Principle</span>, which governs how a <span class="mono">Capability</span> is realised by a component, which provides a service, which is exposed at exactly one tier. Any claim in this document can be walked back up that chain.</figcaption>
+        <figcaption><b>Figure 1 — The metamodel</b>Seventeen entity types across five TOGAF layers, joined by twenty-one named relationship types, of which the principal sixteen are drawn. Solid boxes are TOGAF core; dashed boxes are the four extensions. <span class="mono">serves</span> stands for three relationships — primary, secondary and enabling — and is drawn from <span class="mono">Principle</span> only: the same pair also joins components, providers, data, controls, nodes and exposure tiers to a <span class="mono">Pillar</span>. The chain that matters runs top to bottom: a <span class="mono">Driver</span> motivates a <span class="mono">Principle</span>, which governs how a <span class="mono">Capability</span> is realised by a component, which provides a service, which is exposed at exactly one tier. Any claim in this document can be walked back up that chain.</figcaption>
       </figure>
     </div>
   </section>
 
   <!-- ================================================= 3. EXTENSIONS -->
   <section class="band">
-    <div class="rail"><b>Extensions</b><span>Three additions to core</span></div>
+    <div class="rail"><b>Extensions</b><span>Four additions to core</span></div>
     <div class="col">
       <h2>Where the standard needed extending</h2>
-      <p>TOGAF explicitly permits metamodel extension. Three were added, each because a question kept being asked that the core vocabulary could not express.</p>
+      <p>TOGAF explicitly permits metamodel extension. Four were added, each because a question kept being asked that the core vocabulary could not express.</p>
 
       <h3>ExposureTier — who can reach this at all</h3>
       <p>TOGAF has no first-class concept for reachability zoning. In this estate it is the single most consequential design decision and the one most easily got wrong: a service intended for one person, published to the internet, is the failure mode that matters. Every endpoint sits in exactly one tier, and that is also the fact a non-technical reader most needs.</p>
@@ -621,9 +626,12 @@
       <h3>Gap — what is known to be wrong</h3>
       <p>With no target architecture to diff against, gaps attach directly to the baseline. Recording them as entities rather than a footnote means they appear in the same views as everything else, and cannot be quietly dropped when the description is presented.</p>
 
+      <h3>Pillar — the domain a decision answers to</h3>
+      <p>A principle says what rule a design follows; it does not say which non-functional concern the rule is for, so a review could not ask which concerns the estate serves heavily and which barely at all. Six pillars name them: cost, agility, information security, resilience (which carries operability and scale), AI output quality, and control and sovereignty (which carries compliance). It is the <em>characteristics</em> of each pillar that are kept disjoint, not the things mapped to them: every principle, component, provider, data entity, control, node and exposure tier names exactly one primary pillar and any number of secondary ones. An <em>enabler</em> — the monitoring stack, the workflow engine, the AI gateway, the trace store — is recorded as such whether or not anything in the estate uses it yet, with a gap recording the non-adoption; a component that trades one pillar for another, such as a service published on every interface, shows as a secondary edge instead.</p>
+
       <div class="note">
         <span class="tag">Modelling discipline</span>
-        <p>Five invariants are enforced mechanically, not by review. Every <span class="mono">ApplicationService</span> must declare exactly one exposure tier. Every <span class="mono">Capability</span> must be realised by something. Every <span class="mono">Control</span> must both protect an asset and implement a principle. Every <span class="mono">DataEntity</span> marked irreplaceable must reach a store that is actually backed up — the one invariant whose violation destroys the estate, so it is checked rather than assumed. And every component built locally from another project's source must name that source, so the dependency is recorded as data instead of narrated in prose that goes stale.</p>
+        <p>Six invariants are enforced mechanically, not by review. Every <span class="mono">ApplicationService</span> must declare exactly one exposure tier. Every <span class="mono">Capability</span> must be realised by something. Every <span class="mono">Control</span> must both protect an asset and implement a principle. Every <span class="mono">DataEntity</span> marked irreplaceable must reach a store that is actually backed up — the one invariant whose violation destroys the estate, so it is checked rather than assumed. And every component built locally from another project's source must name that source, so the dependency is recorded as data instead of narrated in prose that goes stale. Finally, everything classified by pillar must name exactly one primary pillar, or state why no non-functional domain drives it — the one exemption today is a showcase app kept deliberately.</p>
       </div>
     </div>
   </section>
@@ -635,15 +643,33 @@
       <h2>What the model contains</h2>
       <div class="counts">
         <div><span class="n">3</span><span class="l">Drivers</span></div>
-        <div><span class="n">6</span><span class="l">Principles</span></div>
+        <div><span class="n">7</span><span class="l">Principles</span></div>
+        <div><span class="n">6</span><span class="l">Pillars</span></div>
         <div><span class="n">7</span><span class="l">Capabilities</span></div>
-        <div><span class="n">13</span><span class="l">Components</span></div>
-        <div><span class="n">18</span><span class="l">Services</span></div>
+        <div><span class="n">16</span><span class="l">Components</span></div>
+        <div><span class="n">21</span><span class="l">Services</span></div>
         <div><span class="n">10</span><span class="l">Data entities</span></div>
-        <div><span class="n">8</span><span class="l">Providers</span></div>
-        <div><span class="n">11</span><span class="l">Gaps</span></div>
+        <div><span class="n">9</span><span class="l">Providers</span></div>
+        <div><span class="n">13</span><span class="l">Gaps</span></div>
       </div>
-      <p>Eight external providers beside thirteen components is the ratio worth pausing on, because the estate's real dependency surface is wider than the machine. DNS and edge identity, the private network, the alert channel, the backup store, the registrar, mail forwarding, the config repository and the model APIs are all rented rather than owned. Modelling them as first-class entities makes that surface visible instead of leaving it implicit in configuration files.</p>
+      <p>Nine external providers beside sixteen components is the ratio worth pausing on, because the estate's real dependency surface is wider than the machine. DNS and edge identity, the private network, the alert channel, the backup store, the registrar, mail forwarding, the config repository, the model APIs and the trace store are all rented rather than owned. Modelling them as first-class entities makes that surface visible instead of leaving it implicit in configuration files.</p>
+
+      <h3>The domains the estate answers to</h3>
+      <div class="scroll">
+        <table>
+          <caption>Entities by the pillar they primarily serve, those that also bear on it, and the enablers that make it achievable</caption>
+          <thead><tr><th>Pillar</th><th>Primary</th><th>Also bears on</th><th>Enablers</th><th>Gaps</th><th>Reading</th></tr></thead>
+          <tbody>
+            <tr><td>Resilience</td><td>27</td><td>6</td><td>3</td><td>6</td><td>Backup, restore, monitoring, host access and the single node. The most heavily served domain.</td></tr>
+            <tr><td>Information security</td><td>23</td><td>17</td><td>3</td><td>6</td><td>Every exposure tier, most controls, and most of the recorded trade-offs.</td></tr>
+            <tr><td>Agility</td><td>6</td><td>8</td><td>1</td><td>1</td><td>Rarely the main reason for anything, but the other side of each east-west exception.</td></tr>
+            <tr><td>Control and sovereignty</td><td>4</td><td>16</td><td>2</td><td>1</td><td>Seldom primary but touches everything: the domain, the data, the substitutable providers. The AI gateway and the workflow engine enable it.</td></tr>
+            <tr><td>Cost</td><td>3</td><td>14</td><td>4</td><td>1</td><td>Mostly a constraint on other choices, with one principle of its own: AI spend is tied to value and bounded by a budget. The budget is designed but not switched on, so metered model spend is unbounded today.</td></tr>
+            <tr><td>AI output quality</td><td>1</td><td>1</td><td>5</td><td>1</td><td>The trace and evaluation tool is deployed and in use outside the estate; nothing running on beeblebox uses it yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The skew is the finding. Security and resilience account for about four fifths of what the estate is driven by; cost and control are mostly constraints on those. Quality is the instructive case: five enablers are modelled for it, one of them live, and no component of the estate yet draws on any. One component, a public showcase app, is driven by no pillar at all and says so.</p>
 
       <h3>Information the estate is responsible for</h3>
       <div class="scroll">
@@ -773,12 +799,12 @@
     <div class="col">
         <div class="scroll">
           <table>
-            <caption>The eighteen modelled services, by tier</caption>
+            <caption>The twenty-one modelled services, by tier</caption>
             <thead><tr><th>Tier</th><th>Services</th><th>Authentication</th></tr></thead>
             <tbody>
               <tr><td><span class="tier t-public">Public / Cloudflare</span></td><td>Blog, blog administration</td><td>None / email challenge at the edge, plus a WAF challenge on stray <span class="mono">.php</span> requests</td></tr>
               <tr><td><span class="tier t-funnel">Public / Funnel</span></td><td>Workflow editor and webhooks, tool transport, one demo</td><td>Password, OAuth, none</td></tr>
-              <tr><td><span class="tier t-tailnet">Private network</span></td><td>Admin consoles (host, AI gateway, dashboards, graph database), AI gateway API, local model API, metrics, tool GUI, demos, graph database TLS door</td><td>Device identity, then password or key; the local model API has none</td></tr>
+              <tr><td><span class="tier t-tailnet">Private network</span></td><td>Admin consoles (host, AI gateway, dashboards, graph database), host shell, file and desktop services, AI gateway API, local model API, metrics, tool GUI, demos, graph database TLS door</td><td>Device identity, then password or key; the local model API has none</td></tr>
               <tr><td><span class="tier t-lan">Home network</span></td><td>Per-service diagnostic ports, including a break-glass door to the graph console</td><td>Network position</td></tr>
               <tr><td><span class="tier t-loop">Host-internal</span></td><td>Graph database wire protocol, alert manager, and every application by default</td><td>Unreachable from outside the host</td></tr>
             </tbody>
@@ -811,22 +837,26 @@
     <div class="rail"><b>Register</b><span>Known weaknesses</span></div>
     <div class="col">
       <h2>What is wrong with it</h2>
-      <p>Eleven gaps are recorded. Nine are <em>accepted</em> — understood, with the cost of fixing them currently exceeding the cost of living with them — and two are <em>mitigated</em>, each with its residual risk written down. Recording that judgement is the point.</p>
+      <p>Thirteen gaps are recorded. Ten are <em>accepted</em> — understood, with the cost of fixing them currently exceeding the cost of living with them — two are <em>mitigated</em>, each with its residual risk written down, and one is <em>planned</em>. Recording that judgement is the point.</p>
       <div class="scroll">
         <table>
-          \1
+          <caption>Known gaps, by severity</caption>
+          <thead><tr><th>Severity</th><th>Gap</th><th>Why it stands</th></tr></thead>
+          <tbody>
             <tr><td><span class="sev s-high">High</span></td><td>Single point of failure</td><td>Every workload runs on one machine in one house. Backups make the data survivable; the service is not. Recovery is hours of rebuild.</td></tr>
             <tr><td><span class="sev s-med">Med</span></td><td>Residential connectivity</td><td>Availability is bounded by domestic broadband and household power.</td></tr>
             <tr><td><span class="sev s-med">Med</span></td><td>No secret rotation</td><td>Long-lived provider and storage keys with no rotation schedule.</td></tr>
             <tr><td><span class="sev s-med">Med</span></td><td>Flat east-west traffic</td><td>Any container can reach any endpoint another publishes, so one compromised workload reaches the internal surface of all of them. Traded for not wiring every connection by hand.</td></tr>
             <tr><td><span class="sev s-med">Med</span></td><td>Home directory shared over SMB <em>(mitigated)</em></td><td>One account's password gave read-write access to the master-key file. The share is removed; the remaining shares are still read-write for that one account.</td></tr>
+            <tr><td><span class="sev s-med">Med</span></td><td>AI spend not budgeted or tied to value <em>(planned)</em></td><td>Provider usage is the only metered cost and nothing caps it, so a leaked or runaway key spends until noticed, and no one can say what value a key's spending bought. Caps in the AI gateway are designed but not switched on; the gateway enforces a currency cap, not the token budget the principle prefers.</td></tr>
             <tr><td><span class="sev s-low">Low</span></td><td>Alerting limited <em>(mitigated)</em></td><td>Probes, host resources, failed units and certificates now alert to Slack. Backup age and a whole-host outage are still uncovered, because the alert pipeline runs on the machine it watches.</td></tr>
             <tr><td><span class="sev s-low">Low</span></td><td>AI gateway reachable beyond its intent</td><td>Meant for callers on the host, it also answers on the home and private networks. Every route still needs a key.</td></tr>
             <tr><td><span class="sev s-low">Low</span></td><td>Local model API unauthenticated</td><td>Bound to every interface so the gateway's container can reach it; any home or private-network device can run inference or manage models.</td></tr>
             <tr><td><span class="sev s-low">Low</span></td><td>Edge state is local</td><td>Cloudflare's configuration is code, but its Terraform state is one gitignored file on the laptop and applies are manual.</td></tr>
-            <tr><td><span class="sev s-low">Low</span></td><td>Demo apps published</td><td>One demonstration app is internet-facing. It holds no data, but it is attack surface earning nothing.</td></tr>
+            <tr><td><span class="sev s-low">Low</span></td><td>Demo apps published</td><td>One showcase app is internet-facing, kept deliberately. It holds no data, but no requirement calls for the surface.</td></tr>
+            <tr><td><span class="sev s-low">Low</span></td><td>Estate components not traced or evaluated</td><td>LangSmith is deployed and used by applications outside the estate, but nothing on beeblebox sends it traces and the AI gateway has no callback configured. Whether the estate's own AI parts still give good answers goes unchecked.</td></tr>
             <tr><td><span class="sev s-low">Low</span></td><td>No staging environment</td><td>Changes are validated by deploying to production and checking afterwards.</td></tr>
-          \2
+          </tbody>
         </table>
       </div>
       <p>The first and the alerting gap still compound each other, and that is the honest headline: something now tells the operator when a service, a website or the disk is in trouble, but the alert pipeline lives on the machine it watches. The estate can lose its only server without losing its data, but nothing would say that the whole box had gone quiet.</p>
@@ -840,7 +870,7 @@
       <h2>Why this description should still be true next year</h2>
       <p>Architecture documents rot because nothing contradicts them when they drift. This one is held to the estate by three deliberate choices.</p>
       <p><strong>The model is the source, the document is the view.</strong> Entities and relationships live in version-controlled YAML beside the configuration they describe, in the same repository and the same commits. A change to the estate and a change to its description travel together or the difference is visible in review.</p>
-      <p><strong>Conformance is machine-checked.</strong> A validator enforces referential integrity, relationship typing, and the five invariants. It does not check that the model matches reality — nothing can — but it does refuse the specific decay that makes architecture models useless: dangling references, unclassified endpoints, controls attached to nothing.</p>
+      <p><strong>Conformance is machine-checked.</strong> A validator enforces referential integrity, relationship typing, and the six invariants. It does not check that the model matches reality — nothing can — but it does refuse the specific decay that makes architecture models useless: dangling references, unclassified endpoints, controls attached to nothing.</p>
       <p><strong>The plain-language explanation is part of the model.</strong> Every motivation and business entity carries a stakeholder-facing sentence as a required field, and the validator rejects it if missing. The non-technical narrative is therefore generated from the same rows as the technical one, and cannot drift from it at presentation time.</p>
       <div class="note">
         <span class="tag">Its honest limit</span>
