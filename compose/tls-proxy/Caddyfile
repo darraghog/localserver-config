@@ -16,6 +16,8 @@
 # for why it can't be path-mounted on :8090). See docs/NETWORK-CONFIG.md.
 # :8098 is the GQLDB Manager's dedicated tailnet-only port, root-mounted for the same
 # class of reason — see the :8098 block below.
+# :8099 (people, password) and :8105 (agents, /mcp and /api/agent/* only) are homelab-arch's
+# tailnet-only sites, both root-mounted — see the blocks after :8098.
 # :8103 is Caddy's host-internal metrics site (Prometheus scrape only).
 # New ":PORT {" sites here are picked up by scripts/setup-windows-podman-lan-ports.ps1 on Windows.
 #
@@ -256,6 +258,65 @@
 :8098 {
   bind 127.0.0.1
   reverse_proxy {env.HOST_INTERNAL_IP}:3052
+}
+# Homelab Architecture Manager — people. Tailnet-only, root-mounted on its own port (the app
+# calls absolute /api/... paths, so it cannot be path-mounted on :8090). Mounted at the tailnet
+# leg via: tailscale serve --bg --https=8099 http://127.0.0.1:8099
+# Plain HTTP and loopback-bound like :8092 and :8098: Tailscale terminates TLS in front.
+# The app's approval routes need X-HLA-Approver == HLA_APPROVER_TOKEN. This site adds it, and
+# only AFTER basic_auth (the owner's password; its bcrypt hash, base64-encoded, is
+# HLA_BASIC_AUTH_HASH). Network position cannot tell a person from an agent on the tailnet, so
+# the password is what keeps "agents propose, people approve" true (see
+# compose/homelab-arch/README.md).
+#   - HLA_HUMAN_AUTH=tailnet-trust (exact value) is the owner's documented downgrade: no
+#     password, and then any tailnet device AND any process on this host (this container uses
+#     host networking, so 127.0.0.1:8099 is reachable from every container) can approve. Any
+#     other value keeps the password.
+#   - Agent routes are not served here (404): agents use :8105.
+#   - Never add CORS headers to this site: the app relies on browsers being unable to send its
+#     custom X-HLA-Client header from another site.
+#   - Secrets are {env.*} placeholders, never {$*}: the approver token is resolved at request
+#     time and the password hash when the config is loaded; either way the value stays out of
+#     the adapted config that the admin API returns.
+# No LAN door on purpose: scripts/lib/post-deploy-caddy.sh probes homelab-arch on its backend.
+:8099 {
+  bind 127.0.0.1
+  @hla_agent_paths path /mcp /mcp/* /api/agent /api/agent/*
+  respond @hla_agent_paths 404
+  @hla_password_required expression `{env.HLA_HUMAN_AUTH} != "tailnet-trust"`
+  basic_auth @hla_password_required {
+    owner {env.HLA_BASIC_AUTH_HASH}
+  }
+  reverse_proxy {env.HOST_INTERNAL_IP}:8104 {
+    # The owner's password is for Caddy only; the app never sees it.
+    header_up -Authorization
+    # Replaces any value the client sent.
+    header_up X-HLA-Approver {env.HLA_APPROVER_TOKEN}
+  }
+}
+# Homelab Architecture Manager — agents. Tailnet-only, plain HTTP on loopback. Forwards ONLY the
+# MCP endpoint and the agent REST API; everything else is 404, so nothing reachable here is an
+# approval route. Inbound X-HLA-Approver and X-HLA-Client are stripped; agents authenticate with
+# their own bearer token (AGENT_API_TOKEN), checked by the app. Mounted via:
+#   tailscale serve --bg --https=8105 http://127.0.0.1:8105
+:8105 {
+  bind 127.0.0.1
+  @hla_agent {
+    path /mcp /api/agent/*
+    # The matcher above compares a decoded, CLEANED, case-folded path, but the request goes
+    # upstream as sent: also require the path as sent to be canonical (no "." / ".." / empty
+    # segments, exact case), so nothing but /mcp and /api/agent/... ever reaches the app.
+    expression `{http.request.uri.path}.matches("^(/mcp|/api/agent(/[A-Za-z0-9_-][A-Za-z0-9._~-]*)+)$")`
+  }
+  handle @hla_agent {
+    reverse_proxy {env.HOST_INTERNAL_IP}:8104 {
+      header_up -X-HLA-Approver
+      header_up -X-HLA-Client
+    }
+  }
+  handle {
+    respond 404
+  }
 }
 
 # Prometheus scrape target for Caddy's own metrics. Bound to the host-internal address
