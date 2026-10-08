@@ -261,6 +261,15 @@ Capability:
     maturity: managed
     description: Observe, deploy and repair the estate.
     plain_language: "Day-to-day running: deploying changes, checking health, fixing faults."
+  - id: cap-architecture-knowledge
+    name: Architecture Knowledge and AI Governance
+    maturity: initial
+    description: >
+      Keep an ontology-backed model of the estate's services, data products and AI use cases,
+      assess AI readiness and risk, and govern changes through human-approved proposals.
+    plain_language: >
+      Knowing what the estate is made of and which data is fit for AI, and making sure every
+      change to that picture is approved by a person.
 
 BusinessService:
   - id: bs-blog
@@ -301,6 +310,15 @@ BusinessService:
     criticality: medium
     description: Container and host management surface for the operator.
     plain_language: The control panel used to see what is running and fix it.
+  - id: bs-architecture-knowledge
+    name: Architecture knowledge and change approval
+    criticality: low
+    description: >
+      Views, readiness scores and risk findings over the homelab_arch graph; a build brief for
+      AI agents; a proposal queue that only the owner can approve.
+    plain_language: >
+      A map of the homelab that people can read and AI assistants can ask before they build
+      something, with every change waiting for the owner's approval.
 
 Actor:
   - id: act-operator
@@ -319,6 +337,15 @@ Actor:
     description: Third-party AI platform infrastructure calling published MCP and webhook endpoints.
     plain_language: >
       AI assistants calling in from outside to run an automation or use a tool.
+  - id: act-build-agent
+    name: Building AI agent
+    kind: machine
+    description: >
+      AI coding agents (Claude Code and similar) on the owner's tailnet devices or on this host
+      that read the build brief over MCP or REST and propose changes; they cannot approve.
+    plain_language: >
+      AI assistants that check the map before building something, and suggest updates to it
+      afterwards for the owner to approve.
 
 # ============================================================== APPLICATION ===
 ApplicationComponent:
@@ -444,6 +471,17 @@ ApplicationComponent:
     routing: no-strip
     lifecycle: production
     description: Dashboards over Prometheus. Datasource and dashboards are provisioned from git.
+  - id: ac-homelab-arch
+    name: Homelab Architecture Manager
+    stack: compose/homelab-arch
+    image: locally built
+    source: ~/dev/homelab-arch (vendored by compose/homelab-arch/sync-app.sh)
+    routing: not-path-mounted
+    lifecycle: experimental
+    description: >
+      Web app and agent interface (REST + MCP) over the homelab_arch graph in GQLDB: ontology,
+      views, readiness and risk, and proposals that only a person can approve. Root-mounted on
+      its own tailnet ports because the browser app calls absolute /api paths.
 
   - id: ac-sshd
     name: OpenSSH server
@@ -616,6 +654,33 @@ ApplicationService:
     protocol: https
     auth: basic
     description: Dashboards on the tailnet path router; authenticates callers itself.
+  - id: as-homelab-arch-ui
+    name: Homelab Architecture Manager (people)
+    endpoint: https://beeblebox.taile98462.ts.net:8099/
+    protocol: https
+    auth: basic
+    description: >
+      Browser app and API for the owner. Production runs HLA_HUMAN_AUTH=tailnet-trust (proof
+      of concept, owner decision): Caddy :8099 adds the approver header with no password, so
+      any tailnet device or local process can approve (accepted risk). HLA_HUMAN_AUTH=basic
+      requires the owner's password first (documented in compose/homelab-arch/README.md).
+  - id: as-homelab-arch-mcp
+    name: Homelab Architecture Manager (agents)
+    endpoint: https://beeblebox.taile98462.ts.net:8105/mcp
+    protocol: mcp
+    auth: api-key
+    description: >
+      MCP endpoint and /api/agent/* for AI agents, bearer AGENT_API_TOKEN. Caddy :8105 forwards
+      nothing else (404) and strips the approver headers, so agents cannot approve.
+  - id: as-homelab-arch-internal
+    name: Homelab Architecture Manager (east-west)
+    endpoint: http://127.0.0.1:8104
+    protocol: http
+    auth: none
+    description: >
+      The app port for containers on this host (host.containers.internal:8104). The read API is
+      unauthenticated here (gap-flat-east-west); agent routes need the agent token and approval
+      routes the approver token, which only Caddy :8099 adds.
 
 # ==================================================================== DATA ===
 
@@ -717,6 +782,16 @@ DataEntity:
     classification: internal
     recoverability: recoverable
     description: Fifteen days of scraped metrics. Disposable by design; nothing is lost that matters if it is.
+  - id: de-architecture-proposals
+    name: Architecture change proposals and audit log
+    classification: internal
+    recoverability: irreplaceable
+    description: >
+      Proposed, approved and rejected changes to the homelab_arch graph with their undo log and
+      an append-only audit trail of who decided what.
+    plain_language: >
+      The record of every suggested change to the map and who approved it. It cannot be
+      rebuilt from anywhere else.
 
 DataStore:
   - id: ds-wordpress-db
@@ -786,6 +861,13 @@ DataStore:
     technology: Podman volume
     backup_method: none
     description: Deliberately not backed up - metrics are disposable and rebuilt from the next scrape.
+  - id: ds-homelab-arch-proposals
+    name: homelab-arch proposals database
+    technology: SQLite on Podman volume homelab-arch_proposals-data
+    backup_method: logical-dump
+    description: >
+      Online SQLite backup made inside the container and integrity-checked
+      (compose/homelab-arch/backup.sh), collected by backup.sh; the volume is never file-copied.
 
 # ============================================================== TECHNOLOGY ===
 Node:
@@ -1065,6 +1147,11 @@ Gap:
     description: >
       Long-lived provider keys and a storage account key sit in .env with no rotation
       schedule. A SAS token scoped to the backup container is the identified improvement.
+      homelab-arch adds two more (HLA_APPROVER_TOKEN, AGENT_API_TOKEN, also in .env), and
+      podman-compose passes them to `podman create` as `-e NAME=value` arguments, so they are
+      briefly visible in the host process list and in `podman inspect` to local users of the
+      server (no env_file or secret store is available in this podman-compose version). Local
+      accounts are treated as inside the trust boundary; rotate the tokens if that stops being true.
   - id: gap-public-demo-surface
     name: Demonstration apps published
     severity: low
@@ -1225,6 +1312,7 @@ relationships:
   - { from: cap-administration, name: realised_by, to: ac-grafana }
   - { from: cap-administration, name: realised_by, to: ac-sshd }
   - { from: cap-remote-access,  name: realised_by, to: ac-xrdp }
+  - { from: cap-architecture-knowledge, name: realised_by, to: ac-homelab-arch }
 
   # Business service -> capability, and -> consumer
   - { from: bs-blog,                 name: supports, to: cap-publishing }
@@ -1239,6 +1327,9 @@ relationships:
   - { from: bs-llm-gateway,          name: consumed_by, to: act-operator }
   - { from: bs-administration,       name: consumed_by, to: act-operator }
   - { from: bs-demonstrations,       name: consumed_by, to: act-public-reader }
+  - { from: bs-architecture-knowledge, name: supports,    to: cap-architecture-knowledge }
+  - { from: bs-architecture-knowledge, name: consumed_by, to: act-operator }
+  - { from: bs-architecture-knowledge, name: consumed_by, to: act-build-agent }
 
   # Component -> service
   - { from: ac-wordpress,    name: provides, to: as-blog-public }
@@ -1262,6 +1353,9 @@ relationships:
   - { from: ac-sshd,          name: provides, to: as-ssh }
   - { from: ac-samba,         name: provides, to: as-samba }
   - { from: ac-xrdp,          name: provides, to: as-xrdp }
+  - { from: ac-homelab-arch,  name: provides, to: as-homelab-arch-ui }
+  - { from: ac-homelab-arch,  name: provides, to: as-homelab-arch-mcp }
+  - { from: ac-homelab-arch,  name: provides, to: as-homelab-arch-internal }
 
   # Service -> business service
   - { from: as-blog-public,   name: delivers, to: bs-blog }
@@ -1281,6 +1375,9 @@ relationships:
   - { from: as-grafana,       name: delivers, to: bs-administration }
   - { from: as-ssh,           name: delivers, to: bs-administration }
   - { from: as-xrdp,          name: delivers, to: bs-administration }
+  - { from: as-homelab-arch-ui,       name: delivers, to: bs-architecture-knowledge }
+  - { from: as-homelab-arch-mcp,      name: delivers, to: bs-architecture-knowledge }
+  - { from: as-homelab-arch-internal, name: delivers, to: bs-architecture-knowledge }
 
   # Service -> exposure tier (invariant: exactly one each)
   - { from: as-blog-public,   name: exposed_via, to: et-public-cloudflare }
@@ -1304,6 +1401,9 @@ relationships:
   - { from: as-ssh,           name: exposed_via, to: et-tailnet }
   - { from: as-samba,         name: exposed_via, to: et-tailnet }
   - { from: as-xrdp,          name: exposed_via, to: et-tailnet }
+  - { from: as-homelab-arch-ui,       name: exposed_via, to: et-tailnet }
+  - { from: as-homelab-arch-mcp,      name: exposed_via, to: et-tailnet }
+  - { from: as-homelab-arch-internal, name: exposed_via, to: et-loopback }
 
   # Tier enforcement
   - { from: et-public-cloudflare, name: enforced_by, to: ep-cloudflare }
@@ -1324,6 +1424,8 @@ relationships:
   - { from: ac-prometheus,  name: manages, to: de-monitoring-metrics }
   - { from: ac-alertmanager, name: manages, to: de-monitoring-state }
   - { from: ac-grafana,     name: manages, to: de-monitoring-state }
+  - { from: ac-homelab-arch, name: manages, to: de-architecture-proposals }
+  - { from: ac-homelab-arch, name: manages, to: de-graph-data }
   - { from: de-blog-content,         name: persisted_in, to: ds-wordpress-db }
   - { from: de-media-assets,         name: persisted_in, to: ds-wp-content }
   - { from: de-workflow-definitions, name: persisted_in, to: ds-n8n-db }
@@ -1336,6 +1438,7 @@ relationships:
   - { from: de-monitoring-metrics,   name: persisted_in, to: ds-prometheus-tsdb }
   - { from: de-monitoring-state,     name: persisted_in, to: ds-alertmanager }
   - { from: de-monitoring-state,     name: persisted_in, to: ds-grafana }
+  - { from: de-architecture-proposals, name: persisted_in, to: ds-homelab-arch-proposals }
 
   # Deployment
   - { from: ac-wordpress,   name: deployed_on, to: n-beeblebox }
@@ -1354,6 +1457,7 @@ relationships:
   - { from: ac-sshd,          name: deployed_on, to: n-beeblebox }
   - { from: ac-samba,         name: deployed_on, to: n-beeblebox }
   - { from: ac-xrdp,          name: deployed_on, to: n-beeblebox }
+  - { from: ac-homelab-arch,  name: deployed_on, to: n-beeblebox }
 
   # Dependencies
   - { from: ac-wordpress,   name: depends_on, to: ts-podman }
@@ -1376,6 +1480,10 @@ relationships:
   - { from: ac-alertmanager, name: depends_on, to: ts-podman }
   - { from: ac-alertmanager, name: depends_on, to: ep-slack }
   - { from: ac-grafana,       name: depends_on, to: ts-podman }
+  - { from: ac-homelab-arch,  name: depends_on, to: ts-podman }
+  - { from: ac-homelab-arch,  name: depends_on, to: ts-caddy }
+  - { from: ac-homelab-arch,  name: depends_on, to: ep-tailscale }
+  - { from: ac-homelab-arch,  name: depends_on, to: ac-gqldb }
 
   # Network
   - { from: n-beeblebox, name: connects, to: net-home-lan }
@@ -1393,6 +1501,8 @@ relationships:
   - { from: ctl-tailnet-identity,   name: protects,   to: as-weather-gui }
   - { from: ctl-tailnet-identity,   name: protects,   to: as-prometheus }
   - { from: ctl-tailnet-identity,   name: protects,   to: as-grafana }
+  - { from: ctl-tailnet-identity,   name: protects,   to: as-homelab-arch-ui }
+  - { from: ctl-tailnet-identity,   name: protects,   to: as-homelab-arch-mcp }
   - { from: ctl-tailnet-identity,   name: implements, to: p-tiered-exposure }
   - { from: ctl-rootless,           name: protects,   to: n-beeblebox }
   - { from: ctl-rootless,           name: implements, to: p-rootless }
@@ -1407,11 +1517,13 @@ relationships:
   - { from: ctl-offsite-copy,       name: protects,   to: ds-secrets }
   - { from: ctl-offsite-copy,       name: protects,   to: ds-gqldb }
   - { from: ctl-offsite-copy,       name: protects,   to: ds-manager }
+  - { from: ctl-offsite-copy,       name: protects,   to: ds-homelab-arch-proposals }
   - { from: ctl-offsite-copy,       name: implements, to: p-tested-recovery }
   - { from: ctl-dump-verification,  name: protects,   to: ds-wordpress-db }
   - { from: ctl-dump-verification,  name: protects,   to: ds-n8n-db }
   - { from: ctl-dump-verification,  name: protects,   to: ds-litellm-db }
   - { from: ctl-dump-verification,  name: protects,   to: ds-gqldb }
+  - { from: ctl-dump-verification,  name: protects,   to: ds-homelab-arch-proposals }
   - { from: ctl-dump-verification,  name: implements, to: p-tested-recovery }
   - { from: ctl-restore-rehearsal,  name: protects,   to: de-blog-content }
   - { from: ctl-restore-rehearsal,  name: implements, to: p-tested-recovery }
@@ -1478,6 +1590,9 @@ relationships:
   - { from: ac-alertmanager, name: enables, to: pl-cost }
   - { from: ac-alertmanager, name: enables, to: pl-quality }
   - { from: ac-grafana, name: primarily_serves, to: pl-resilience }
+  - { from: ac-homelab-arch, name: primarily_serves, to: pl-control }
+  - { from: ac-homelab-arch, name: also_serves, to: pl-security }
+  - { from: ac-homelab-arch, name: also_serves, to: pl-agility }
   - { from: ac-grafana, name: enables, to: pl-resilience }
   - { from: ac-grafana, name: enables, to: pl-security }
   - { from: ac-grafana, name: enables, to: pl-cost }
@@ -1556,6 +1671,8 @@ relationships:
   - { from: de-monitoring-state, name: primarily_serves, to: pl-resilience }
   - { from: de-monitoring-metrics, name: primarily_serves, to: pl-resilience }
   - { from: de-monitoring-metrics, name: also_serves, to: pl-cost }
+  - { from: de-architecture-proposals, name: primarily_serves, to: pl-control }
+  - { from: de-architecture-proposals, name: also_serves, to: pl-security }
 
   # Controls
   - { from: ctl-access-gate, name: primarily_serves, to: pl-security }
@@ -1597,6 +1714,7 @@ relationships:
   - { from: gap-no-staging,              name: affects, to: n-beeblebox }
   - { from: gap-flat-east-west,          name: affects, to: ac-weather-mcp }
   - { from: gap-flat-east-west,          name: affects, to: n-beeblebox }
+  - { from: gap-flat-east-west,          name: affects, to: ac-homelab-arch }
   - { from: gap-edge-state-local,        name: affects, to: ep-cloudflare }
   - { from: gap-ollama-reach,            name: affects, to: ac-ollama }
   - { from: gap-smb-home-share,          name: affects, to: n-beeblebox }

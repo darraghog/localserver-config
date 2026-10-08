@@ -163,6 +163,21 @@ for a in "$STAGE"/gqldb/*.gqlbackup.tar.gz; do
 done
 log "  gqldb: $gq_archives graph archive(s) collected"
 
+# homelab-arch: online, integrity-checked SQLite backup of the proposal queue and audit log
+# (compose/homelab-arch/backup.sh). A copy of the live volume would not be a backup.
+# A failure here must be LOUD but must not cost the rest of the estate its backup: it is
+# recorded in HLA_BACKUP_FAILED (no "|| true"), the other dumps and the upload proceed, and
+# the run exits non-zero at the very end so the weekly unit alerts.
+log "  homelab-arch proposals (online SQLite backup)"
+HLA_BACKUP_FAILED=0
+if hla_cid="${HLA_CONTAINER:-$(cid homelab-arch app)}" \
+   && HLA_CONTAINER="$hla_cid" "$REPO_ROOT/compose/homelab-arch/backup.sh" "$STAGE/homelab-arch"; then
+  :
+else
+  HLA_BACKUP_FAILED=1
+  echo "[backup] ERROR: homelab-arch proposals backup FAILED - continuing with the rest; this run will exit non-zero" >&2
+fi
+
 # The console's own embedded store has no dump command of its own, so it is stopped for a
 # cold copy. That honours the same rule as the SQL dumps: what this repo forbids is copying
 # a database directory while it is being written, not file copies as such.
@@ -208,6 +223,11 @@ log "  ok gqldb-manager.tar ($(stat -c %s "$STAGE/gqldb-manager.tar") bytes)"
   ( cd "$STAGE" && [ -d gqldb ] && printf "  %-28s %s\n" "gqldb/" "$(du -sh gqldb | cut -f1)"
     cd "$STAGE" && [ -f gqldb-manager.tar ] && \
       printf "  %-28s %s bytes\n" "gqldb-manager.tar" "$(stat -c %s gqldb-manager.tar)" )
+  if [[ "$HLA_BACKUP_FAILED" -eq 0 && -f "$STAGE/homelab-arch/homelab-arch-proposals.db" ]]; then
+    printf "  %-28s %s bytes\n" "homelab-arch/" "$(stat -c %s "$STAGE/homelab-arch/homelab-arch-proposals.db")"
+  else
+    echo "  homelab-arch/                FAILED - NOT in this backup"
+  fi
 } > "$STAGE/manifest.txt"
 cat "$STAGE/manifest.txt"
 
@@ -228,4 +248,7 @@ log "Applying retention (keep 12 weekly)..."
 log "Checking repository integrity..."
 "$REPO_ROOT/scripts/restic.sh" check
 
+if [[ "$HLA_BACKUP_FAILED" -ne 0 ]]; then
+  fail "homelab-arch proposals backup failed earlier in this run; everything else was uploaded"
+fi
 log "Done."

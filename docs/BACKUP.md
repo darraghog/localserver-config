@@ -20,6 +20,7 @@ weeks.
 | `weather-mcp_oauth-store` | file copy | issued OAuth tokens |
 | GQLDB graphs (`gqldb`) | `BACKUP DATABASE` | the graph store; the server writes and verifies its own per-graph archives while serving |
 | GQLDB Manager store | cold file copy | saved connections + console users; the container is stopped for the copy |
+| homelab-arch proposals (`homelab-arch-proposals.db`) | online SQLite backup + `PRAGMA integrity_check` | the proposal queue and approval audit log; cannot be rebuilt. Restore: `compose/homelab-arch/README.md` → Backup and restore. If this step fails the rest of the backup still runs and uploads, then the run exits non-zero and `manifest.txt` says `homelab-arch/ FAILED` |
 | `.env` | file copy | **see below** |
 | `~/.cloudflared/` | file copy | tunnel credentials + origin cert |
 | `certs/` | file copy | local CA (regenerable, but cheap to keep) |

@@ -33,6 +33,7 @@ scrape_configs:
           - http://host.containers.internal:8080/         # hello-world
           - http://host.containers.internal:8093/         # claude-mock-test
           - http://host.containers.internal:3052/         # gqldb console
+          - http://host.containers.internal:8104/api/health   # homelab-arch (200 also when degraded)
           - https://thelearningcto.com/                   # public blog
           - https://beeblebox.taile98462.ts.net/healthz   # n8n via public Funnel
     relabel_configs: &blackbox_relabel
