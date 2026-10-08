@@ -11,4 +11,5 @@ gqldb
 prometheus
 alertmanager
 grafana
+homelab-arch
 tls-proxy

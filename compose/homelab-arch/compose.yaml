@@ -1,0 +1,64 @@
+# Homelab Architecture Manager — one container serving the browser app, its API and /mcp.
+# Source: ~/dev/homelab-arch, vendored into ./app by sync-app.sh (git archive of one commit;
+# ./app is git-ignored and shipped by deploy-service.sh's rsync). See README.md.
+#
+# East-west: ${HOST_INTERNAL_IP}:8104. Other containers use http://host.containers.internal:8104
+#   (agents: /mcp and /api/agent/* with AGENT_API_TOKEN). Network position is not
+#   authentication (gap-flat-east-west): the read API is open to every container on the host;
+#   proposal writes need the approver token, which only Caddy's :8099 site adds, and saved-view
+#   writes need the app's X-HLA-Client header.
+# North-south, tailnet only: Caddy :8099 (people: basic_auth, then X-HLA-Approver) and :8105
+#   (agents: /mcp and /api/agent/* only), both loopback plain HTTP behind `tailscale serve`.
+#   There is deliberately no LAN :84xx door, so scripts/lib/post-deploy-caddy.sh probes this
+#   stack on its backend (see the homelab-arch case there).
+#
+# Secrets come from .env (envs/<env>.env on the workstation); none has a default here, so a
+# missing one fails the compose run instead of starting an app that cannot work.
+services:
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    ports:
+      - "${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}:8104:8104"
+    volumes:
+      # Proposal queue + audit log (SQLite). A named volume, not a bind: deploy-service.sh
+      # rsyncs with --delete and would wipe a writable bind under this stack directory.
+      - proposals-data:/data
+    environment:
+      GQLDB_ADDRESS: host.containers.internal:60061
+      GQLDB_USER: hla_app
+      GQLDB_GRAPH: homelab_arch
+      GQLDB_PASSWORD: ${HLA_GQLDB_PASSWORD:?HLA_GQLDB_PASSWORD must be set in .env - the scoped GQLDB user hla_app}
+      GQLDB_TIMEOUT_SECONDS: "10"
+      # Never sync at start-up: ontology sync is an owner-approved `podman exec ... sync`.
+      HLA_SKIP_SYNC: "1"
+      # Explicit opt-in to writing the graph (applying approved proposals). Removing this
+      # line makes the deployed app read-only: writes answer 503 "writes switched off".
+      HLA_ALLOW_GRAPH_WRITES: homelab_arch
+      HLA_APPROVER_TOKEN: ${HLA_APPROVER_TOKEN:?HLA_APPROVER_TOKEN must be set in .env - >= 32 chars, >= 16 distinct (docs/deployment.md B1, not plain openssl rand -hex 32)}
+      AGENT_API_TOKEN: ${AGENT_API_TOKEN:?AGENT_API_TOKEN must be set in .env - >= 32 chars, >= 16 distinct (docs/deployment.md B1), different from HLA_APPROVER_TOKEN}
+      # basic (default, fail-closed) or tailnet-trust (production proof of concept, owner
+      # decision); any other value means basic. The same variable drives the :8099 Caddy
+      # site, so both stacks always agree.
+      HLA_HUMAN_AUTH: ${HLA_HUMAN_AUTH:-basic}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    healthcheck:
+      # Liveness only: /api/health answers 200 while the graph is unreachable ("degraded").
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8104/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  proposals-data: {}
