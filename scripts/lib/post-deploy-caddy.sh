@@ -84,6 +84,9 @@ caddy_verify_path_for_stack() {
     # Not "/": that renders the Flask GUI template on every deploy poll. /health
     # is a no-I/O JSON probe and stays answerable without a bearer token.
     weather-mcp) printf '%s' "/health" ;;
+    # 200 even while the graph is unreachable ("degraded"): a liveness probe, like the
+    # container healthcheck. Readiness is checked by the app repo's scripts/verify-deployment.sh.
+    homelab-arch) printf '%s' "/api/health" ;;
     *) printf '%s' "/" ;;
   esac
 }
@@ -132,10 +135,11 @@ verify_deployed_stacks_via_caddy() {
   for s in "$@"; do
     [[ "$s" == "tls-proxy" ]] && continue
     be="$(compose_first_published_host_port "$s" 2>/dev/null)" || continue
-    # Tailnet-only monitoring stacks have no LAN Caddy door (the :8090 router is plain HTTP),
-    # so probe the backend directly rather than an HTTPS front door that does not exist.
+    # Tailnet-only stacks with no LAN Caddy door (the :8090 router and the :8099/:8105
+    # homelab-arch sites are plain HTTP), so probe the backend directly rather than an HTTPS
+    # front door that does not exist.
     case "$s" in
-      prometheus|alertmanager|grafana)
+      prometheus|alertmanager|grafana|homelab-arch)
         if wait_for_stack_backend "$s" "$be"; then
           echo "[post-deploy-caddy] OK $s (backend healthy; tailnet-only, no LAN Caddy door)"
         else
