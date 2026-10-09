@@ -1,0 +1,449 @@
+DataStore:
+- id: ds_alertmanager
+  name: Alertmanager state
+  description: Silences and the notification log; recreated empty if lost, at the cost of re-silencing.
+  technology: Podman volume
+  backup_method: none
+- id: ds_gqldb
+  name: GQLDB graph store
+  description: 'BACKUP DATABASE has the server write its own verified archive while serving; the LSM directory
+    is never file-copied. The archives are written to the gqldb-backups volume, collected by backup.sh
+    into the staging directory, and are not themselves a backup.
+
+    '
+  technology: Ultipa GQLDB 6.2.131 (LSM)
+  backup_method: logical-dump
+- id: ds_grafana
+  name: Grafana state
+  description: 'Grafana''s own database (sessions, users, ad-hoc edits). Datasource and dashboards are
+    provisioned from git, so only changes made in the UI are lost with it.
+
+    '
+  technology: Podman volume
+  backup_method: none
+- id: ds_homelab_arch_proposals
+  name: homelab-arch proposals database
+  description: 'Online SQLite backup made inside the container and integrity-checked (compose/homelab-arch/backup.sh),
+    collected by backup.sh; the volume is never file-copied.
+
+    '
+  technology: SQLite on Podman volume homelab-arch_proposals-data
+  backup_method: logical-dump
+- id: ds_litellm_db
+  name: LiteLLM database
+  description: pg_dump of the LiteLLM database holding virtual keys and spend history.
+  technology: PostgreSQL 16
+  backup_method: logical-dump
+- id: ds_manager
+  name: GQLDB Manager store
+  description: 'The console''s own embedded store. It has no dump command, so the container is stopped
+    for the copy - a cold copy, not a copy of a running database directory.
+
+    '
+  technology: GQLDB embedded via NAPI (LSM), Podman volume
+  backup_method: file-copy
+- id: ds_n8n_data
+  name: n8n instance data
+  description: n8n's instance directory; safe to copy as files since state lives in Postgres.
+  technology: Podman volume
+  backup_method: file-copy
+- id: ds_n8n_db
+  name: n8n database
+  description: pg_dump of the n8n database; credentials inside remain encrypted at rest.
+  technology: PostgreSQL 15
+  backup_method: logical-dump
+- id: ds_oauth_store
+  name: OAuth token store
+  description: Small JSON store of issued tokens.
+  technology: Podman volume
+  backup_method: file-copy
+- id: ds_prometheus_tsdb
+  name: Prometheus TSDB
+  description: Deliberately not backed up - metrics are disposable and rebuilt from the next scrape.
+  technology: Podman volume
+  backup_method: none
+- id: ds_secrets
+  name: Secrets and credentials
+  description: Included in the encrypted snapshot; the reason encryption is load-bearing.
+  technology: Host filesystem (.env, ~/.cloudflared, certs/)
+  backup_method: file-copy
+- id: ds_wordpress_db
+  name: WordPress database
+  description: mariadb-dump --single-transaction, so the blog keeps serving during backup.
+  technology: MariaDB 11.8
+  backup_method: logical-dump
+- id: ds_wp_content
+  name: WordPress site tree
+  description: The whole /var/www/html including wp-config.php, not merely uploads.
+  technology: Podman volume
+  backup_method: file-copy
+Node:
+- id: n_beeblebox
+  name: beeblebox
+  description: 'Sole server. Runs every application component, including the host services SSH, Samba
+    and xrdp (ac-sshd, ac-samba, ac-xrdp). Also runs CUPS (loopback :631), which is neither critical nor
+    reachable from outside the host and so is not modelled.
+
+    '
+  location: home
+  spec: Ubuntu 26.04, 12 cores, 30 GB RAM, 1.1 TB NVMe
+- id: n_laptop
+  name: darragh-laptop
+  description: Development and deployment workstation; runs no production workload.
+  location: home
+  spec: Windows + WSL2, Podman
+- id: n_mobile
+  name: Mobile devices
+  description: Tailnet members providing operator access away from home.
+  location: mobile
+  spec: iOS
+TechnologyService:
+- id: ts_caddy
+  name: Reverse proxy and TLS termination
+  description: 'Single ingress point; every tier''s routing rules are expressed here. Also serves its
+    own /metrics on host-internal :8103, and Prometheus, Alertmanager and Grafana expose theirs on :8101
+    and :8102, none reachable from the LAN or tailnet.
+
+    '
+  product: Caddy (host network)
+- id: ts_cloudflared
+  name: Outbound tunnel connector
+  description: Dials out to Cloudflare so the blog is public with no inbound port.
+  product: cloudflared
+- id: ts_podman
+  name: Container runtime
+  description: Runs every application component as an unprivileged user.
+  product: Podman 5.7.0 (rootless) + podman-compose
+- id: ts_restic
+  name: Backup engine
+  description: Client-side encrypted, deduplicating, weekly with 12-week retention.
+  product: restic 0.19.1 (containerised)
+- id: ts_systemd
+  name: Service lifecycle and scheduling
+  description: 'Starts stacks at boot without login, drives the weekly backup timer, and runs the unit-metrics
+    timer whose textfile metric feeds the SystemdUserUnitFailed alerts.
+
+    '
+  product: systemd user units with loginctl linger
+- id: ts_tailscale
+  name: Mesh VPN and public funnel
+  description: Provides private device-identity reachability and the public *.ts.net ingress.
+  product: Tailscale
+Network:
+- id: net_container
+  name: Container network
+  description: 'The podman bridge networks and the host-internal address they reach. Membership is being
+    a workload on beeblebox; there is no boundary between members.
+
+    '
+  trust: trusted
+- id: net_home_lan
+  name: Home LAN
+  description: 192.168.86.0/24 behind Google Wi-Fi and a bridged Verizon FIOS router.
+  trust: trusted
+- id: net_internet
+  name: Public internet
+  description: Anonymous callers; the zone the public tiers are addressable from.
+  trust: untrusted
+- id: net_tailnet
+  name: Tailnet
+  description: WireGuard mesh; membership is identity, so reachability implies authentication.
+  trust: authenticated
+ExternalProvider:
+- id: ep_amazon_registrar
+  name: Amazon Registrar
+  description: Registrar of record; delegates DNS to Cloudflare nameservers.
+  function: Domain registration for thelearningcto.com
+  cost: ~annual domain fee
+  lock_in: low
+- id: ep_azure_blob
+  name: Azure Blob Storage
+  description: restic abstracts the backend; substituting for S3 is a configuration change.
+  function: Off-site encrypted backup repository
+  cost: pennies/month (Cool tier)
+  lock_in: low
+- id: ep_cloudflare
+  name: Cloudflare
+  description: 'Holds the domain''s DNS and fronts the blog. Substitutable, but doing so means re-establishing
+    DNS, tunnel and the admin identity gate together.
+
+    '
+  function: Authoritative DNS, tunnel ingress, edge TLS, Access identity gating
+  cost: free tier
+  lock_in: medium
+- id: ep_github
+  name: GitHub
+  description: Remote of the localserver-config repository that defines the estate.
+  function: Configuration source of truth
+  cost: free tier
+  lock_in: low
+- id: ep_improvmx
+  name: ImprovMX
+  description: Forwards mail addressed to the domain; depends on MX records surviving DNS changes.
+  function: Inbound email forwarding for the domain
+  cost: free tier
+  lock_in: low
+- id: ep_langsmith
+  name: LangSmith
+  description: 'Operator''s account, in use today by Python applications running outside the estate (the
+    development workstation), which send traces to it. No component deployed on beeblebox uses it yet
+    (gap-ai-evals-not-adopted). Reaching it from a container is outbound HTTPS only, so p-no-inbound is
+    unaffected, and it is the same path litellm already uses to reach the model providers; the repo records
+    no egress filtering. What it does change: prompts and outputs leave the estate for a third party,
+    so what a workflow or app sends is a data-custody decision (pl-control), and each tracing client needs
+    its own API key in .env. LiteLLM has a LangSmith callback, which would make the gateway the single
+    egress point and the single key for every caller using it.
+
+    '
+  function: Trace capture and automated evaluation (build time and runtime) for LLM applications
+  cost: per account plan; tier not recorded
+  lock_in: low
+- id: ep_model_providers
+  name: Model providers
+  description: 'Upstream model APIs; the only metered cost in the estate. Reached only through LiteLLM,
+    across three providers, which is what keeps substitution cheap and lock-in low.
+
+    '
+  function: OpenAI, Anthropic and Google inference APIs consumed via LiteLLM
+  cost: metered usage
+  lock_in: low
+- id: ep_slack
+  name: Slack
+  description: 'Outbound-only HTTPS from Alertmanager. Substitutable by any notifier Alertmanager supports;
+    the bot token is the one secret involved.
+
+    '
+  function: Alert delivery to
+  cost: free tier
+  lock_in: low
+- id: ep_tailscale
+  name: Tailscale
+  description: Carries both the private tier and the machine-facing public tier.
+  function: Mesh VPN, private service reachability, public Funnel ingress
+  cost: free tier
+  lock_in: medium
+Artifact:
+- id: art_ps_check_ports
+  name: Port checks
+  description: Asserts expected TCP listeners; core-only is 8080 and 5678
+  kind: pipeline_stage
+  location: localserver-config
+- id: art_ps_check_tls
+  name: TLS diagnostic
+  description: Runs for prod only, when certs/server.pem exists on the target
+  kind: pipeline_stage
+  location: localserver-config
+- id: art_ps_ci_github
+  name: GitHub Actions CI
+  description: Runs generate, harness, JSON syntax and secret scan on push and pull request
+  kind: pipeline_stage
+  location: n8n-workflow
+- id: art_ps_eval_cases
+  name: Validate eval cases
+  description: Parse check on the eval corpus
+  kind: pipeline_stage
+  location: n8n-workflow
+- id: art_ps_evals
+  name: Eval run
+  description: Runs the eval corpus against the token-authenticated webhook
+  kind: pipeline_stage
+  location: n8n-workflow
+- id: art_ps_generate
+  name: Generate workflows
+  description: Regenerates core, form and eval workflow JSON from a single generator
+  kind: pipeline_stage
+  location: n8n-workflow
+- id: art_ps_harness
+  name: Workflow harness
+  description: Structural and dataflow assertions over the workflow JSON
+  kind: pipeline_stage
+  location: n8n-workflow
+- id: art_ps_import_activate
+  name: Import and activate
+  description: Imports workflow JSON via the n8n REST API and activates it
+  kind: pipeline_stage
+  location: n8n-workflow
+- id: art_ps_infra_deploy
+  name: Infra deploy
+  description: Syncs the host repo, regenerates TLS and brings up the compose stacks
+  kind: pipeline_stage
+  location: localserver-config
+- id: art_ps_json_syntax
+  name: Workflow JSON syntax
+  description: Parse check on every workflow export
+  kind: pipeline_stage
+  location: n8n-workflow
+- id: art_ps_package
+  name: Package release
+  description: Builds the release bundle and manifest with a release id
+  kind: pipeline_stage
+  location: n8n-workflow
+- id: art_ps_rollback
+  name: Rollback
+  description: Re-imports and reactivates a prior known-good release
+  kind: pipeline_stage
+  location: n8n-workflow
+- id: art_ps_rsync_bundle
+  name: Sync release bundle
+  description: Places the packaged release on the target host
+  kind: pipeline_stage
+  location: n8n-workflow
+- id: art_ps_secret_scan
+  name: Secret scan
+  description: Rejects secrets committed in workflow JSON or repo files
+  kind: pipeline_stage
+  location: n8n-workflow
+- id: art_ps_smoke_health
+  name: Service smoke
+  description: Checks the n8n /healthz endpoint on the target
+  kind: pipeline_stage
+  location: n8n-workflow
+- id: art_ps_webhook_smoke
+  name: Webhook smoke
+  description: Warn-only in dev; required in test and prod
+  kind: pipeline_stage
+  location: n8n-workflow
+- id: art_repo_knowledgebase
+  name: knowledgebase
+  description: Private knowledge store; contents not inspected for this extract
+  kind: repository
+  location: https://github.com/darraghog/knowledgebase
+- id: art_repo_localserver_config
+  name: localserver-config
+  description: 'Podman host configuration: compose stacks, Caddy TLS proxy, systemd units, deploy scripts'
+  kind: repository
+  location: https://github.com/darraghog/localserver-config
+- id: art_repo_n8n_workflow
+  name: n8n-workflow
+  description: 'Managed AI-enabled workflows prototype: workflow JSON, field contract, release pipeline'
+  kind: repository
+  location: https://github.com/darraghog/n8n-workflow
+ExposureTier:
+- id: et_lan
+  name: Home LAN only
+  description: Break-glass access path; not the designed route for any service.
+  reachable_from: Devices on the home network
+  enforced_by: Caddy listeners bound to the LAN with a private CA
+- id: et_loopback
+  name: Host internal only
+  description: 'Where every application actually listens. Reaching it requires already being on beeblebox
+    — as the host, or as a workload it is running.
+
+    '
+  reachable_from: beeblebox itself, and any container running on it
+  enforced_by: Bind to a host-internal address that is neither LAN- nor tailnet-routable
+- id: et_public_cloudflare
+  name: Public via Cloudflare
+  description: Custom-domain public tier. The only tier serving thelearningcto.com.
+  reachable_from: The entire internet
+  enforced_by: Cloudflare edge; admin paths additionally gated by Access
+- id: et_public_funnel
+  name: Public via Tailscale Funnel
+  description: 'Public tier for machine callers. Cannot serve a custom domain, which is precisely why
+    the blog needed Cloudflare instead.
+
+    '
+  reachable_from: The entire internet
+  enforced_by: Tailscale Funnel on the *.ts.net hostname
+- id: et_tailnet
+  name: Tailnet only
+  description: Default tier for anything with an admin surface or unauthenticated routes.
+  reachable_from: Devices enrolled in the tailnet
+  enforced_by: Tailscale device identity
+relationships:
+- from: art_ps_check_ports
+  name: precedes
+  to: art_ps_check_tls
+- from: art_ps_eval_cases
+  name: precedes
+  to: art_ps_package
+- from: art_ps_generate
+  name: precedes
+  to: art_ps_harness
+- from: art_ps_harness
+  name: precedes
+  to: art_ps_json_syntax
+- from: art_ps_import_activate
+  name: precedes
+  to: art_ps_webhook_smoke
+- from: art_ps_infra_deploy
+  name: precedes
+  to: art_ps_check_ports
+- from: art_ps_infra_deploy
+  name: precedes
+  to: art_ps_rsync_bundle
+- from: art_ps_json_syntax
+  name: precedes
+  to: art_ps_secret_scan
+- from: art_ps_package
+  name: precedes
+  to: art_ps_infra_deploy
+- from: art_ps_rsync_bundle
+  name: precedes
+  to: art_ps_smoke_health
+- from: art_ps_secret_scan
+  name: precedes
+  to: art_ps_eval_cases
+- from: art_ps_smoke_health
+  name: precedes
+  to: art_ps_import_activate
+- from: art_ps_webhook_smoke
+  name: precedes
+  to: art_ps_evals
+- from: et_lan
+  name: enforced_by
+  to: ts_caddy
+- from: et_lan
+  name: trust_zone
+  to: net_home_lan
+- from: et_loopback
+  name: enforced_by
+  to: ts_podman
+- from: et_loopback
+  name: trust_zone
+  to: net_container
+- from: et_public_cloudflare
+  name: enforced_by
+  to: ep_cloudflare
+- from: et_public_cloudflare
+  name: enforced_by
+  to: ts_cloudflared
+- from: et_public_cloudflare
+  name: trust_zone
+  to: net_internet
+- from: et_public_funnel
+  name: enforced_by
+  to: ep_tailscale
+- from: et_public_funnel
+  name: trust_zone
+  to: net_internet
+- from: et_tailnet
+  name: enforced_by
+  to: ts_tailscale
+- from: et_tailnet
+  name: trust_zone
+  to: net_tailnet
+- from: n_beeblebox
+  name: connects
+  to: net_home_lan
+- from: n_beeblebox
+  name: connects
+  to: net_tailnet
+- from: n_laptop
+  name: connects
+  to: net_home_lan
+- from: n_laptop
+  name: connects
+  to: net_tailnet
+- from: n_mobile
+  name: connects
+  to: net_tailnet
+- from: ts_cloudflared
+  name: depends_on
+  to: ep_cloudflare
+- from: ts_restic
+  name: depends_on
+  to: ep_azure_blob
+- from: ts_tailscale
+  name: depends_on
+  to: ep_tailscale

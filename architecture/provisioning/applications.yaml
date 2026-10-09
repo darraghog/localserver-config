@@ -1,0 +1,616 @@
+ApplicationComponent:
+- id: ac_alertmanager
+  name: Alertmanager
+  description: Groups Prometheus alerts and delivers them to Slack
+  stack: compose/alertmanager
+  image: prom/alertmanager:v0.28.1
+  routing: not-path-mounted
+- id: ac_claudemock
+  name: Claude mock test
+  description: Static practice-exam application; state held entirely in the browser.
+  stack: compose/claude-mock-test
+  image: locally built
+  source: ~/dev/claude/mock-test (vendored by compose/claude-mock-test/sync-site.sh)
+  routing: strip
+- id: ac_cockpit
+  name: Cockpit
+  description: 'Web administration console for the host and its containers. A system service whose cockpit.socket
+    Caddy reaches at 127.0.0.1:9090. scripts/sudo/setup-cockpit.sh binds the socket to loopback with a
+    systemd drop-in (applied and verified 2026-10-06; the packaged default is all interfaces), so Cockpit''s
+    own login is reachable only through Caddy.
+
+    '
+  stack: (host package, not containerised)
+  image: distribution package
+  routing: no-strip
+- id: ac_gqldb
+  name: Ultipa GQLDB
+  description: 'GQL graph database plus its web console, as two containers in one pod. The database speaks
+    raw gRPC and is never path-mounted; the console is a normal HTTPS site.
+
+    '
+  stack: compose/gqldb
+  image: locally built
+  source: 'Two pinned upstream artifacts, neither of which this repo builds from source: the ultipa-gqldb
+    6.2.131 server binary from download.ultipa.com (sha256-pinned) and the GQLDB Manager 1.0.99 .deb (vendor-supplied;
+    the upstream GitHub repo is private). scripts/check-updates.py cannot see either pin - both are recorded
+    in compose/gqldb/README.md and reviewed by hand.
+
+    '
+  routing: not-path-mounted
+- id: ac_grafana
+  name: Grafana
+  description: Dashboards over Prometheus. Datasource and dashboards are provisioned from git.
+  stack: compose/grafana
+  image: grafana/grafana:12.1.0
+  routing: no-strip
+- id: ac_helloworld
+  name: Hello world
+  description: 'Smoke-test endpoint used by deployment health checks. Intentional east-west exception
+    (p-open-east-west): publishes 8080 on 0.0.0.0, so it answers raw on the LAN and tailnet.
+
+    '
+  stack: compose/hello-world
+  image: nginx:alpine
+  source: in-repo
+  routing: strip
+- id: ac_homelab_arch
+  name: Homelab Architecture Manager
+  description: 'Web app and agent interface (REST + MCP) over the homelab_arch graph in GQLDB: ontology,
+    views, readiness and risk, and proposals that only a person can approve. Root-mounted on its own tailnet
+    ports because the browser app calls absolute /api paths.
+
+    '
+  stack: compose/homelab-arch
+  image: locally built
+  source: ~/dev/homelab-arch (vendored by compose/homelab-arch/sync-app.sh)
+  routing: not-path-mounted
+- id: ac_litellm
+  name: LiteLLM
+  description: Multi-provider LLM proxy with key management and spend tracking.
+  stack: compose/litellm
+  image: ghcr.io/berriai/litellm:main-stable + postgres:16-alpine
+  routing: no-strip
+- id: ac_n8n
+  name: n8n
+  description: 'Workflow automation engine; publishes webhook and MCP trigger endpoints. Intentional east-west
+    exception (p-open-east-west): publishes 5678 on 0.0.0.0 rather than the host-internal address, so
+    the raw editor also answers on the LAN and tailnet beside the Funnel and the Caddy door. Basic auth
+    still applies.
+
+    '
+  stack: compose/n8n
+  image: n8nio/n8n:2.33.7 + postgres:15-alpine
+  routing: not-path-mounted
+- id: ac_ollama
+  name: Ollama
+  description: 'Local model server behind the LLM gateway, listening on 0.0.0.0:11434 (OLLAMA_HOST in
+    the unit). Intentional east-west exception (p-open-east-west): litellm''s container cannot reach a
+    loopback-only listener, so it binds all interfaces. Models are read from the Samba Models share by
+    the laptop''s own Ollama.
+
+    '
+  stack: (host package, not containerised)
+  image: ollama 0.35.0 (system service)
+  routing: not-path-mounted
+- id: ac_prometheus
+  name: Prometheus
+  description: 'Metrics store, rule evaluator and probe scheduler. Scrapes metric endpoints where an application
+    already exposes them and blackbox-probes the rest; changes no application.
+
+    '
+  stack: compose/prometheus
+  image: prom/prometheus:v3.5.0 + prom/blackbox-exporter:v0.27.0 + prom/node-exporter:v1.9.1
+  routing: no-strip
+- id: ac_samba
+  name: Samba
+  description: 'File sharing on :139/:445, listening on every interface, password-only with no guest access.
+    Shares /mnt/windows and its models and games subfolders; the laptop''s own Ollama reads models from
+    the Models share. The remaining shares are read-write for one account (gap-smb-home-share).
+
+    '
+  stack: (host package, not containerised)
+  image: distribution package
+  routing: not-path-mounted
+- id: ac_sshd
+  name: OpenSSH server
+  description: 'Remote shell on :22, listening on every interface. The deploy path (rsync and ssh from
+    the laptop) and the operator''s way in when Cockpit is not enough, so a host with no working sshd
+    can only be repaired at the keyboard.
+
+    '
+  stack: (host package, not containerised)
+  image: distribution package
+  routing: not-path-mounted
+- id: ac_tictactoe
+  name: Tic-tac-toe
+  description: Reference app proving path-based routing with a relative API base.
+  stack: compose/tic-tac-toe
+  image: locally built
+  source: in-repo
+  routing: strip
+- id: ac_weather_mcp
+  name: Weather MCP server
+  description: MCP tool server with an OAuth-protected public transport and a private GUI.
+  stack: compose/weather-mcp
+  image: locally built
+  source: ~/dev/claude/weather (vendored by compose/weather-mcp/sync-app.sh)
+  routing: strip
+- id: ac_wordpress
+  name: WordPress
+  description: Blog platform migrated off WordPress.com, serving thelearningcto.com.
+  stack: compose/wordpress
+  image: wordpress:7.1-php8.3-apache + mariadb:11.8
+  routing: not-path-mounted
+- id: ac_xrdp
+  name: xrdp
+  description: Remote desktop on :3389, listening on every interface.
+  stack: (host package, not containerised)
+  image: distribution package
+  routing: not-path-mounted
+ApplicationService:
+- id: as_alertmanager
+  name: Alertmanager API
+  description: 'Host-internal only; Prometheus is its only caller. No Caddy route, so it is not reachable
+    from the LAN or tailnet. Unauthenticated east-west like every published endpoint.
+
+    '
+  endpoint: http://127.0.0.1:8101
+  protocol: http
+  auth: none
+- id: as_blog_admin
+  name: Blog administration
+  description: WordPress admin, gated by Cloudflare Access before reaching the origin.
+  endpoint: https://thelearningcto.com/wp-admin
+  protocol: https
+  auth: edge-identity
+- id: as_blog_public
+  name: Blog (public web)
+  description: Public read access to blog content.
+  endpoint: https://thelearningcto.com
+  protocol: https
+  auth: none
+- id: as_claudemock
+  name: Claude mock test (public)
+  description: Published deliberately; holds no data and makes no outbound calls.
+  endpoint: https://beeblebox.taile98462.ts.net/claudemock
+  protocol: https
+  auth: none
+- id: as_cockpit
+  name: Cockpit console
+  description: Host administration console, reachable only over the tailnet.
+  endpoint: https://beeblebox.taile98462.ts.net:8090/cockpit/
+  protocol: https
+  auth: basic
+- id: as_demos_private
+  name: Demonstration apps (private)
+  description: Demo apps on the tailnet path router.
+  endpoint: https://beeblebox.taile98462.ts.net:8090/{tictactoe,helloworld}
+  protocol: https
+  auth: network-identity
+- id: as_gqldb
+  name: GQLDB gRPC endpoint
+  description: 'The database wire protocol: RBAC login returns a session id carried in gRPC metadata.
+    Deliberately unpublished beyond the host - its only caller is the console beside it. Outside callers
+    use as-gqldb-tls instead.
+
+    '
+  endpoint: grpc://127.0.0.1:60061
+  protocol: grpc
+  auth: basic
+- id: as_gqldb_manager
+  name: GQLDB Manager console
+  description: 'Web console for the graph database - browsing graphs, running GQL, managing users. Given
+    its own entry rather than folded into as-lan-consoles because it authenticates callers itself rather
+    than relying on the network it is reachable from. On a dedicated port rather than the :8090 path router
+    because its client fetches an absolute /assets/... bundle and the server has no base-path setting,
+    so no prefix mount can work; the router''s index page links here instead. The LAN door on :8450 is
+    the break-glass path covered by as-lan-consoles.
+
+    '
+  endpoint: https://beeblebox.taile98462.ts.net:8098/
+  protocol: https
+  auth: basic
+- id: as_gqldb_tls
+  name: GQLDB gRPC endpoint (TLS door)
+  description: 'The same wire protocol behind a Caddy listener that terminates TLS (private CA) and speaks
+    h2c to the database, for gqldb-cli and apps outside the host. Bound 0.0.0.0 like every :84xx door,
+    so it answers on the LAN and on the tailnet IP (verified 2026-09-30 for :8450). The metamodel allows
+    one tier per endpoint, so the wider one (tailnet) is recorded; LAN reach is a side effect of the bind,
+    not a separate route. RBAC login is the only credential. The certificate must carry whatever name
+    the client dials - the short name is already a SAN, the ts.net FQDN is not unless added via DEPLOY_CERT_EXTRA_SANS.
+
+    '
+  endpoint: grpcs://beeblebox:8451
+  protocol: grpc
+  auth: basic
+- id: as_grafana
+  name: Grafana
+  description: Dashboards on the tailnet path router; authenticates callers itself.
+  endpoint: https://beeblebox.taile98462.ts.net:8090/grafana/
+  protocol: https
+  auth: basic
+- id: as_homelab_arch_internal
+  name: Homelab Architecture Manager (east-west)
+  description: 'The app port for containers on this host (host.containers.internal:8104). The read API
+    is unauthenticated here (gap-flat-east-west); agent routes need the agent token and approval routes
+    the approver token, which only Caddy :8099 adds.
+
+    '
+  endpoint: http://127.0.0.1:8104
+  protocol: http
+  auth: none
+- id: as_homelab_arch_mcp
+  name: Homelab Architecture Manager (agents)
+  description: 'MCP endpoint and /api/agent/* for AI agents, bearer AGENT_API_TOKEN. Caddy :8105 forwards
+    nothing else (404) and strips the approver headers, so agents cannot approve.
+
+    '
+  endpoint: https://beeblebox.taile98462.ts.net:8105/mcp
+  protocol: mcp
+  auth: api-key
+- id: as_homelab_arch_ui
+  name: Homelab Architecture Manager (people)
+  description: 'Browser app and API for the owner. Production runs HLA_HUMAN_AUTH=tailnet-trust (proof
+    of concept, owner decision): Caddy :8099 adds the approver header with no password, so any tailnet
+    device or local process can approve (accepted risk). HLA_HUMAN_AUTH=basic requires the owner''s password
+    first (documented in compose/homelab-arch/README.md).
+
+    '
+  endpoint: https://beeblebox.taile98462.ts.net:8099/
+  protocol: https
+  auth: basic
+- id: as_lan_consoles
+  name: LAN service endpoints
+  description: 'Direct per-service HTTPS ports on the home LAN, using a private CA. Includes the GQLDB
+    console''s :8450 break-glass door; its designed route is the tailnet port in as-gqldb-manager.
+
+    '
+  endpoint: https://beeblebox:8443-8450, :9443
+  protocol: https
+  auth: network-identity
+- id: as_litellm_api
+  name: LiteLLM OpenAI-compatible API
+  description: The gateway proper — /v1/chat/completions and the rest — authenticated by the master key
+    or a virtual key, not by the console's login. Intended for east-west use by components on beeblebox
+    (http://127.0.0.1:4000/litellm/v1); it answers more widely than that today, which gap-litellm-api-reach
+    records. Any route that later needs internet exposure for an integration gets its own service entry
+    and its own tier.
+  endpoint: https://beeblebox.taile98462.ts.net:8090/litellm/v1
+  protocol: https
+  auth: api-key
+- id: as_litellm_ui
+  name: LiteLLM admin console
+  description: Operator console for keys, models and spend — an administrative surface, not the gateway
+    itself, which is why it delivers administration rather than the LLM gateway. Path-mounted on the tailnet
+    router via SERVER_ROOT_PATH; the dedicated :8092 port is retained as a fallback until the mount has
+    proven itself.
+  endpoint: https://beeblebox.taile98462.ts.net:8090/litellm/ui/
+  protocol: https
+  auth: basic
+- id: as_n8n_editor
+  name: n8n editor and webhooks
+  description: Workflow editor plus registered webhook and MCP trigger URLs, root-mounted on :443.
+  endpoint: https://beeblebox.taile98462.ts.net/
+  protocol: https
+  auth: basic
+- id: as_ollama
+  name: Ollama API
+  description: 'Ollama''s native API, unauthenticated, bound 0.0.0.0 so it answers on the LAN and on the
+    tailnet IP; the wider of the two (tailnet) is recorded. Its caller is litellm; gap-ollama-reach records
+    that anyone on either network can also call it.
+
+    '
+  endpoint: http://beeblebox:11434
+  protocol: http
+  auth: none
+- id: as_prometheus
+  name: Prometheus UI and API
+  description: Query UI and API on the tailnet path router. Also answers east-west on the host-internal
+    port.
+  endpoint: https://beeblebox.taile98462.ts.net:8090/prometheus/
+  protocol: https
+  auth: network-identity
+- id: as_samba
+  name: SMB file shares
+  description: 'Password-only shares, no guest. Answers on the LAN as well as the tailnet.
+
+    '
+  endpoint: smb://beeblebox (:139, :445)
+  protocol: smb
+  auth: basic
+- id: as_ssh
+  name: SSH
+  description: 'Operator shell and deploy transport. Answers on the LAN as well as the tailnet; tiered
+    with the other every-interface host services (compare as-ollama).
+
+    '
+  endpoint: ssh://beeblebox:22
+  protocol: ssh
+  auth: ssh-key
+- id: as_weather_gui
+  name: Weather GUI
+  description: Unauthenticated GUI, kept private precisely because it is unauthenticated.
+  endpoint: https://beeblebox.taile98462.ts.net:8090/weather
+  protocol: https
+  auth: network-identity
+- id: as_weather_mcp
+  name: Weather MCP transport
+  description: Publicly reachable MCP endpoint; only the authenticated transport paths are published.
+  endpoint: https://beeblebox.taile98462.ts.net/weather
+  protocol: mcp
+  auth: oauth
+- id: as_xrdp
+  name: Remote desktop
+  description: Desktop login with a host account. Answers on the LAN as well as the tailnet.
+  endpoint: rdp://beeblebox:3389
+  protocol: rdp
+  auth: basic
+relationships:
+- from: ac_alertmanager
+  name: depends_on
+  to: ep_slack
+- from: ac_alertmanager
+  name: depends_on
+  to: ts_podman
+- from: ac_alertmanager
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_alertmanager
+  name: provides
+  to: as_alertmanager
+- from: ac_claudemock
+  name: depends_on
+  to: ts_podman
+- from: ac_claudemock
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_claudemock
+  name: provides
+  to: as_claudemock
+- from: ac_cockpit
+  name: depends_on
+  to: ts_caddy
+- from: ac_cockpit
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_cockpit
+  name: provides
+  to: as_cockpit
+- from: ac_gqldb
+  name: depends_on
+  to: ts_podman
+- from: ac_gqldb
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_gqldb
+  name: provides
+  to: as_gqldb
+- from: ac_gqldb
+  name: provides
+  to: as_gqldb_manager
+- from: ac_gqldb
+  name: provides
+  to: as_gqldb_tls
+- from: ac_grafana
+  name: depends_on
+  to: ts_podman
+- from: ac_grafana
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_grafana
+  name: provides
+  to: as_grafana
+- from: ac_helloworld
+  name: depends_on
+  to: ts_podman
+- from: ac_helloworld
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_helloworld
+  name: provides
+  to: as_demos_private
+- from: ac_homelab_arch
+  name: depends_on
+  to: ac_gqldb
+- from: ac_homelab_arch
+  name: depends_on
+  to: ep_tailscale
+- from: ac_homelab_arch
+  name: depends_on
+  to: ts_caddy
+- from: ac_homelab_arch
+  name: depends_on
+  to: ts_podman
+- from: ac_homelab_arch
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_homelab_arch
+  name: provides
+  to: as_homelab_arch_internal
+- from: ac_homelab_arch
+  name: provides
+  to: as_homelab_arch_mcp
+- from: ac_homelab_arch
+  name: provides
+  to: as_homelab_arch_ui
+- from: ac_litellm
+  name: depends_on
+  to: ac_ollama
+- from: ac_litellm
+  name: depends_on
+  to: ep_model_providers
+- from: ac_litellm
+  name: depends_on
+  to: ts_podman
+- from: ac_litellm
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_litellm
+  name: provides
+  to: as_litellm_api
+- from: ac_litellm
+  name: provides
+  to: as_litellm_ui
+- from: ac_n8n
+  name: depends_on
+  to: ep_tailscale
+- from: ac_n8n
+  name: depends_on
+  to: ts_podman
+- from: ac_n8n
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_n8n
+  name: provides
+  to: as_n8n_editor
+- from: ac_ollama
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_ollama
+  name: provides
+  to: as_ollama
+- from: ac_prometheus
+  name: depends_on
+  to: ts_caddy
+- from: ac_prometheus
+  name: depends_on
+  to: ts_podman
+- from: ac_prometheus
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_prometheus
+  name: provides
+  to: as_prometheus
+- from: ac_samba
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_samba
+  name: provides
+  to: as_samba
+- from: ac_sshd
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_sshd
+  name: provides
+  to: as_ssh
+- from: ac_tictactoe
+  name: depends_on
+  to: ts_podman
+- from: ac_tictactoe
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_tictactoe
+  name: provides
+  to: as_demos_private
+- from: ac_weather_mcp
+  name: depends_on
+  to: ep_tailscale
+- from: ac_weather_mcp
+  name: depends_on
+  to: ts_podman
+- from: ac_weather_mcp
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_weather_mcp
+  name: provides
+  to: as_weather_gui
+- from: ac_weather_mcp
+  name: provides
+  to: as_weather_mcp
+- from: ac_wordpress
+  name: depends_on
+  to: ep_cloudflare
+- from: ac_wordpress
+  name: depends_on
+  to: ts_caddy
+- from: ac_wordpress
+  name: depends_on
+  to: ts_podman
+- from: ac_wordpress
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_wordpress
+  name: provides
+  to: as_blog_admin
+- from: ac_wordpress
+  name: provides
+  to: as_blog_public
+- from: ac_xrdp
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_xrdp
+  name: provides
+  to: as_xrdp
+- from: as_alertmanager
+  name: exposed_via
+  to: et_loopback
+- from: as_blog_admin
+  name: exposed_via
+  to: et_public_cloudflare
+- from: as_blog_public
+  name: exposed_via
+  to: et_public_cloudflare
+- from: as_claudemock
+  name: exposed_via
+  to: et_public_funnel
+- from: as_cockpit
+  name: exposed_via
+  to: et_tailnet
+- from: as_demos_private
+  name: exposed_via
+  to: et_tailnet
+- from: as_gqldb
+  name: exposed_via
+  to: et_loopback
+- from: as_gqldb_manager
+  name: exposed_via
+  to: et_tailnet
+- from: as_gqldb_tls
+  name: exposed_via
+  to: et_tailnet
+- from: as_grafana
+  name: exposed_via
+  to: et_tailnet
+- from: as_homelab_arch_internal
+  name: exposed_via
+  to: et_loopback
+- from: as_homelab_arch_mcp
+  name: exposed_via
+  to: et_tailnet
+- from: as_homelab_arch_ui
+  name: exposed_via
+  to: et_tailnet
+- from: as_lan_consoles
+  name: exposed_via
+  to: et_lan
+- from: as_litellm_api
+  name: exposed_via
+  to: et_tailnet
+- from: as_litellm_ui
+  name: exposed_via
+  to: et_tailnet
+- from: as_n8n_editor
+  name: exposed_via
+  to: et_public_funnel
+- from: as_ollama
+  name: exposed_via
+  to: et_tailnet
+- from: as_prometheus
+  name: exposed_via
+  to: et_tailnet
+- from: as_samba
+  name: exposed_via
+  to: et_tailnet
+- from: as_ssh
+  name: exposed_via
+  to: et_tailnet
+- from: as_weather_gui
+  name: exposed_via
+  to: et_tailnet
+- from: as_weather_mcp
+  name: exposed_via
+  to: et_public_funnel
+- from: as_xrdp
+  name: exposed_via
+  to: et_tailnet
