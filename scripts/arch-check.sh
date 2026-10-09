@@ -21,7 +21,15 @@
 #   HLA_CHECKER_PYTHON   tests only: skip the venv, run this interpreter with <src>/src on
 #                        sys.path. Uses a private temp dir, never the shared cache; warns.
 #
-# Exit: 0 both checks pass, 1 findings, 2 setup failed or a checker could not run (exit >= 2).
+# When architecture/model.yaml exists, the committed generated export is checked too (model.yaml
+# checks + offline freshness). The metamodel's `  ontology_hash:` stamp is compared with the
+# pinned commit's ontology/ontology_v2.hash (read with `git show`, validated, compared in bash):
+# a mismatch exits 1 with the re-pin command BEFORE the cache, any venv or ANY check (provisioning
+# and alignment included) runs. A pinned commit without a valid hash file, or a missing/malformed
+# stamp, skips that pre-check (freshness reports a bad stamp); the authoritative comparison with
+# the hash computed by the pinned interpreter still runs after setup and before any check.
+#
+# Exit: 0 all checks pass, 1 findings, 2 setup failed or a checker could not run (exit >= 2).
 set -euo pipefail
 umask 077
 
@@ -55,6 +63,55 @@ git_app() { git -C "$APP_REPO" -c core.fsmonitor=false "$@"; }
 resolved=$(git_app rev-parse --verify --quiet "$REF^{commit}" 2>/dev/null) || resolved=""
 if [[ $resolved != "$REF" ]]; then
     die "commit $REF is not in $APP_REPO; fetch it with: git -C '$APP_REPO' fetch origin"
+fi
+
+REPIN_HINT='git -C "$HLA_APP_REPO" rev-parse <commit> > architecture/.checker-ref'
+HAS_MODEL=0
+[[ -f $ROOT/architecture/model.yaml && ! -L $ROOT/architecture/model.yaml ]] && HAS_MODEL=1
+COMMITTED_HASH=""
+if ((HAS_MODEL)) && [[ -f $ROOT/architecture/metamodel.yaml && ! -L $ROOT/architecture/metamodel.yaml ]]; then
+    # Bounded read; only a well-formed 64-hex stamp counts (anything else is left to freshness).
+    # Process substitution, not a pipe: grep -m1 exiting early must not SIGPIPE `head` into
+    # failing the pipeline (pipefail) and discarding a valid stamp.
+    COMMITTED_HASH=$(grep -m1 -E '^  ontology_hash: [0-9a-f]{64}$' \
+        < <(head -c 1048576 -- "$ROOT/architecture/metamodel.yaml")) || COMMITTED_HASH=""
+    COMMITTED_HASH=${COMMITTED_HASH#  ontology_hash: }
+fi
+
+pinned_hash() { # authoritative: computed by the pinned interpreter. $1 = interpreter, $2 = dir holding the archived source; prints the hash or fails
+    "$1" -I -c '
+import sys
+sys.path.insert(0, sys.argv[1] + "/src")
+from homelab_arch.ontology.loader import load_ontology
+from homelab_arch.ontology.sync import ontology_hash
+print(ontology_hash(load_ontology(sys.argv[1] + "/ontology/ontology_v2.yaml")))
+' "$2" 2>/dev/null
+}
+
+hash_mismatch() { # $1 = interpreter, $2 = source dir. 0 = mismatch, 1 = match, 2 = cannot tell
+    local got
+    got=$(pinned_hash "$1" "$2") || return 2
+    [[ $got =~ ^[0-9a-f]{64}$ ]] || return 2
+    [[ $got != "$COMMITTED_HASH" ]]
+}
+
+pinned_file_hash() { # the hash the pinned commit ships; empty when absent or invalid
+    local h
+    h=$(git_app show "$REF:ontology/ontology_v2.hash" 2>/dev/null | head -c 200) || h=""
+    h=${h%$'\n'}
+    [[ $h =~ ^[0-9a-f]{64}$ ]] && printf '%s' "$h"
+    return 0
+}
+
+fail_repin() {
+    printf 'arch-check: architecture/metamodel.yaml was exported with a different ontology than the pinned checker (%s).\n  re-pin the checker to the exporting commit: %s\n' "$REF" "$REPIN_HINT" >&2
+    exit 1
+}
+
+if [[ -n $COMMITTED_HASH ]]; then
+    shipped=$(pinned_file_hash)
+    # Cheap pre-check (no archive, no cache, no venv). Empty = cannot tell: fall through.
+    if [[ -n $shipped && $shipped != "$COMMITTED_HASH" ]]; then fail_repin; fi
 fi
 
 OVERRIDE=0
@@ -138,6 +195,19 @@ runpy.run_module(mod, run_name="__main__", alter_sys=True)
     fi
 }
 
+if [[ -n $COMMITTED_HASH ]]; then
+    # Authoritative, with the pinned interpreter; before any check runs. Fails closed (2) when the
+    # pinned hash cannot be computed.
+    if ((OVERRIDE)); then hash_py=$HLA_CHECKER_PYTHON; else hash_py="$FINAL/venv/bin/python"; fi
+    rc=0
+    hash_mismatch "$hash_py" "$FINAL/src" || rc=$?
+    case $rc in
+        0) fail_repin ;;
+        1) ;;
+        *) die "cannot compute the pinned ontology hash for $REF" ;;
+    esac
+fi
+
 worst=0
 record() { # exit code -> 0 ok, 1 findings, 2 could not run (including 127 and signals)
     local c=$1
@@ -153,4 +223,14 @@ rc=0
 run_check homelab_arch.checks.alignment "$ROOT" \
     --ontology "$SRC/ontology/ontology_v2.yaml" || rc=$?
 record "$rc"
+if ((HAS_MODEL)); then
+    rc=0
+    run_check homelab_arch.checks "$ROOT/architecture/model.yaml" \
+        --ontology "$SRC/ontology/ontology_v2.yaml" || rc=$?
+    record "$rc"
+    rc=0
+    run_check homelab_arch.checks.freshness "$ROOT/architecture" \
+        --ontology "$SRC/ontology/ontology_v2.yaml" || rc=$?
+    record "$rc"
+fi
 exit "$worst"

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Validate architecture/model.yaml before a commit that could invalidate it.
+# Validate the architecture before a commit that could invalidate it: scripts/arch-validate.py until
+# the N5 cutover commits architecture/export.json, then the pinned scripts/arch-check.sh.
 #
 # Catches model drift at commit time; scripts/lib/stack-helpers.sh's require_conformant_model()
 # is the real gate and blocks the deploy itself. This hook is the early, cheap warning.
@@ -40,11 +41,29 @@ check_monitoring_configs() {
 check_monitoring_configs || exit 1
 
 # Only worth running when something that shapes the model is staged.
-if ! git diff --cached --name-only | grep -qE '^(architecture/|compose/|scripts/arch-validate\.py)'; then
+if ! git diff --cached --name-only | grep -qE '^(architecture/|compose/|systemd/|scripts/arch-(check|validate|export)\.)'; then
   exit 0
 fi
 
 if [[ ! -f "$REPO_ROOT/architecture/model.yaml" ]]; then
+  exit 0
+fi
+
+# Switch-over: until the N5 cutover commits a generated architecture/export.json, the stdlib
+# validator (the same one the deploy gate uses) stays the check, as before. Once
+# architecture/export.json is in the INDEX or in HEAD (an untracked trial file does not count; a
+# commit that deletes a committed export.json still counts), the pinned scripts/arch-check.sh runs
+# instead. With no HEAD (fresh repo) the HEAD test fails quietly and the old path applies. Note
+# that arch-check.sh itself reads the working tree.
+if git cat-file -e ":architecture/export.json" 2>/dev/null \
+  || git cat-file -e "HEAD:architecture/export.json" 2>/dev/null; then
+  if ! "$REPO_ROOT/scripts/arch-check.sh"; then
+    echo "" >&2
+    echo "[pre-commit] architecture checks failed (pinned checker: scripts/arch-check.sh) — commit refused." >&2
+    echo "[pre-commit] Fix the model, or run scripts/arch-export.sh and commit its output together with" >&2
+    echo "[pre-commit] the provisioning YAML; --no-verify is for WIP commits only." >&2
+    exit 1
+  fi
   exit 0
 fi
 

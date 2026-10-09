@@ -25,6 +25,13 @@ services:
       # Proposal queue + audit log (SQLite). A named volume, not a bind: deploy-service.sh
       # rsyncs with --delete and would wipe a writable bind under this stack directory.
       - proposals-data:/data
+      # The architecture/ directory, read-only: the app reads the committed export manifest at
+      # /infra/architecture/export.json (export_status compares the graph with it). A DIRECTORY
+      # mount on purpose: architecture/ always exists in the repo, so a missing export.json cannot
+      # make podman-compose create an empty directory in its place, and rsync's rename-over of
+      # export.json is seen without recreating the container (a file bind would pin the old inode).
+      # Relative to this compose dir: deploy-service.sh rsyncs the whole repo to the server.
+      - ../../architecture:/infra/architecture:ro
     environment:
       GQLDB_ADDRESS: host.containers.internal:60061
       GQLDB_USER: hla_app
@@ -33,6 +40,7 @@ services:
       GQLDB_TIMEOUT_SECONDS: "10"
       # Never sync at start-up: ontology sync is an owner-approved `podman exec ... sync`.
       HLA_SKIP_SYNC: "1"
+      HLA_EXPORT_MANIFEST: /infra/architecture/export.json
       # Explicit opt-in to writing the graph (applying approved proposals). Removing this
       # line makes the deployed app read-only: writes answer 503 "writes switched off".
       HLA_ALLOW_GRAPH_WRITES: homelab_arch
