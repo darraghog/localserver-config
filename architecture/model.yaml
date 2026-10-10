@@ -634,6 +634,25 @@ ApplicationService:
       Direct per-service HTTPS ports on the home LAN, using a private CA. Includes the GQLDB
       console's :8450 break-glass door; its designed route is the tailnet port in
       as-gqldb-manager.
+  - id: as-n8n-lan
+    name: n8n raw port (LAN)
+    endpoint: http://beeblebox:5678
+    protocol: http
+    auth: basic
+    description: >
+      n8n's own HTTP port, published on all interfaces (ac-n8n's east-west exception), so the
+      editor also answers raw on the LAN and the tailnet IP beside the Funnel and the Caddy door.
+      Intended (owner decision 2026-10-09): apps developed on the laptop use the production n8n.
+      Recorded at the LAN tier, which is what the publish adds; basic auth still applies.
+  - id: as-helloworld-lan
+    name: Hello world raw port (LAN)
+    endpoint: http://beeblebox:8080
+    protocol: http
+    auth: none
+    description: >
+      The hello-world nginx published on all interfaces (ac-helloworld's east-west exception;
+      compose/windows-lan-extra-ports.txt lists it), so it answers raw on the LAN and the tailnet
+      IP. Intended (owner decision 2026-10-09); holds no data.
   - id: as-prometheus
     name: Prometheus UI and API
     endpoint: https://beeblebox.taile98462.ts.net:8090/prometheus/
@@ -1344,6 +1363,8 @@ relationships:
   - { from: ac-claudemock,   name: provides, to: as-claudemock }
   - { from: ac-tictactoe,    name: provides, to: as-demos-private }
   - { from: ac-helloworld,   name: provides, to: as-demos-private }
+  - { from: ac-n8n,          name: provides, to: as-n8n-lan }
+  - { from: ac-helloworld,   name: provides, to: as-helloworld-lan }
   - { from: ac-gqldb,        name: provides, to: as-gqldb-manager }
   - { from: ac-gqldb,        name: provides, to: as-gqldb }
   - { from: ac-gqldb,        name: provides, to: as-gqldb-tls }
@@ -1370,6 +1391,8 @@ relationships:
   - { from: as-lan-consoles,  name: delivers, to: bs-administration }
   - { from: as-claudemock,    name: delivers, to: bs-demonstrations }
   - { from: as-demos-private, name: delivers, to: bs-demonstrations }
+  - { from: as-n8n-lan,       name: delivers, to: bs-automation-endpoints }
+  - { from: as-helloworld-lan, name: delivers, to: bs-demonstrations }
   - { from: as-prometheus,    name: delivers, to: bs-administration }
   - { from: as-alertmanager,  name: delivers, to: bs-administration }
   - { from: as-grafana,       name: delivers, to: bs-administration }
@@ -1392,6 +1415,8 @@ relationships:
   - { from: as-cockpit,       name: exposed_via, to: et-tailnet }
   - { from: as-demos-private, name: exposed_via, to: et-tailnet }
   - { from: as-lan-consoles,  name: exposed_via, to: et-lan }
+  - { from: as-n8n-lan,       name: exposed_via, to: et-lan }
+  - { from: as-helloworld-lan, name: exposed_via, to: et-lan }
   - { from: as-gqldb-manager, name: exposed_via, to: et-tailnet }
   - { from: as-gqldb,         name: exposed_via, to: et-loopback }
   - { from: as-gqldb-tls,     name: exposed_via, to: et-tailnet }

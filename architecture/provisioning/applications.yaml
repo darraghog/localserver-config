@@ -230,6 +230,16 @@ ApplicationService:
   endpoint: https://beeblebox.taile98462.ts.net:8090/grafana/
   protocol: https
   auth: basic
+- id: as_helloworld_lan
+  name: Hello world raw port (LAN)
+  description: 'The hello-world nginx published on all interfaces (ac-helloworld''s east-west exception;
+    compose/windows-lan-extra-ports.txt lists it), so it answers raw on the LAN and the tailnet IP. Intended
+    (owner decision 2026-10-09); holds no data.
+
+    '
+  endpoint: http://beeblebox:8080
+  protocol: http
+  auth: none
 - id: as_homelab_arch_internal
   name: Homelab Architecture Manager (east-west)
   description: 'The app port for containers on this host (host.containers.internal:8104). The read API
@@ -293,6 +303,17 @@ ApplicationService:
   description: Workflow editor plus registered webhook and MCP trigger URLs, root-mounted on :443.
   endpoint: https://beeblebox.taile98462.ts.net/
   protocol: https
+  auth: basic
+- id: as_n8n_lan
+  name: n8n raw port (LAN)
+  description: 'n8n''s own HTTP port, published on all interfaces (ac-n8n''s east-west exception), so
+    the editor also answers raw on the LAN and the tailnet IP beside the Funnel and the Caddy door. Intended
+    (owner decision 2026-10-09): apps developed on the laptop use the production n8n. Recorded at the
+    LAN tier, which is what the publish adds; basic auth still applies.
+
+    '
+  endpoint: http://beeblebox:5678
+  protocol: http
   auth: basic
 - id: as_ollama
   name: Ollama API
@@ -410,6 +431,9 @@ relationships:
 - from: ac_helloworld
   name: provides
   to: as_demos_private
+- from: ac_helloworld
+  name: provides
+  to: as_helloworld_lan
 - from: ac_homelab_arch
   name: depends_on
   to: ac_gqldb
@@ -464,6 +488,9 @@ relationships:
 - from: ac_n8n
   name: provides
   to: as_n8n_editor
+- from: ac_n8n
+  name: provides
+  to: as_n8n_lan
 - from: ac_ollama
   name: deployed_on
   to: n_beeblebox
@@ -572,6 +599,9 @@ relationships:
 - from: as_grafana
   name: exposed_via
   to: et_tailnet
+- from: as_helloworld_lan
+  name: exposed_via
+  to: et_lan
 - from: as_homelab_arch_internal
   name: exposed_via
   to: et_loopback
@@ -593,6 +623,9 @@ relationships:
 - from: as_n8n_editor
   name: exposed_via
   to: et_public_funnel
+- from: as_n8n_lan
+  name: exposed_via
+  to: et_lan
 - from: as_ollama
   name: exposed_via
   to: et_tailnet

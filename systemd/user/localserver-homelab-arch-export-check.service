@@ -1,0 +1,12 @@
+[Unit]
+Description=Check that the homelab-arch graph still matches the committed architecture/export.json
+Documentation=https://github.com/darraghog/localserver-config
+
+[Service]
+Type=oneshot
+Environment=PATH=__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=__REPO_ROOT__/scripts/homelab-arch-export-check.sh
+
+# Deliberately NO [Install] section: driven by localserver-homelab-arch-export-check.timer.
+# A non-zero exit (stale, or the check could not run) leaves this unit failed, which
+# scripts/emit-unit-metrics.sh reports and the SystemdUserUnitFailed alert picks up.

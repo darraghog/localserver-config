@@ -1,0 +1,14 @@
+[Unit]
+Description=Weekly homelab-arch export freshness check (see localserver-homelab-arch-export-check.service)
+Documentation=https://github.com/darraghog/localserver-config
+
+[Timer]
+# Weekly, early Monday, clear of the Sunday backup. Persistent=true means a run missed while
+# the host was off fires shortly after the next boot rather than being skipped for the week.
+OnCalendar=Mon 04:30
+Persistent=true
+RandomizedDelaySec=30m
+Unit=localserver-homelab-arch-export-check.service
+
+[Install]
+WantedBy=timers.target

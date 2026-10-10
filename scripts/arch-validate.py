@@ -245,7 +245,17 @@ def main() -> int:
 
     # ---- report ------------------------------------------------------------
     if "--summary" in sys.argv:
-        print(f"model: {model['model']['name']}  baseline {model['model']['baseline_date']}")
+        # A hand-written (v1) model carries baseline_date; an exported (v2) one carries the
+        # ontology version and hash instead. Print whichever is there, never require either.
+        head = model.get("model") or {}
+        line = f"model: {head.get('name', '?')}"
+        if "baseline_date" in head:
+            line += f"  baseline {head['baseline_date']}"
+        if "ontology_version" in head:
+            line += f"  ontology {head['ontology_version']}"
+            if head.get("ontology_hash"):
+                line += f" ({str(head['ontology_hash'])[:12]})"
+        print(line)
         print(f"metamodel: {mm['meta']['version']}  ({mm['meta']['basis']})\n")
         for layer in mm["layers"]:
             names = [t for t in types if types[t]["_layer"] == layer]
