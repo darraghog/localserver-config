@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# hla - owner CLI wrapper. Runs `python -m homelab_arch hla ...` inside the app container on
+# the server, over ssh, with a terminal. Every argument is validated against a fixed pattern
+# BEFORE ssh, because ssh joins its arguments into one string for the remote shell.
+#
+# Environment: HLA_SSH_HOST (default beeblebox), HLA_CONTAINER (default homelab-arch_app_1).
+# No token is read or forwarded by this wrapper; hla asks for nothing on the command line.
+#
+# Exit codes:
+#   0-3        from hla itself
+#   2          also: this wrapper refused its arguments or has no terminal
+#   255        from ssh (connection or auth failure)
+#   125-127    from podman (exec failed / command not runnable / not found)
+# These ranges do not collide with hla's 0-3.
+set -euo pipefail
+shopt -u nocasematch
+
+usage() {
+    cat >&2 <<'USAGE'
+usage: hla pending [--limit N]     (N is 1-200)
+       hla show <id>
+       hla approve <id>
+       hla reject <id>
+  <id> looks like pr_ followed by 16 lowercase hex digits
+USAGE
+    exit 2
+}
+
+die() {
+    echo "hla: $1" >&2
+    exit 2
+}
+
+# Use "-" (not ":-") so an empty value is refused instead of silently defaulted.
+HOST=${HLA_SSH_HOST-beeblebox}
+C=${HLA_CONTAINER-homelab-arch_app_1}
+name_re='^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$'
+[[ $HOST =~ $name_re && $C =~ $name_re ]] || die "bad host/container name"
+
+id_re='^pr_[0-9a-f]{16}$'
+limit_re='^([1-9][0-9]?|1[0-9]{2}|200)$'
+
+(($# >= 1)) || usage
+case $1 in
+    pending)
+        if (($# == 1)); then
+            :
+        elif (($# == 3)) && [[ $2 == --limit && $3 =~ $limit_re ]]; then
+            :
+        else
+            usage
+        fi
+        ;;
+    show | approve | reject)
+        (($# == 2)) && [[ $2 =~ $id_re ]] || usage
+        ;;
+    *) usage ;;
+esac
+
+[[ -t 0 && -t 1 ]] || die "needs an interactive terminal"
+
+exec ssh -q -t -- "$HOST" podman exec -it "$C" python -m homelab_arch hla "$@"
