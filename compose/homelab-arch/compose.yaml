@@ -43,7 +43,6 @@ services:
       HLA_EXPORT_MANIFEST: /infra/architecture/export.json
       # Explicit opt-in to writing the graph (applying approved proposals). Removing this
       # line makes the deployed app read-only: writes answer 503 "writes switched off".
-      HLA_ALLOW_GRAPH_WRITES: homelab_arch
       HLA_APPROVER_TOKEN: ${HLA_APPROVER_TOKEN:?HLA_APPROVER_TOKEN must be set in .env - >= 32 chars, >= 16 distinct (docs/deployment.md B1, not plain openssl rand -hex 32)}
       AGENT_API_TOKEN: ${AGENT_API_TOKEN:?AGENT_API_TOKEN must be set in .env - >= 32 chars, >= 16 distinct (docs/deployment.md B1), different from HLA_APPROVER_TOKEN}
       # basic (default, fail-closed) or tailnet-trust (production proof of concept, owner
