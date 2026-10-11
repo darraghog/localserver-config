@@ -38,7 +38,7 @@ for f in .env frontend/.env.local data/proposals.db; do
     exit 1
   fi
 done
-for f in Dockerfile requirements.lock frontend/package-lock.json ontology/ontology.yaml; do
+for f in Dockerfile requirements.lock frontend/package-lock.json ontology/ontology_v2.yaml; do
   if [[ ! -f "$NEW/$f" ]]; then
     rm -rf "$NEW"
     echo "[sync-app homelab-arch] ERROR: $COMMIT has no $f; is it a Milestone 6 commit?" >&2
