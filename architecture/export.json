@@ -1,0 +1,61 @@
+{
+  "conformance": {
+    "errors": 0,
+    "warnings": 5
+  },
+  "counts": {
+    "by_type": {
+      "AIModel": 0,
+      "Actor": 4,
+      "Agent": 0,
+      "ApplicationComponent": 17,
+      "ApplicationService": 26,
+      "Artifact": 19,
+      "BusinessProcess": 4,
+      "BusinessService": 7,
+      "Capability": 8,
+      "Change": 0,
+      "Control": 9,
+      "DataDomain": 0,
+      "DataEntity": 11,
+      "DataField": 28,
+      "DataProduct": 0,
+      "DataStore": 13,
+      "Driver": 3,
+      "EvalSuite": 0,
+      "ExposureTier": 5,
+      "ExternalProvider": 9,
+      "Gap": 13,
+      "Incident": 0,
+      "MCPTool": 0,
+      "Network": 4,
+      "Node": 3,
+      "OutputPort": 0,
+      "Pillar": 6,
+      "Principle": 7,
+      "Problem": 0,
+      "ProcessStep": 21,
+      "PromptTemplate": 0,
+      "QualityRule": 0,
+      "Risk": 0,
+      "ServiceLevel": 0,
+      "ServiceOffering": 0,
+      "TechnologyService": 6,
+      "UseCase": 0,
+      "VectorIndex": 0
+    },
+    "entities": 223,
+    "relationships": 553
+  },
+  "files": {
+    "metamodel.yaml": "afe4ba836608baf45ee15f947889b689e2cb658ce79c3ad4bf93da926bc98807",
+    "model.yaml": "4332929c9d23ad8e2e81672f8a3efa658fbdeaad234e4bbe4242e64ca3ce7c27",
+    "overview.html": "90382fc5c629d475c388cd3df540c68b7ee0bea416cc0f15374b1ad90fda9483"
+  },
+  "format": 1,
+  "ontology": {
+    "hash": "8ad422ef6e8eafa2a41c27cc7c1f348ea03688468b03707d5106218e8803a3c2",
+    "version": "2.0"
+  },
+  "renderer_version": 1
+}
