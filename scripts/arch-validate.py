@@ -64,6 +64,20 @@ def entity_types(mm: dict) -> dict[str, dict]:
     return out
 
 
+def lineage(types: dict[str, dict], tname: str) -> list[str]:
+    """tname and every type it specialises (metamodel `specialises`), nearest first."""
+    out: list[str] = []
+    while tname and tname not in out:
+        out.append(tname)
+        tname = (types.get(tname) or {}).get("specialises")
+    return out
+
+
+def admits(allowed: list[str], types: dict[str, dict], tname: str) -> bool:
+    """A relationship end accepts a type, or any specialisation of an accepted type."""
+    return "*" in allowed or any(t in allowed for t in lineage(types, tname))
+
+
 def main() -> int:
     mm, model = load()
     types = entity_types(mm)
@@ -133,10 +147,10 @@ def main() -> int:
             err(f"relationship {name}: target {t!r} does not exist")
             continue
         spec = rel_specs[name]
-        if instances[f] not in spec["from"]:
+        if not admits(spec["from"], types, instances[f]):
             err(f"relationship {name}: source {f} is a {instances[f]}, "
                 f"but must be one of {spec['from']}")
-        if instances[t] not in spec["to"]:
+        if not admits(spec["to"], types, instances[t]):
             err(f"relationship {name}: target {t} is a {instances[t]}, "
                 f"but must be one of {spec['to']}")
         outgoing[(f, name)].append(t)
