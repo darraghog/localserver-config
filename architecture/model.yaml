@@ -1645,6 +1645,13 @@ Gap:
     '
   severity: medium
   status: mitigated
+UseCase:
+- id: uc_shakespeare_play_explorer
+  name: Shakespeare Play Explorer
+  description: Answers questions about a Shakespeare play submitted through a form, using the local model.
+  problem_statement: 'Answer questions about a Shakespeare play submitted through a form: the local model
+    returns JSON, and the answer is emailed only if the recipient is allowlisted.'
+  status: live
 relationships:
 - from: ac_alertmanager
   name: depends_on
@@ -2165,6 +2172,9 @@ relationships:
 - from: as_n8n_editor
   name: delivers
   to: bs_automation_endpoints
+- from: as_n8n_editor
+  name: delivers
+  to: uc_shakespeare_play_explorer
 - from: as_n8n_editor
   name: exposed_via
   to: et_public_funnel
@@ -3305,3 +3315,6 @@ relationships:
 - from: ts_tailscale
   name: primarily_serves
   to: pl_security
+- from: uc_shakespeare_play_explorer
+  name: supports
+  to: cap_automation

@@ -41,16 +41,16 @@
       "ServiceLevel": 0,
       "ServiceOffering": 0,
       "TechnologyService": 6,
-      "UseCase": 0,
+      "UseCase": 1,
       "VectorIndex": 0
     },
-    "entities": 223,
-    "relationships": 553
+    "entities": 224,
+    "relationships": 555
   },
   "files": {
     "metamodel.yaml": "afe4ba836608baf45ee15f947889b689e2cb658ce79c3ad4bf93da926bc98807",
-    "model.yaml": "4332929c9d23ad8e2e81672f8a3efa658fbdeaad234e4bbe4242e64ca3ce7c27",
-    "overview.html": "90382fc5c629d475c388cd3df540c68b7ee0bea416cc0f15374b1ad90fda9483"
+    "model.yaml": "b19ddaca301a9d8468f2f597d132a7bf106ffa9941dcb9dc3304b4f1463acef0",
+    "overview.html": "b6e2728367446729774199fd9740dabf7b4f1f04e51396be67ec248554c9d01a"
   },
   "format": 1,
   "ontology": {
