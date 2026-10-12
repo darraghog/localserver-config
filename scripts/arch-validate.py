@@ -78,6 +78,23 @@ def admits(allowed: list[str], types: dict[str, dict], tname: str) -> bool:
     return "*" in allowed or any(t in allowed for t in lineage(types, tname))
 
 
+def effective_attributes(types: dict[str, dict], tname: str) -> dict:
+    """A type's attributes plus those of every type it specialises (nearest wins)."""
+    out: dict = {}
+    for t in reversed(lineage(types, tname)):
+        out.update((types.get(t) or {}).get("attributes") or {})
+    return out
+
+
+def enum_values(spec: dict) -> list | None:
+    """Allowed values: the old dialect (type: enum, values: [...]) or v2's (enum: [...])."""
+    if spec.get("type") == "enum":
+        return list(spec.get("values") or [])
+    if isinstance(spec.get("enum"), list):
+        return list(spec["enum"])
+    return None
+
+
 def main() -> int:
     mm, model = load()
     types = entity_types(mm)
@@ -117,16 +134,15 @@ def main() -> int:
             err(f"{tname} {eid}: missing plain_language "
                 f"(required on {'/'.join(sorted(PLAIN_LANGUAGE_REQUIRED))} "
                 f"— the non-technical view is generated from it)")
-        for attr, spec in (types[tname].get("attributes") or {}).items():
+        for attr, spec in effective_attributes(types, tname).items():
             if not isinstance(spec, dict):
                 continue
             val = ent.get(attr)
             if spec.get("required") and val in (None, ""):
                 err(f"{tname} {eid}: missing required attribute {attr!r}")
-            if val is not None and spec.get("type") == "enum":
-                allowed = spec.get("values", [])
-                if val not in allowed:
-                    err(f"{tname} {eid}: {attr}={val!r} not in {allowed}")
+            allowed = enum_values(spec)
+            if val is not None and allowed is not None and val not in allowed:
+                err(f"{tname} {eid}: {attr}={val!r} not in {allowed}")
 
     # ---- relationships -----------------------------------------------------
     rels = model.get("relationships", []) or []
