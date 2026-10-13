@@ -1491,6 +1491,12 @@ Gap:
     '
   severity: low
   status: accepted
+- id: gap_deploy_from_workstation
+  name: Production deploys from a workstation working tree
+  description: Deploy syncs a directory, not a reviewed ref; no record of the deployed commit and no check
+    that the tree matches origin. Tracked as IMPROVEMENTS 1.5.
+  severity: medium
+  status: planned
 - id: gap_edge_state_local
   name: Cloudflare edge state is local and applied by hand
   description: 'cloudflare/terraform.tfstate is a gitignored local file on the laptop and is not in the
@@ -1533,6 +1539,19 @@ Gap:
     '
   severity: low
   status: accepted
+- id: gap_moving_image_tags
+  name: Several images track moving tags
+  description: nginx:alpine (hello-world, and the base image claude-mock-test builds FROM), caddy:alpine
+    and litellm main-stable are pulled and swapped on every deploy, so upstream changes reach production
+    without review. Pinned images are tracked by check-updates.py; these are not.
+  severity: medium
+  status: planned
+- id: gap_n8n_env_readable
+  name: n8n Code nodes can read all environment variables
+  description: N8N_BLOCK_ENV_ACCESS_IN_NODE is false, so workflow code can read N8N_ENCRYPTION_KEY and
+    every other value passed to the container.
+  severity: high
+  status: planned
 - id: gap_no_alerting
   name: Alerting limited to probes, host resources, unit failures and certificates
   description: 'Prometheus probes every stack and public URL, watches host disk, memory and CPU, failed
@@ -1549,6 +1568,13 @@ Gap:
     '
   severity: low
   status: mitigated
+- id: gap_no_container_hardening_baseline
+  name: No container hardening baseline
+  description: Only homelab-arch runs read-only with no-new-privileges. Other stacks keep default capabilities,
+    writable root filesystems and no pids limit; only gqldb sets a memory limit. The add-service template
+    does not apply a baseline and the validator does not check one.
+  severity: medium
+  status: planned
 - id: gap_no_secret_rotation
   name: No secret rotation
   description: 'Long-lived provider keys and a storage account key sit in .env with no rotation schedule.
@@ -1645,6 +1671,100 @@ Gap:
     '
   severity: medium
   status: mitigated
+Risk:
+- id: rk_backup_silent_failure
+  name: Backups can fail or be unreadable without anyone noticing
+  description: The weekly backup once failed silently for three weeks. A failed-unit alert now exists,
+    but there is no backup-age metric, so a disabled timer or a stuck run goes unseen, and the restic
+    passphrase must also be recoverable off-host. Restore rehearsal currently covers blog content only,
+    not n8n credentials, litellm, GQLDB or homelab-arch proposals.
+  category: operational
+  severity: high
+  likelihood: medium
+  status: open
+  mitigation: 1) backup.sh writes a last-success timestamp through the node-exporter textfile collector;
+    alert when older than 9 days. 2) Confirm RESTIC_PASSWORD and a copy of .env are in the password manager.
+    3) Extend restore rehearsal to n8n (decrypt one credential), litellm and homelab-arch; run quarterly
+    and alert when the last rehearsal is older than 100 days. 4) Daily backup for n8n and homelab-arch
+    to shorten RPO.
+- id: rk_n8n_public_compromise
+  name: n8n compromise exposes secrets and downstream services
+  description: n8n is the only service published publicly (Funnel :443) and also answers on the LAN and
+    tailnet at :5678 with a single shared basic-auth credential. N8N_BLOCK_ENV_ACCESS_IN_NODE=false lets
+    any Code node read every env var, including N8N_ENCRYPTION_KEY, so a webhook or workflow compromise
+    reaches the key plus everything n8n can call (LiteLLM, Ollama, Slack).
+  category: security
+  severity: high
+  likelihood: medium
+  status: open
+  mitigation: 1) Set N8N_BLOCK_ENV_ACCESS_IN_NODE=true or move needed values into n8n credentials. 2)
+    Restrict Funnel to /webhook/* and the MCP path; keep the editor tailnet-only. 3) Replace basic auth
+    with n8n user management (owner account, 2FA). 4) read_only, cap_drop ALL and no-new-privileges on
+    the n8n container. 5) Per-key budgets and scopes on the LiteLLM key n8n holds.
+- id: rk_no_security_event_visibility
+  name: Security events are not observed
+  description: Alert rules cover availability, host resources, unit failures and certificate expiry. Nothing
+    watches authentication failures on n8n or LiteLLM, error spikes on the public doors, hits on admin
+    paths, or listening ports that differ from the model, so an intrusion or misconfiguration would show
+    up only as an availability symptom, if at all.
+  category: security
+  severity: medium
+  likelihood: medium
+  status: open
+  mitigation: Caddy access-log metrics or Loki with alerts on 4xx/5xx spikes on Funnel and tunnel doors,
+    n8n and LiteLLM auth failures and admin-path hits; weekly diff of ss -tlnp against model.yaml; external
+    heartbeat for the Watchdog alert so a dead Prometheus or Alertmanager is noticed.
+- id: rk_secret_concentration
+  name: One leak exposes every secret
+  description: All secrets live in one gitignored .env whose only copy is the backup. POSTGRES_PASSWORD
+    is shared by two Postgres instances, the restic repository credential sits on the host it protects,
+    and restored files contain plaintext secrets. Restic client-side encryption is the only barrier if
+    the storage key leaks.
+  category: security
+  severity: high
+  likelihood: low
+  status: open
+  mitigation: 'Per-database passwords and per-stack env files (or podman secrets) to shrink blast radius
+    and allow per-service rotation; SAS token scoped to the backup container instead of the storage account
+    key; restore directories removed after use. Related gap: gap_no_secret_rotation.'
+- id: rk_unreviewed_image_updates
+  name: Moving image tags reach production unreviewed
+  description: nginx, caddy and litellm track moving tags (alpine, main-stable) and are pulled and swapped
+    on every deploy. LiteLLM holds every LLM provider credential. The GQLDB package is a vendor .deb with
+    no public upstream to scan or verify beyond a recorded sha256.
+  category: dependency
+  severity: high
+  likelihood: low
+  status: open
+  mitigation: Pin litellm, caddy and nginx by digest (or minor version) and accept updates deliberately;
+    run an image vulnerability scan (for example Trivy) over the pinned set from check-updates.py or a
+    weekly timer; keep the sha256 check on the vendor package.
+- id: rk_unreviewed_prod_deploy
+  name: Production runs whatever is in one laptop's working tree
+  description: deploy-to-server.sh prod rsyncs the workstation working directory. Uncommitted edits deploy
+    silently, there is no record of which commit is running, and the laptop is a single point of failure
+    for changes. Model validation gates what can be committed and deployed but cannot assert the deployed
+    tree matches origin.
+  category: governance
+  severity: medium
+  likelihood: high
+  status: open
+  mitigation: 'Interim: deploy-to-server.sh prod refuses a dirty tree or a commit not on origin/main,
+    and writes a DEPLOYED_REF file to the host exported as a Prometheus metric so drift is visible. Target:
+    deploy a ref, not a directory (pull-based agent or self-hosted runner), with its own secret delivery.'
+- id: rk_wp_edge_regression
+  name: WordPress edge protections regress or are bypassed
+  description: The admin Access gate was open to Everyone until 2026-10-05. The uptime-probe WAF skip
+    rule matches a spoofable user agent, wp-cron.php is excepted from the WAF .php rule, and Terraform
+    state is local and applied by hand, so edge drift is only warned about at deploy time. xmlrpc.php
+    is already blocked outright at Caddy (ctl_published_surface).
+  category: security
+  severity: medium
+  likelihood: medium
+  status: open
+  mitigation: Cloudflare rate limiting on /wp-login.php; scheduled terraform plan that alerts on non-empty
+    drift; remote encrypted Terraform state; replace the user-agent probe skip with an Access service
+    token or secret header; a periodic check that the Access apps carry only the admin-email policy.
 UseCase:
 - id: uc_shakespeare_play_explorer
   name: Shakespeare Play Explorer
@@ -2448,6 +2568,9 @@ relationships:
 - from: ctl_encrypted_backup
   name: protects
   to: de_platform_secrets
+- from: ctl_encrypted_backup
+  name: protects
+  to: ds_secrets
 - from: ctl_offsite_copy
   name: also_serves
   to: pl_control
@@ -2511,6 +2634,9 @@ relationships:
 - from: ctl_restore_rehearsal
   name: protects
   to: de_blog_content
+- from: ctl_restore_rehearsal
+  name: protects
+  to: ds_wordpress_db
 - from: ctl_rootless
   name: implements
   to: p_rootless
@@ -2529,6 +2655,15 @@ relationships:
 - from: ctl_tailnet_identity
   name: protects
   to: as_cockpit
+- from: ctl_tailnet_identity
+  name: protects
+  to: as_demos_private
+- from: ctl_tailnet_identity
+  name: protects
+  to: as_gqldb_manager
+- from: ctl_tailnet_identity
+  name: protects
+  to: as_gqldb_tls
 - from: ctl_tailnet_identity
   name: protects
   to: as_grafana
@@ -2811,6 +2946,21 @@ relationships:
 - from: gap_ai_evals_not_adopted
   name: affects
   to: pl_quality
+- from: gap_deploy_from_workstation
+  name: affects
+  to: n_beeblebox
+- from: gap_deploy_from_workstation
+  name: affects
+  to: pl_agility
+- from: gap_deploy_from_workstation
+  name: affects
+  to: pl_control
+- from: gap_edge_state_local
+  name: affects
+  to: ac_wordpress
+- from: gap_edge_state_local
+  name: affects
+  to: bs_blog
 - from: gap_edge_state_local
   name: affects
   to: ep_cloudflare
@@ -2825,6 +2975,12 @@ relationships:
   to: ac_homelab_arch
 - from: gap_flat_east_west
   name: affects
+  to: ac_litellm
+- from: gap_flat_east_west
+  name: affects
+  to: ac_n8n
+- from: gap_flat_east_west
+  name: affects
   to: ac_weather_mcp
 - from: gap_flat_east_west
   name: affects
@@ -2837,10 +2993,43 @@ relationships:
   to: pl_security
 - from: gap_litellm_api_reach
   name: affects
+  to: ac_litellm
+- from: gap_litellm_api_reach
+  name: affects
   to: bs_llm_gateway
 - from: gap_litellm_api_reach
   name: affects
   to: pl_security
+- from: gap_moving_image_tags
+  name: affects
+  to: ac_claudemock
+- from: gap_moving_image_tags
+  name: affects
+  to: ac_helloworld
+- from: gap_moving_image_tags
+  name: affects
+  to: ac_litellm
+- from: gap_moving_image_tags
+  name: affects
+  to: n_beeblebox
+- from: gap_moving_image_tags
+  name: affects
+  to: pl_security
+- from: gap_n8n_env_readable
+  name: affects
+  to: ac_n8n
+- from: gap_n8n_env_readable
+  name: affects
+  to: ds_secrets
+- from: gap_n8n_env_readable
+  name: affects
+  to: pl_security
+- from: gap_no_alerting
+  name: affects
+  to: ac_alertmanager
+- from: gap_no_alerting
+  name: affects
+  to: ac_prometheus
 - from: gap_no_alerting
   name: affects
   to: bs_administration
@@ -2849,10 +3038,46 @@ relationships:
   to: bs_domain_email
 - from: gap_no_alerting
   name: affects
+  to: ep_slack
+- from: gap_no_alerting
+  name: affects
+  to: n_beeblebox
+- from: gap_no_alerting
+  name: affects
   to: pl_resilience
+- from: gap_no_container_hardening_baseline
+  name: affects
+  to: ac_gqldb
+- from: gap_no_container_hardening_baseline
+  name: affects
+  to: ac_litellm
+- from: gap_no_container_hardening_baseline
+  name: affects
+  to: ac_n8n
+- from: gap_no_container_hardening_baseline
+  name: affects
+  to: ac_weather_mcp
+- from: gap_no_container_hardening_baseline
+  name: affects
+  to: ac_wordpress
+- from: gap_no_container_hardening_baseline
+  name: affects
+  to: n_beeblebox
+- from: gap_no_container_hardening_baseline
+  name: affects
+  to: pl_security
+- from: gap_no_secret_rotation
+  name: affects
+  to: ac_homelab_arch
 - from: gap_no_secret_rotation
   name: affects
   to: ds_secrets
+- from: gap_no_secret_rotation
+  name: affects
+  to: ep_azure_blob
+- from: gap_no_secret_rotation
+  name: affects
+  to: ep_model_providers
 - from: gap_no_secret_rotation
   name: affects
   to: pl_security
@@ -3020,6 +3245,132 @@ relationships:
   to: et_tailnet
 - from: p_tiered_exposure
   name: primarily_serves
+  to: pl_security
+- from: rk_backup_silent_failure
+  name: affects
+  to: ds_gqldb
+- from: rk_backup_silent_failure
+  name: affects
+  to: ds_homelab_arch_proposals
+- from: rk_backup_silent_failure
+  name: affects
+  to: ds_litellm_db
+- from: rk_backup_silent_failure
+  name: affects
+  to: ds_manager
+- from: rk_backup_silent_failure
+  name: affects
+  to: ds_n8n_data
+- from: rk_backup_silent_failure
+  name: affects
+  to: ds_n8n_db
+- from: rk_backup_silent_failure
+  name: affects
+  to: ds_oauth_store
+- from: rk_backup_silent_failure
+  name: affects
+  to: ds_secrets
+- from: rk_backup_silent_failure
+  name: affects
+  to: ds_wordpress_db
+- from: rk_backup_silent_failure
+  name: affects
+  to: ds_wp_content
+- from: rk_backup_silent_failure
+  name: affects
+  to: ep_azure_blob
+- from: rk_backup_silent_failure
+  name: affects
+  to: pl_resilience
+- from: rk_n8n_public_compromise
+  name: affects
+  to: ac_litellm
+- from: rk_n8n_public_compromise
+  name: affects
+  to: ac_n8n
+- from: rk_n8n_public_compromise
+  name: affects
+  to: ac_ollama
+- from: rk_n8n_public_compromise
+  name: affects
+  to: ds_n8n_db
+- from: rk_n8n_public_compromise
+  name: affects
+  to: ds_secrets
+- from: rk_n8n_public_compromise
+  name: affects
+  to: ep_slack
+- from: rk_n8n_public_compromise
+  name: affects
+  to: pl_security
+- from: rk_no_security_event_visibility
+  name: affects
+  to: ac_alertmanager
+- from: rk_no_security_event_visibility
+  name: affects
+  to: ac_litellm
+- from: rk_no_security_event_visibility
+  name: affects
+  to: ac_n8n
+- from: rk_no_security_event_visibility
+  name: affects
+  to: ac_prometheus
+- from: rk_no_security_event_visibility
+  name: affects
+  to: n_beeblebox
+- from: rk_no_security_event_visibility
+  name: affects
+  to: pl_security
+- from: rk_secret_concentration
+  name: affects
+  to: ds_secrets
+- from: rk_secret_concentration
+  name: affects
+  to: ep_azure_blob
+- from: rk_secret_concentration
+  name: affects
+  to: ep_model_providers
+- from: rk_secret_concentration
+  name: affects
+  to: n_beeblebox
+- from: rk_secret_concentration
+  name: affects
+  to: pl_security
+- from: rk_unreviewed_image_updates
+  name: affects
+  to: ac_claudemock
+- from: rk_unreviewed_image_updates
+  name: affects
+  to: ac_helloworld
+- from: rk_unreviewed_image_updates
+  name: affects
+  to: ac_litellm
+- from: rk_unreviewed_image_updates
+  name: affects
+  to: n_beeblebox
+- from: rk_unreviewed_image_updates
+  name: affects
+  to: pl_security
+- from: rk_unreviewed_prod_deploy
+  name: affects
+  to: n_beeblebox
+- from: rk_unreviewed_prod_deploy
+  name: affects
+  to: pl_control
+- from: rk_unreviewed_prod_deploy
+  name: affects
+  to: pl_resilience
+- from: rk_wp_edge_regression
+  name: affects
+  to: ac_wordpress
+- from: rk_wp_edge_regression
+  name: affects
+  to: bs_blog
+- from: rk_wp_edge_regression
+  name: affects
+  to: ep_cloudflare
+- from: rk_wp_edge_regression
+  name: affects
   to: pl_security
 - from: step_core_build
   name: next_step

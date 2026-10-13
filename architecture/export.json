@@ -25,7 +25,7 @@
       "EvalSuite": 0,
       "ExposureTier": 5,
       "ExternalProvider": 9,
-      "Gap": 13,
+      "Gap": 17,
       "Incident": 0,
       "MCPTool": 0,
       "Network": 4,
@@ -37,20 +37,20 @@
       "ProcessStep": 21,
       "PromptTemplate": 0,
       "QualityRule": 0,
-      "Risk": 0,
+      "Risk": 7,
       "ServiceLevel": 0,
       "ServiceOffering": 0,
       "TechnologyService": 6,
       "UseCase": 1,
       "VectorIndex": 0
     },
-    "entities": 224,
-    "relationships": 555
+    "entities": 235,
+    "relationships": 632
   },
   "files": {
     "metamodel.yaml": "afe4ba836608baf45ee15f947889b689e2cb658ce79c3ad4bf93da926bc98807",
-    "model.yaml": "b19ddaca301a9d8468f2f597d132a7bf106ffa9941dcb9dc3304b4f1463acef0",
-    "overview.html": "b6e2728367446729774199fd9740dabf7b4f1f04e51396be67ec248554c9d01a"
+    "model.yaml": "76fb5dd3356a76e2be90d67ff6383a3df13112a4d4627a8624f7dc143cbd0996",
+    "overview.html": "89c6844f9062caad36b0c7a174f90ee73a94f85cc880f0dfc5a01367e766fdb6"
   },
   "format": 1,
   "ontology": {
