@@ -1541,9 +1541,10 @@ Gap:
   status: accepted
 - id: gap_moving_image_tags
   name: Several images track moving tags
-  description: nginx:alpine (hello-world, and the base image claude-mock-test builds FROM), caddy:alpine
-    and litellm main-stable are pulled and swapped on every deploy, so upstream changes reach production
-    without review. Pinned images are tracked by check-updates.py; these are not.
+  description: nginx:alpine (hello-world, and the base image claude-mock-test builds FROM) and caddy:alpine
+    are pulled and swapped on every deploy, so upstream changes reach production without review. Pinned
+    images, including litellm (pinned to release tag v1.105.1), are tracked by check-updates.py; these
+    are not.
   severity: medium
   status: planned
 - id: gap_n8n_env_readable
@@ -1729,16 +1730,17 @@ Risk:
     key; restore directories removed after use. Related gap: gap_no_secret_rotation.'
 - id: rk_unreviewed_image_updates
   name: Moving image tags reach production unreviewed
-  description: nginx, caddy and litellm track moving tags (alpine, main-stable) and are pulled and swapped
-    on every deploy. LiteLLM holds every LLM provider credential. The GQLDB package is a vendor .deb with
-    no public upstream to scan or verify beyond a recorded sha256.
+  description: nginx and caddy track moving tags (alpine) and are pulled and swapped on every deploy.
+    LiteLLM, which holds every LLM provider credential, is pinned to a release tag (v1.105.1) so upgrades
+    are deliberate, but the tag is not a digest and the image is not vulnerability-scanned. The GQLDB
+    package is a vendor .deb with no public upstream to scan or verify beyond a recorded sha256.
   category: dependency
   severity: high
   likelihood: low
   status: open
-  mitigation: Pin litellm, caddy and nginx by digest (or minor version) and accept updates deliberately;
-    run an image vulnerability scan (for example Trivy) over the pinned set from check-updates.py or a
-    weekly timer; keep the sha256 check on the vendor package.
+  mitigation: Pin caddy and nginx by digest (or minor version) and litellm by digest, accepting updates
+    deliberately; run an image vulnerability scan (for example Trivy) over the pinned set from check-updates.py
+    or a weekly timer; keep the sha256 check on the vendor package.
 - id: rk_unreviewed_prod_deploy
   name: Production runs whatever is in one laptop's working tree
   description: deploy-to-server.sh prod rsyncs the workstation working directory. Uncommitted edits deploy
@@ -3006,9 +3008,6 @@ relationships:
 - from: gap_moving_image_tags
   name: affects
   to: ac_helloworld
-- from: gap_moving_image_tags
-  name: affects
-  to: ac_litellm
 - from: gap_moving_image_tags
   name: affects
   to: n_beeblebox

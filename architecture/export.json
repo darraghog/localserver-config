@@ -45,12 +45,12 @@
       "VectorIndex": 0
     },
     "entities": 235,
-    "relationships": 632
+    "relationships": 631
   },
   "files": {
     "metamodel.yaml": "afe4ba836608baf45ee15f947889b689e2cb658ce79c3ad4bf93da926bc98807",
-    "model.yaml": "ebdf1bfc51eccb72ae95ca0205114f16b3a5c992349ff180d5eae2c98084c240",
-    "overview.html": "89c6844f9062caad36b0c7a174f90ee73a94f85cc880f0dfc5a01367e766fdb6"
+    "model.yaml": "861c9a5b892da9b9cb26cb889e8b2c4477cf867c19e3230d4e30c5a5d1c95c3d",
+    "overview.html": "a6f270a391190218647f02c4e4983bf5c49afb6b89802a41b155e04ffbd86e23"
   },
   "format": 1,
   "ontology": {
