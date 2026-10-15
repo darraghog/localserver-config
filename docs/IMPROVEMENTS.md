@@ -75,7 +75,8 @@ default to the public URL when unset.
 
 ### 2.4 Image tag: avoid `latest` **[Medium]**
 **Status:** ✅ Resolved (commit `455068a`)
-**Current:** n8n is pinned to `n8nio/n8n:2.33.7`. The rest of the estate is mixed by intent: wordpress, mariadb, both postgres instances and the Python base images are pinned; nginx, caddy and litellm itself deliberately track moving tags (`alpine`, `main-stable`) and are refreshed on every `./scripts/deploy.sh` by the pull-and-compare in `start-stack.sh`.
+**Current:** n8n is pinned to `n8nio/n8n:2.33.7`. The rest of the estate is mixed by intent: wordpress, mariadb, both postgres instances and the Python base images are pinned; nginx and caddy deliberately track moving tags (`alpine`) and are refreshed on every `./scripts/deploy.sh` by the pull-and-compare in `start-stack.sh`.
+**Deployment policy (litellm):** litellm is pinned to an explicit release tag (`v1.105.1` as of 2026-10-15), not `main-stable`. Upgrading is a deliberate change: confirm the tag exists on ghcr.io, edit the image in `compose/litellm/compose.yaml` and the matching `image:` in `architecture/model.yaml` and `architecture/provisioning/applications.yaml`, run `./scripts/deploy-litellm.sh local` and confirm the health check, commit, then `./scripts/deploy-litellm.sh prod beeblebox`. Prod ships the laptop's working tree, so commit first.
 **Remaining:** Pinning creates the opposite problem — nothing announces that a newer version exists, and this entry claimed `2.19.5` for months after the pin had moved. `scripts/check-updates.py` now reports every pinned tag against the newest published tag of the same shape, separating a leading-number change (postgres/mariadb majors need a dump/restore, not a tag edit) from the rest, and flags where `compose/` and `architecture/model.yaml` disagree about an image. It is advisory and manual: no hook, no CI, and `arch-validate.py` is untouched.
 
 ### 2.5 EXECUTIONS_MODE for concurrency **[Low]**

@@ -17,7 +17,7 @@ services:
       start_period: 10s
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-stable
+    image: ghcr.io/berriai/litellm:v1.105.1
     ports:
       - "${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}:4000:4000"
     volumes:

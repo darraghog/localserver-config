@@ -69,7 +69,7 @@ ApplicationComponent:
   name: LiteLLM
   description: Multi-provider LLM proxy with key management and spend tracking.
   stack: compose/litellm
-  image: ghcr.io/berriai/litellm:main-stable + postgres:16-alpine
+  image: ghcr.io/berriai/litellm:v1.105.1 + postgres:16-alpine
   routing: no-strip
 - id: ac_n8n
   name: n8n
