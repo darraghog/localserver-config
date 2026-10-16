@@ -7,7 +7,7 @@
 # script, and so the unit, fail. scripts/emit-unit-metrics.sh then reports the failed unit and
 # the SystemdUserUnitFailed alert fires: no alert wiring of its own is needed.
 #
-# Before the N5 cutover commits architecture/export.json there is nothing to compare: the script
+# When architecture/export.json is absent there is nothing to compare: the script
 # says so and exits 0, so the timer can be enabled early without alerting.
 #
 # Source of truth: homelab-arch deploy/infra/homelab-arch-export-check.sh (held patch 0004).

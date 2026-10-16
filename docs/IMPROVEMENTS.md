@@ -41,7 +41,8 @@ deployed, but neither can assert that the deployed tree matches `origin`.
 **Improvement:** deploy to beeblebox from GitHub rather than from a workstation — a workflow that
 builds from a pushed ref and pushes to the host (self-hosted runner on beeblebox, or a pull-based
 agent on the host reconciling against a ref). Deploying a *ref* rather than a *directory* is the
-actual change; the mechanism is secondary. `scripts/arch-validate.py` and the stack health checks
+actual change; the mechanism is secondary. The deploy gate (`scripts/arch-validate.py` and `check-metric-identity.py`, an internal-consistency check
+of the generated model) and the stack health checks
 already give such a pipeline its gates. Note the tunnel/certs/`.env` are deliberately excluded
 from rsync today, so any pipeline needs its own secret delivery.
 

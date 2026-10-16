@@ -2,7 +2,7 @@
 
 This repo uses **Caddy in `network_mode: host`** (`compose/tls-proxy`) so TLS terminates on the Linux host. Each site block listens on a **host TCP port** (for example `:8444`) and `reverse_proxy`s to a **backend** bound on the **host-internal address**, written in the Caddyfile as `{env.HOST_INTERNAL_IP}` (Caddy has no shell-style `${VAR}` substitution) and passed into the Caddy container by `compose/tls-proxy/compose.yaml` (other compose stacks publish ports to the host).
 
-> **Publish on `${HOST_INTERNAL_IP}`, never a hardcoded address.** Under the `p-open-east-west` principle ([architecture/model.yaml](../architecture/model.yaml)), a published endpoint is reachable by every other container on the host with no shared-network setup. **The value is per-host** — `127.0.0.1` on beeblebox (native Linux + pasta `--map-host-loopback`), `10.255.255.254` on WSL2 — and neither is reachable from the home LAN or the tailnet, unlike `0.0.0.0`, which would publish to both. A port you do not publish stays private. See [NETWORK-CONFIG.md](NETWORK-CONFIG.md#container-to-container-traffic-east-west).
+> **Publish on `${HOST_INTERNAL_IP}`, never a hardcoded address.** Under the `p_open_east_west` principle ([architecture/model.yaml](../architecture/model.yaml)), a published endpoint is reachable by every other container on the host with no shared-network setup. **The value is per-host** — `127.0.0.1` on beeblebox (native Linux + pasta `--map-host-loopback`), `10.255.255.254` on WSL2 — and neither is reachable from the home LAN or the tailnet, unlike `0.0.0.0`, which would publish to both. A port you do not publish stays private. See [NETWORK-CONFIG.md](NETWORK-CONFIG.md#container-to-container-traffic-east-west).
 
 Use this checklist so the service is reachable from **other containers on the same host** and from **other PCs on your home LAN** (including through **WSL2 + Podman on Windows** if that is your setup).
 
@@ -157,7 +157,7 @@ Verify from any running container:
 podman exec <some-container> wget -qO- http://host.containers.internal:<backend-host-port>/
 ```
 
-**Authenticate the endpoint.** Under `p-open-east-west` every container can reach every published port, so network position is not authentication — see `gap-flat-east-west` in [architecture/model.yaml](../architecture/model.yaml) for the accepted residual risk. If a service must not be callable by other workloads, do not publish its port; keep it on its stack's own compose network (as `litellm`'s Postgres does).
+**Authenticate the endpoint.** Under `p_open_east_west` every container can reach every published port, so network position is not authentication — see `gap_flat_east_west` in [architecture/model.yaml](../architecture/model.yaml) for the accepted residual risk. If a service must not be callable by other workloads, do not publish its port; keep it on its stack's own compose network (as `litellm`'s Postgres does).
 
 ---
 
@@ -179,37 +179,60 @@ Full rationale, the exposure-tiering decision, and why `--set-path` stripping is
 
 ## 10. Record the service in the architecture model
 
-**This step is enforced — `./scripts/deploy.sh` refuses to run against a non-conformant model.**
+**This step is enforced: `./scripts/deploy.sh` refuses to run against an internally inconsistent
+model, and the pre-commit hook refuses a commit whose YAML and generated `architecture/` disagree.**
 
-Add the service to [`architecture/model.yaml`](../architecture/model.yaml) rather than listing it in
-prose. Nothing about a new service belongs in README.md or NETWORK-CONFIG.md; those describe the
-platform's mechanisms, and the model holds which services use them.
+`architecture/model.yaml` is **generated** from the homelab-arch graph by `scripts/arch-export.sh`;
+never edit it, or the other generated files in `architecture/`. The only hand-edited architecture
+input is `architecture/provisioning/*.yaml`. Nothing about a new service belongs in README.md or
+NETWORK-CONFIG.md; those describe the platform's mechanisms, and the model holds which services use them.
 
-- An `ApplicationComponent` (`ac-<name>`): `stack`, `image`, `lifecycle`, `routing`
-  (`strip` | `no-strip` | `not-path-mounted`), and — if `image` is `locally built` — `source`, being
-  the repo that owns the app (or `in-repo`). The `source` attribute is what keeps this repo's docs
-  neutral to the projects that depend on it; the validator requires it.
-- An `ApplicationService` (`as-<name>`) per reachable endpoint, with an `exposed_via`
-  relationship to exactly one exposure tier.
-- A `primarily_serves` relationship from the component to exactly one `Pillar` (`pl-cost`,
-  `pl-agility`, `pl-security`, `pl-resilience`, `pl-quality` or `pl-control`) — the domain that
-  would degrade first if it were removed — plus an `also_serves` for each other pillar it bears
-  on. A component that exists only to learn from states a `pillar_exemption` instead; the
-  validator requires one or the other. If the component is a cross-cutting means to a pillar
-  (monitoring, a gateway, a workflow engine), add an `enables` edge too, even if nothing uses it yet.
+Ownership splits per fact. The lifecycle itself is in the homelab-arch repo, `docs/change-playbook.md`,
+sections `#sync-map`, `#4-provisioning-facts-and-infra` and `#5-retire-or-rename` (and `#2-ontology`
+for ontology changes); this section does not restate it.
 
-Check it before committing (the `.githooks/pre-commit` hook does this for you):
+**In the provisioning YAML (you edit these):**
 
-```bash
-python3 scripts/arch-validate.py
-```
+- An `ApplicationComponent` (`ac_<name>`) with `name`, `description`, `stack`, `image`, `routing`
+  (`strip` | `no-strip` | `not-path-mounted`) and, if `image` is `locally built`, `source`: the repo
+  that owns the app (or `in-repo`). The `source` attribute is what keeps this repo's docs neutral to
+  the projects that depend on it; the validator requires it.
+- An `ApplicationService` (`as_<name>`) per reachable endpoint, with `provides` from the component
+  and exactly one `exposed_via` to an exposure tier.
 
-Application-specific deployment notes — OAuth metadata paths, edge config, anything true only of
-this one app — go in `compose/<service-name>/README.md`, not in the platform docs.
+**In the graph, by proposal (never in the YAML; the owner approves):**
+
+- `pillar_exemption`, `plain_language` and `lifecycle` on the component.
+- The pillar edges: `primarily_serves` to exactly one `Pillar` (`pl_cost`, `pl_agility`,
+  `pl_security`, `pl_resilience`, `pl_quality` or `pl_control`), `also_serves` for each other pillar
+  it bears on, and `enables` for a cross-cutting means to a pillar (monitoring, a gateway, a
+  workflow engine). A component that exists only to learn from states a `pillar_exemption` instead;
+  a component with neither a primary pillar nor an exemption fails the check.
+- Controls and data entities.
+
+**Sequence (deploy first, commit last):**
+
+1. Edit compose and the provisioning YAML. Do not commit yet.
+2. `./scripts/deploy-service.sh prod beeblebox <service>`.
+3. `scripts/provisioning-sync.sh --check`, then `scripts/provisioning-sync.sh` (owner).
+4. A curation session proposes the graph-owned facts above; the owner approves.
+5. `scripts/arch-export.sh`, review `git diff architecture/`, then commit the YAML and
+   `architecture/` together. The hook passes only now. `git commit --no-verify`: only for WIP
+   commits that do not touch `architecture/`.
+
+The deploy gate (`require_conformant_model`) runs `scripts/arch-validate.py` and
+`scripts/check-metric-identity.py`. They check the exported model for internal consistency only;
+they cannot tell whether the YAML, the graph and the export agree. Running the validator by hand is
+a quick check, not the proof that the sync is done.
+
+Application-specific deployment notes (OAuth metadata paths, edge config, anything true only of
+this one app) go in `compose/<service-name>/README.md`, not in the platform docs.
 
 ---
 
 ## 11. Verify end-to-end
+
+Section 10 ends with the model committed in step 5; after the push and deploy, check the service itself and run `scripts/verify-deployment.sh`.
 
 On the server:
 
@@ -245,3 +268,4 @@ podman run --rm --add-host=<hostname>:host-gateway curlimages/curl \
 | Container → another container | `http://host.containers.internal:<backend-port>` — no network config, no TLS |
 | Tailnet URL, public/low-risk | `tailscale serve --set-path=/<name> http://127.0.0.1:<port>` (beeblebox) |
 | Tailnet URL, sensitive/admin | `handle`/`handle_path /<name>/*` block in the `:8090` router (`compose/tls-proxy/Caddyfile`) |
+| Record the service in the model | `architecture/provisioning/*.yaml`, then section 10 (deploy, `provisioning-sync`, `arch-export.sh`, commit together); never `architecture/model.yaml` |

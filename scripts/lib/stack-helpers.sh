@@ -68,10 +68,10 @@ assert_stack_compose_exists() {
 
 # Refuse to deploy an estate whose architecture model no longer describes it.
 #
-# architecture/model.yaml is the single source of truth for which services exist, how they are
-# routed, and which dependent project owns each locally-built component (see docs/ADD-SERVICE.md).
-# That only holds while something enforces it — a model nobody checks drifts exactly as fast as
-# the prose it replaced. scripts/arch-validate.py is stdlib-only, so this runs on the server too.
+# architecture/model.yaml is GENERATED from the homelab-arch graph by scripts/arch-export.sh; it is
+# not hand-edited (docs/ADD-SERVICE.md section 10). This gate checks internal consistency only
+# (arch-validate.py, check-metric-identity.py); it does not prove the YAML, graph and export agree.
+# scripts/arch-validate.py is stdlib-only, so this runs on the server too.
 #
 # Break-glass: DEPLOY_SKIP_ARCH_VALIDATE=1 (announced loudly; use it to ship a fix, not to live in).
 require_conformant_model() {
@@ -103,8 +103,8 @@ require_conformant_model() {
   if ! python3 "$validator"; then
     echo "" >&2
     echo "[arch] ERROR: architecture/model.yaml does not conform — refusing to deploy." >&2
-    echo "[arch] Update the model to match what you are deploying, then retry." >&2
-    echo "[arch] (Adding a service? docs/ADD-SERVICE.md step 10.)" >&2
+    echo "[arch] Do not edit the generated model by hand: fix the provisioning YAML and re-export" >&2
+    echo "[arch] (scripts/arch-export.sh), then retry. See docs/ADD-SERVICE.md section 10." >&2
     return 1
   fi
 
