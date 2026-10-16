@@ -10,32 +10,58 @@ alerting:
     - static_configs:
         - targets: ['host.containers.internal:8101']
 
+# Metric identity: every scraped series says what it describes, with exactly one of
+#   service: an ApplicationService id (as_*) from architecture/model.yaml, for anything an
+#            application exposes: its probes, its /metrics, its health.
+#   entity:  any other model id (n_*, ts_*, ...), for what no application service owns:
+#            the host, the reverse proxy, systemd.
+# Set it as a static_configs label (or a literal relabel on a job that mixes sources).
+# scripts/check-metric-identity.py enforces this and the ids at deploy time;
+# scripts/check-monitoring.sh enforces it on the live series and on every dashboard query.
+# Dashboard and rule aggregations must keep it: `sum by (service, ...)`, never a bare `sum`.
 scrape_configs:
   - job_name: prometheus
     metrics_path: /prometheus/metrics
     static_configs:
       - targets: ['localhost:9090']
+        labels: {service: as_prometheus}
 
   - job_name: node
     static_configs:
       - targets: ['node-exporter:9100']
+        labels: {entity: n_beeblebox}
+    # The textfile emitter reports systemd user units, which are ts_systemd's, not the host's.
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: localserver_systemd_.*
+        target_label: entity
+        replacement: ts_systemd
 
   - job_name: probe-http
     metrics_path: /probe
     params:
       module: [http_2xx]
     static_configs:
-      - targets:
-          - http://host.containers.internal:8091/health   # tic-tac-toe
-          - http://host.containers.internal:8094/health   # weather-mcp
-          - http://host.containers.internal:4000/litellm/health/liveliness
-          - http://host.containers.internal:5678/healthz  # n8n
-          - http://host.containers.internal:8080/         # hello-world
-          - http://host.containers.internal:8093/         # claude-mock-test
-          - http://host.containers.internal:3052/         # gqldb console
-          - http://host.containers.internal:8104/api/health   # homelab-arch (200 also when degraded)
-          - https://thelearningcto.com/                   # public blog
-          - https://beeblebox.taile98462.ts.net/healthz   # n8n via public Funnel
+      - targets: ['http://host.containers.internal:8091/health']   # tic-tac-toe
+        labels: {service: as_demos_private}
+      - targets: ['http://host.containers.internal:8094/health']   # weather-mcp
+        labels: {service: as_weather_mcp}
+      - targets: ['http://host.containers.internal:4000/litellm/health/liveliness']   # litellm
+        labels: {service: as_litellm_api}
+      - targets: ['http://host.containers.internal:5678/healthz']   # n8n raw port
+        labels: {service: as_n8n_lan}
+      - targets: ['http://host.containers.internal:8080/']   # hello-world
+        labels: {service: as_helloworld_lan}
+      - targets: ['http://host.containers.internal:8093/']   # claude-mock-test
+        labels: {service: as_claudemock}
+      - targets: ['http://host.containers.internal:3052/']   # gqldb console
+        labels: {service: as_gqldb_manager}
+      - targets: ['http://host.containers.internal:8104/api/health']   # homelab-arch (200 also when degraded)
+        labels: {service: as_homelab_arch_internal}
+      - targets: ['https://thelearningcto.com/']   # public blog
+        labels: {service: as_blog_public}
+      - targets: ['https://beeblebox.taile98462.ts.net/healthz']   # n8n via public Funnel
+        labels: {service: as_n8n_editor}
     relabel_configs: &blackbox_relabel
       - source_labels: [__address__]
         target_label: __param_target
@@ -50,8 +76,8 @@ scrape_configs:
     params:
       module: [http_2xx_no_redirect]
     static_configs:
-      - targets:
-          - http://host.containers.internal:8096/         # wordpress backend
+      - targets: ['http://host.containers.internal:8096/']   # wordpress backend
+        labels: {service: as_blog_public}
     relabel_configs: *blackbox_relabel
 
   - job_name: probe-tcp
@@ -59,8 +85,8 @@ scrape_configs:
     params:
       module: [tcp_connect]
     static_configs:
-      - targets:
-          - host.containers.internal:60061                # gqldb gRPC
+      - targets: ['host.containers.internal:60061']   # gqldb gRPC
+        labels: {service: as_gqldb}
     relabel_configs: *blackbox_relabel
 
   - job_name: tls-cert
@@ -68,25 +94,29 @@ scrape_configs:
     params:
       module: [tls_expiry]
     static_configs:
-      - targets:
-          - https://host.containers.internal:8443         # Caddy private-CA cert
+      - targets: ['https://host.containers.internal:8443']   # Caddy private-CA cert
+        labels: {entity: ts_caddy}
     relabel_configs: *blackbox_relabel
 
   - job_name: caddy
     metrics_path: /metrics
     static_configs:
       - targets: ['host.containers.internal:8103']
+        labels: {entity: ts_caddy}
 
   - job_name: alertmanager
     static_configs:
       - targets: ['host.containers.internal:8101']
+        labels: {service: as_alertmanager}
 
   - job_name: grafana
     metrics_path: /grafana/metrics     # verified offline in a throwaway container: root /metrics 301-redirects here
     static_configs:
       - targets: ['host.containers.internal:8102']
+        labels: {service: as_grafana}
 
   - job_name: litellm
     metrics_path: /litellm/metrics
     static_configs:
       - targets: ['host.containers.internal:4000']
+        labels: {service: as_litellm_api}

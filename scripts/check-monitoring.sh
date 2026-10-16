@@ -17,10 +17,11 @@ bad() { echo "FAIL $*" >&2; fail=1; }
 
 curl -fsS "$PROM/-/healthy" >/dev/null 2>&1 && ok "prometheus healthy" || bad "prometheus not healthy at $PROM"
 
-python3 - "$PROM" "${CHECK_SKIP_JOBS:-}" <<'PY' || fail=1
-import json, sys, urllib.request, urllib.parse
+python3 - "$PROM" "${CHECK_SKIP_JOBS:-}" "$REPO_ROOT/compose/grafana/dashboards" <<'PY' || fail=1
+import glob, json, sys, urllib.request, urllib.parse
 
 prom, skip = sys.argv[1], set(sys.argv[2].split())
+dash_dir = sys.argv[3]
 def get(path):
     try:
         return json.load(urllib.request.urlopen(prom + path, timeout=10))
@@ -52,8 +53,22 @@ if "tls-cert" not in skip:
 res = get("/api/v1/query?" + urllib.parse.urlencode({"query": 'ALERTS{alertname="Watchdog",alertstate="firing"}'}))["data"]["result"]
 if not res:
     print("FAIL Watchdog is not firing (rules not loaded?)", file=sys.stderr); rc = 1
+# Metric identity: no series, and no dashboard query result, may lack both service and entity.
+anon = get("/api/v1/series?" + urllib.parse.urlencode({"match[]": '{__name__=~".+",service="",entity=""}'}))["data"]
+for s_ in anon[:10]:
+    print(f"FAIL series with no service/entity label: {s_}", file=sys.stderr); rc = 1
+if len(anon) > 10:
+    print(f"FAIL ... and {len(anon) - 10} more series with no identity", file=sys.stderr)
+for path in sorted(glob.glob(dash_dir + "/*.json")):
+    for panel in json.load(open(path)).get("panels", []):
+        for tgt in panel.get("targets", []):
+            for r in get("/api/v1/query?" + urllib.parse.urlencode({"query": tgt["expr"]}))["data"]["result"]:
+                m = r["metric"]
+                if not (m.get("service") or m.get("entity")):
+                    print(f"FAIL dashboard {path.rsplit('/', 1)[-1]} panel {panel['title']!r}: result lacks service/entity: {m}", file=sys.stderr); rc = 1
+                    break
 if rc == 0:
-    print("OK   all expected targets up, no failing probes, Watchdog firing")
+    print("OK   all expected targets up, no failing probes, Watchdog firing, every series and dashboard result has an identity")
 sys.exit(rc)
 PY
 

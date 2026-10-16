@@ -96,6 +96,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: none
+              service: as_prometheus
             exp_annotations:
               summary: "Alerting pipeline heartbeat"
 

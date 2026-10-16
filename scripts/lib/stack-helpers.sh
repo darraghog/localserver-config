@@ -107,4 +107,11 @@ require_conformant_model() {
     echo "[arch] (Adding a service? docs/ADD-SERVICE.md step 10.)" >&2
     return 1
   fi
+
+  # Every scrape target must be tied to a model id, so no Grafana series is anonymous.
+  if ! python3 "$root/scripts/check-metric-identity.py"; then
+    echo "[arch] ERROR: a scrape target has no valid service/entity label — refusing to deploy." >&2
+    echo "[arch] (See the comment above scrape_configs in compose/prometheus/prometheus.yml.)" >&2
+    return 1
+  fi
 }

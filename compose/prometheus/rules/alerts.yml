@@ -5,6 +5,7 @@ groups:
         expr: vector(1)
         labels:
           severity: none
+          service: as_prometheus
         annotations:
           summary: "Alerting pipeline heartbeat"
       - alert: TargetDown
@@ -100,7 +101,7 @@ groups:
         annotations:
           summary: "Host has under 10% memory available"
       - alert: HostCpuHigh
-        expr: 1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.90
+        expr: 1 - avg by (entity) (rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.90
         for: 15m
         labels:
           severity: warn

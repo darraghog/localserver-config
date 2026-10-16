@@ -5,10 +5,10 @@
     {"id": 1, "type": "timeseries", "title": "Requests per second by code", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 0},
      "datasource": {"type": "prometheus", "uid": "prometheus"},
      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
-     "targets": [{"refId": "A", "expr": "sum by (code) (rate(caddy_http_requests_total[5m]))", "legendFormat": "{{code}}"}]},
+     "targets": [{"refId": "A", "expr": "sum by (entity, code) (rate(caddy_http_requests_total[5m]))", "legendFormat": "{{entity}} {{code}}"}]},
     {"id": 2, "type": "timeseries", "title": "Request duration p95", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 0},
      "datasource": {"type": "prometheus", "uid": "prometheus"},
      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
-     "targets": [{"refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(caddy_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95"}]}
+     "targets": [{"refId": "A", "expr": "histogram_quantile(0.95, sum by (entity, le) (rate(caddy_http_request_duration_seconds_bucket[5m])))", "legendFormat": "{{entity}} p95"}]}
   ]
 }

@@ -5,14 +5,14 @@
     {"id": 1, "type": "timeseries", "title": "CPU busy", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
      "datasource": {"type": "prometheus", "uid": "prometheus"},
      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []},
-     "targets": [{"refId": "A", "expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))", "legendFormat": "cpu"}]},
+     "targets": [{"refId": "A", "expr": "1 - avg by (entity) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))", "legendFormat": "{{entity}} cpu"}]},
     {"id": 2, "type": "timeseries", "title": "Memory available", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
      "datasource": {"type": "prometheus", "uid": "prometheus"},
      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []},
-     "targets": [{"refId": "A", "expr": "node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes", "legendFormat": "available"}]},
+     "targets": [{"refId": "A", "expr": "node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes", "legendFormat": "{{entity}} available"}]},
     {"id": 3, "type": "timeseries", "title": "Root filesystem free", "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
      "datasource": {"type": "prometheus", "uid": "prometheus"},
      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []},
-     "targets": [{"refId": "A", "expr": "node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}", "legendFormat": "free"}]}
+     "targets": [{"refId": "A", "expr": "node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}", "legendFormat": "{{entity}} free"}]}
   ]
 }
