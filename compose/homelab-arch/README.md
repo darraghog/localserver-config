@@ -59,12 +59,13 @@ accounts as inside the trust boundary and rotate the tokens if that ever stops b
 
 ## Ontology sync
 
-The container never syncs at start-up (`HLA_SKIP_SYNC=1`). After an ontology change, and only
-with the owner's say-so:
+The container never syncs at start-up (`HLA_SKIP_SYNC=1`). After an ontology change, and only with
+the owner's say-so, run in order (procedure: `~/dev/homelab-arch/docs/change-playbook.md` section 2):
 
 ```bash
-podman exec homelab-arch_app_1 python -m homelab_arch sync --check   # read-only
+podman exec homelab-arch_app_1 python -m homelab_arch sync --check   # 0 in sync, 4 not
 podman exec homelab-arch_app_1 python -m homelab_arch sync           # WRITES ont_* nodes
+podman exec homelab-arch_app_1 python -m homelab_arch sync --check   # must now exit 0
 ```
 
 ## Backup and restore
