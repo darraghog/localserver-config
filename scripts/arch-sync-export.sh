@@ -288,6 +288,7 @@ esac
 
 if ((drift && rc == 0)); then
     err "provisioning drift found (report only; nothing was changed)"
+    err "provisioning drift: follow ~/dev/homelab-arch/docs/change-playbook.md section 4, or docs/ADD-SERVICE.md section 10 steps 2-3 (deploy, then scripts/provisioning-sync.sh)"
     exit 3
 fi
 exit "$rc"
