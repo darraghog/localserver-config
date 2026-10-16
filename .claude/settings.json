@@ -57,6 +57,15 @@
       "Bash(python3 *)",
       "Bash(podman stop *)",
       "Bash(awk -F'\",\"' '{print $1}')"
+    ],
+    "deny": [
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(./scripts/arch-export.sh:*)",
+      "Bash(./scripts/arch-sync-export.sh:*)",
+      "Bash(./scripts/provisioning-sync.sh:*)",
+      "Bash(./scripts/hla:*)",
+      "Bash(hla:*)"
     ]
   }
 }
