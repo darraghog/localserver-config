@@ -113,6 +113,9 @@ ssh_port_hint() {
 # shellcheck source=scripts/lib/stack-helpers.sh
 source "$REPO_ROOT/scripts/lib/stack-helpers.sh"
 
+# shellcheck source=scripts/lib/warn-model-drift.sh
+source "$REPO_ROOT/scripts/lib/warn-model-drift.sh"
+
 for s in "${STACKS[@]}"; do
   assert_stack_compose_exists "$s" || exit 1
 done
@@ -193,6 +196,9 @@ else
   [[ -n "$SSH_PORT" && "$SSH_PORT" != "22" ]] && echo "[deploy-service] SSH port: $SSH_PORT"
   [[ "$SSH_DEST" != "$TARGET" ]] && echo "[deploy-service] SSH connect as: $SSH_DEST"
   echo ""
+
+  # Advisory only (never blocks, always returns 0): tell the owner when the model has drifted.
+  warn_model_drift "${STACKS[@]}"
 
   if [[ "$SYNC" -eq 1 ]]; then
     echo "[deploy-service] Syncing repo (preserving remote certs/, excluding envs/)..."
