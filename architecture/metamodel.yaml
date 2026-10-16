@@ -2,7 +2,7 @@
 meta:
   name: beeblebox-architecture-metamodel
   version: '2.0'
-  ontology_hash: 8ad422ef6e8eafa2a41c27cc7c1f348ea03688468b03707d5106218e8803a3c2
+  ontology_hash: fbe5e82505afcac1ea755b24fbd3f71703cdf4fd70a1952c0e4af30c41110ce7
   renderer_version: 1
   basis: TOGAF Content Metamodel core + ITIL 4 (CMDB, service catalog, change) + AI extension
 common_attributes:
@@ -974,6 +974,29 @@ relationships:
   - ServiceOffering
   authority: graph
   note: The gap or risk concerns this item.
+- name: mitigated_by
+  from:
+  - Risk
+  - Gap
+  to:
+  - Control
+  authority: graph
+  note: This control reduces the risk or contains the gap. Link only controls that exist today; a proposed safeguard belongs in the risk's mitigation text.
+- name: exposed_through
+  from:
+  - Risk
+  - Gap
+  to:
+  - ExposureTier
+  authority: graph
+  note: The risk or gap can be reached or triggered by way of this exposure tier.
+- name: arises_from
+  from:
+  - Risk
+  to:
+  - Gap
+  authority: graph
+  note: The risk exists because of this known shortfall.
 - name: offered_as
   from:
   - BusinessService
