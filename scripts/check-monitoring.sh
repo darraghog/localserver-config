@@ -18,7 +18,7 @@ bad() { echo "FAIL $*" >&2; fail=1; }
 curl -fsS "$PROM/-/healthy" >/dev/null 2>&1 && ok "prometheus healthy" || bad "prometheus not healthy at $PROM"
 
 python3 - "$PROM" "${CHECK_SKIP_JOBS:-}" "$REPO_ROOT/compose/grafana/dashboards" <<'PY' || fail=1
-import glob, json, sys, urllib.request, urllib.parse
+import glob, json, sys, time, urllib.request, urllib.parse
 
 prom, skip = sys.argv[1], set(sys.argv[2].split())
 dash_dir = sys.argv[3]
@@ -54,7 +54,8 @@ res = get("/api/v1/query?" + urllib.parse.urlencode({"query": 'ALERTS{alertname=
 if not res:
     print("FAIL Watchdog is not firing (rules not loaded?)", file=sys.stderr); rc = 1
 # Metric identity: no series, and no dashboard query result, may lack both service and entity.
-anon = get("/api/v1/series?" + urllib.parse.urlencode({"match[]": '{__name__=~".+",service="",entity=""}'}))["data"]
+# Recent window only: series written before the labels existed stay in the TSDB until retention expires.
+anon = get("/api/v1/series?" + urllib.parse.urlencode({"match[]": '{__name__=~".+",service="",entity=""}', "start": time.time() - 300}))["data"]
 for s_ in anon[:10]:
     print(f"FAIL series with no service/entity label: {s_}", file=sys.stderr); rc = 1
 if len(anon) > 10:
