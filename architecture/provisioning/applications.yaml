@@ -481,6 +481,9 @@ relationships:
   to: ep_tailscale
 - from: ac_n8n
   name: depends_on
+  to: ep_gmail
+- from: ac_n8n
+  name: depends_on
   to: ts_podman
 - from: ac_n8n
   name: deployed_on

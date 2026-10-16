@@ -177,6 +177,13 @@ ExternalProvider:
   function: Configuration source of truth
   cost: free tier
   lock_in: low
+- id: ep_gmail
+  name: Gmail
+  description: Operator's Gmail account. Receives the domain mail ImprovMX forwards, and is the mail service
+    n8n workflows use to send email. Outside the estate's control, so delivery depends on Google.
+  function: Operator mailbox for forwarded domain mail; outbound email for n8n workflows
+  cost: free tier
+  lock_in: low
 - id: ep_improvmx
   name: ImprovMX
   description: Forwards mail addressed to the domain; depends on MX records surviving DNS changes.

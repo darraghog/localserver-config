@@ -24,7 +24,7 @@
       "Driver": 3,
       "EvalSuite": 0,
       "ExposureTier": 5,
-      "ExternalProvider": 9,
+      "ExternalProvider": 10,
       "Gap": 17,
       "Incident": 0,
       "MCPTool": 0,
@@ -44,13 +44,13 @@
       "UseCase": 1,
       "VectorIndex": 0
     },
-    "entities": 235,
-    "relationships": 631
+    "entities": 236,
+    "relationships": 634
   },
   "files": {
     "metamodel.yaml": "1af7efb54ef2ae4dfdc76a1904a0a132c08cc9f931602541c2bc6d3c743b9f29",
-    "model.yaml": "77345b0d1feb2ee83b39dbe1a51993f9fa1f3b075d35832ec3b64c8b48210d9e",
-    "overview.html": "7af879a764ccd940ff832f8bc9a7e8eb95b7d26e30b043225bb6d57163ce28c8"
+    "model.yaml": "e94f46d922eb63051cbea6f6368690299d94e32786d6a1d1d14e9f2a6e91a396",
+    "overview.html": "f4ce8df02e6e2afd9d7726a22f38f573e0f047df5849d8c0ba28085b9aa88717"
   },
   "format": 1,
   "ontology": {
