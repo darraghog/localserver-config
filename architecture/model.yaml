@@ -641,6 +641,16 @@ ApplicationService:
   endpoint: https://thelearningcto.com/wp-admin
   protocol: https
   auth: edge-identity
+- id: as_blog_backend
+  name: Blog backend (east-west)
+  description: The WordPress container's own HTTP port, host.containers.internal:8096, published host-internal
+    so Prometheus can probe the origin without going through Cloudflare. It does not follow redirects,
+    because WordPress answers with its canonical public URL. Serves the same site as as-blog-public and
+    as-blog-admin but reaches it with no edge protection in front, so nothing may treat network position
+    as authentication.
+  endpoint: http://127.0.0.1:8096
+  protocol: http
+  auth: none
 - id: as_blog_public
   name: Blog (public web)
   description: Public read access to blog content.
@@ -2156,6 +2166,9 @@ relationships:
   to: as_blog_admin
 - from: ac_wordpress
   name: provides
+  to: as_blog_backend
+- from: ac_wordpress
+  name: provides
   to: as_blog_public
 - from: ac_xrdp
   name: also_serves
@@ -2220,6 +2233,9 @@ relationships:
 - from: as_blog_admin
   name: exposed_via
   to: et_public_cloudflare
+- from: as_blog_backend
+  name: exposed_via
+  to: et_loopback
 - from: as_blog_public
   name: delivers
   to: bs_blog

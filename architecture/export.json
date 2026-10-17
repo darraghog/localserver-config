@@ -9,7 +9,7 @@
       "Actor": 4,
       "Agent": 0,
       "ApplicationComponent": 17,
-      "ApplicationService": 26,
+      "ApplicationService": 27,
       "Artifact": 19,
       "BusinessProcess": 4,
       "BusinessService": 7,
@@ -44,13 +44,13 @@
       "UseCase": 1,
       "VectorIndex": 0
     },
-    "entities": 236,
-    "relationships": 634
+    "entities": 237,
+    "relationships": 636
   },
   "files": {
     "metamodel.yaml": "1af7efb54ef2ae4dfdc76a1904a0a132c08cc9f931602541c2bc6d3c743b9f29",
-    "model.yaml": "e94f46d922eb63051cbea6f6368690299d94e32786d6a1d1d14e9f2a6e91a396",
-    "overview.html": "f4ce8df02e6e2afd9d7726a22f38f573e0f047df5849d8c0ba28085b9aa88717"
+    "model.yaml": "51120e5ff0efd38444dacb58f0010b0b85b25630c11787fd86ae814a03683328",
+    "overview.html": "24c57b1f22682a7c193712b84d054bbdd31066783419b89abf27d58cfd4c63db"
   },
   "format": 1,
   "ontology": {
