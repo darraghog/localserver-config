@@ -29,7 +29,8 @@
 #      start blocks, so its exit status counts) and require LoadState=loaded and Result=success.
 #      A failure is exit 1, but step 8 still runs.
 #   8. Drift report: provisioning-sync /infra/architecture/provisioning --check in the container.
-#      Drift is exit 3; a check that cannot run (ssh, container, config) is exit 1.
+#      Drift is exit 3; a check that cannot run (ssh, container, config) is exit 1, and so is a
+#      check that refuses the files (provisioning-sync exit 1: findings or a blocked removal).
 #
 # Environment:
 #   HLA_SSH_HOST   ssh host (default beeblebox); must match ^[A-Za-z0-9._-]+$, not start with -
@@ -274,6 +275,12 @@ case $src in
 4)
     drift=1
     while IFS= read -r line; do err "DRIFT: $line"; done <<<"$out"
+    ;;
+1)
+    rc=1
+    err "FAILED: provisioning-sync --check refused the provisioning files (exit 1): input findings or a blocked removal, not drift; nothing was written"
+    err "  fix it per ~/dev/homelab-arch/docs/change-playbook.md section 5 (a blocked removal needs its graph-owned edges removed by proposal first)"
+    while IFS= read -r line; do [[ -n $line ]] && err "  $line"; done <<<"$out"
     ;;
 *)
     rc=1
