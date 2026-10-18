@@ -188,6 +188,23 @@ podman volume import gqldb_manager-data ~/restic-work/restore/backup/dumps/gqldb
 `MANAGER_ENCRYPTION_KEY`, exactly as n8n's credentials depend on `N8N_ENCRYPTION_KEY`. Without it
 the console starts fine and every saved connection is undecryptable — delete and re-create them.
 
+### homelab-arch
+
+Three things make up the architecture model; only two need restoring:
+
+| Piece | Where it lives | Restore |
+|---|---|---|
+| `homelab_arch` graph | GQLDB (`BACKUP DATABASE` archive, see GQLDB above) | restored with the other graphs; the next step checks it |
+| Proposal queue and audit log | `homelab-arch-proposals.db` (+ `homelab-arch-sync-runs.jsonl`) in the backup | `compose/homelab-arch/README.md` → Backup and restore (app stopped) |
+| `architecture/` export and `provisioning/*.yaml` | this repo (git) | nothing to restore; `git pull` |
+
+After restoring, with the owner's say-so, from `~/dev/homelab-arch`: `export --check` must report
+no difference between the restored graph and the committed `architecture/export.json`, and
+`scripts/provisioning-sync.sh --check` must exit 0. Either failing means the graph backup is older
+than the last export commit: re-apply from `~/dev/homelab-arch/docs/change-playbook.md` section 4
+(provisioning) and section 3 (the restored queue shows which graph-owned proposals were approved after the backup was taken). If the
+graph archive is lost but git survives, use playbook section 6 (rebuild from the export).
+
 ### Rebuilding the host from nothing
 
 1. Install Podman, clone this repo, run `./scripts/sudo/bootstrap-host.sh`.
@@ -196,7 +213,8 @@ the console starts fine and every saved connection is undecryptable — delete a
    registered to that credential file, so a new one means re-routing DNS).
 4. `./scripts/deploy.sh` to bring the stacks up empty.
 5. Load the three dumps, then the `wordpress-data` volume.
-6. Verify per the checks above.
+6. Restore GQLDB, then the homelab-arch proposals DB, and run the homelab-arch checks above.
+7. Verify per the checks above.
 
 ## Testing the restore
 
