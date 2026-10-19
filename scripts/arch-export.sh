@@ -9,6 +9,9 @@
 # Environment:
 #   HLA_SSH_HOST   ssh host (default beeblebox); must match ^[A-Za-z0-9._-]+$ and not start with -
 #   HLA_CONTAINER  container name (default homelab-arch_app_1); same rule
+#   HLA_EXPORT_LOCAL  1 = run podman exec on THIS host instead of over ssh. Set by the server-side
+#                  arch-sync-export.sh timer, which runs on the host that holds the container; the
+#                  owner's manual runs from the workstation leave it unset.
 #   HLA_EXPORT_BUNDLE_FILE  TESTS ONLY: use this bundle file instead of ssh (warns).
 # The ssh command line is a fixed constant apart from those two validated words; no -t, so
 # stdout stays binary-clean.
@@ -39,13 +42,21 @@ else
   # head caps what a misbehaving remote can put on disk; the unbundler then refuses oversize.
   # pipefail is off so PIPESTATUS (read in this shell) tells ssh's status from head's.
   set +o pipefail
-  ssh -n -- "$HOST" podman exec "$C" python -m homelab_arch export --bundle </dev/null \
-    | head -c $((MAX + 1)) >"$tmp/b.json"
-  st=("${PIPESTATUS[@]}")
+  if [[ ${HLA_EXPORT_LOCAL:-} == 1 ]]; then
+    via=podman
+    podman exec "$C" python -m homelab_arch export --bundle </dev/null \
+      | head -c $((MAX + 1)) >"$tmp/b.json"
+    st=("${PIPESTATUS[@]}")
+  else
+    via=ssh
+    ssh -n -- "$HOST" podman exec "$C" python -m homelab_arch export --bundle </dev/null \
+      | head -c $((MAX + 1)) >"$tmp/b.json"
+    st=("${PIPESTATUS[@]}")
+  fi
   set -o pipefail
   size=$(wc -c <"$tmp/b.json")
-  [[ $size -gt 0 ]] || die "ssh/export produced no output (exit ${st[0]})"
-  if [[ ${st[0]} -ne 0 && $size -le $MAX ]]; then die "ssh/export failed (exit ${st[0]})"; fi
+  [[ $size -gt 0 ]] || die "$via/export produced no output (exit ${st[0]})"
+  if [[ ${st[0]} -ne 0 && $size -le $MAX ]]; then die "$via/export failed (exit ${st[0]})"; fi
 fi
 
 python3 -I "$ROOT/scripts/lib/arch_unbundle.py" "$tmp/b.json" "$ROOT/architecture" || exit 2

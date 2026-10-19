@@ -1,58 +1,73 @@
 #!/usr/bin/env bash
-# scripts/arch-sync-export.sh (infra repo): the daily publish of approved graph changes, run on
-# the owner's WORKSTATION (not the server) from localserver-homelab-arch-export-sync.service
-# (daily 09:00, via its timer).
+# scripts/arch-sync-export.sh (infra repo): the daily publish of approved graph changes, run ON
+# THE SERVER (beeblebox) from localserver-homelab-arch-export-sync.service (daily 09:00, via its
+# timer). Nothing here uses ssh: the container, the export-check unit and the deployed tree are
+# all on this host, so a failure is a failed user unit and the existing SystemdUserUnitFailed
+# alert (emit-unit-metrics.sh -> Alertmanager -> Slack) reports it.
 #
 # Source of truth: homelab-arch deploy/infra/arch-sync-export.sh.
 #
+# Two trees, kept apart on purpose:
+#   DEPLOY  the tree this script runs from (~/localserver-config on the server). It is an rsync
+#           --delete mirror of the owner's workstation (no .git), the container bind-mounts its
+#           architecture/ at /infra/architecture, and the owner's deploys overwrite it. This
+#           script only ever writes the four export files into it, never anything else.
+#   CLONE   a dedicated git clone (HLA_SYNC_CLONE) that only this job touches: pull, export,
+#           check, commit, push all happen there. Running from DEPLOY (not CLONE) also means a
+#           `git pull` never rewrites the script while bash is still reading it.
+#
 # Direction: graph -> git is PUBLISHED (approved proposals already changed the graph; this
-# commits the re-export and deploys it). git -> graph drift (committed provisioning YAML vs the
+# commits the re-export and installs it). git -> graph drift (committed provisioning YAML vs the
 # graph) is only REPORTED: provisioning-sync is only ever run with --check.
 #
 # Steps:
 #   1. flock ${XDG_RUNTIME_DIR:-/tmp}/arch-sync-export.lock; held by another run -> exit 0.
-#   2. Refuse (exit 2) unless on main, with a clean `git status --porcelain` and no local commit
-#      ahead of @{u} (unpushed commits are never published by this script: their net diff could
-#      hide an intermediate commit, and they never went through arch-check here); then
-#      `git pull --ff-only`.
-#   3. scripts/arch-export.sh. No change -> "export unchanged", go to 7.
+#   2. Refuse (exit 2) unless CLONE is a git clone other than DEPLOY, on main, with
+#      core.hooksPath=.githooks (so the pre-commit gate really runs), a clean
+#      `git status --porcelain` and no local commit ahead of @{u} (unpushed commits are never
+#      published by this script: their net diff could hide an intermediate commit, and they
+#      never went through arch-check here); then `git pull --ff-only`.
+#   3. scripts/arch-export.sh with HLA_EXPORT_LOCAL=1 (podman exec on this host). No change ->
+#      "export unchanged", go to 6.
 #   4. Only architecture/{export.json,model.yaml,metamodel.yaml,overview.html} may change, and
 #      scripts/arch-check.sh must pass; otherwise architecture/ is restored and the run fails.
 #   5. Commit those files (never --no-verify): "architecture: export after <ids>", the body
 #      listing `id actor summary` of each applied proposal decided after the last commit that
 #      touched architecture/export.json; "architecture: export refresh (graph changed)" when the
-#      proposals cannot be read or none qualify. A refusing hook restores the files.
-#   6. git push origin main; then, only if the tree is still clean and HEAD equals @{u} (deploy
-#      ships the working tree), scripts/deploy-service.sh prod "$HOST" homelab-arch. A failure
-#      keeps the commit and says whether it was pushed.
-#   7. Freshness: start localserver-homelab-arch-export-check.service on the server (a oneshot
-#      start blocks, so its exit status counts) and require LoadState=loaded and Result=success.
-#      A failure is exit 1, but step 8 still runs.
+#      proposals cannot be read or none qualify. A refusing hook restores the files. Then
+#      git push origin main.
+#   6. Install: only if the tree is still clean and HEAD equals @{u}, copy the four export files
+#      from CLONE into DEPLOY/architecture (atomic rename, only when they differ). This runs on
+#      every run, so a copy that failed yesterday is retried today. No restart is needed: the
+#      container reads the directory live. A failure keeps the commit and says whether it was
+#      pushed.
+#   7. Freshness: start localserver-homelab-arch-export-check.service (a oneshot start blocks, so
+#      its exit status counts) and require LoadState=loaded and Result=success. A failure is
+#      exit 1, but step 8 still runs.
 #   8. Drift report: provisioning-sync /infra/architecture/provisioning --check in the container.
-#      Drift is exit 3; a check that cannot run (ssh, container, config) is exit 1, and so is a
-#      check that refuses the files (provisioning-sync exit 1: findings or a blocked removal).
+#      Drift is exit 3; a check that cannot run (podman, container, config) is exit 1, and so is
+#      a check that refuses the files (provisioning-sync exit 1: findings or a blocked removal).
+#      Exit 3 is deliberately a FAILED unit: drift should alert, not wait to be noticed.
 #
 # Environment:
-#   HLA_SSH_HOST   ssh host (default beeblebox); must match ^[A-Za-z0-9._-]+$, not start with -
-#   HLA_CONTAINER  app container (default homelab-arch_app_1); same rule
-#   DEPLOY_SSH_DEST, DEPLOY_SSH_PORT, DEPLOY_REMOTE_PATH  unset at start: the deploy always goes
-#                  to $HLA_SSH_HOST with deploy-service.sh's defaults
-# Every ssh command line is a fixed constant apart from those two validated words, and always
-# carries -o BatchMode=yes and `--`; SSH_ASKPASS=/bin/false with SSH_ASKPASS_REQUIRE=force is
-# exported for the whole run, so no password or passphrase prompt can be answered. Neither stops
-# a Tailscale SSH check-mode wait (the server side holds the session open): the `timeout`
-# wrappers bound that and every other hang (each ssh 2m, git pull/push 2m, arch-export 15m,
-# arch-check 15m, git commit with its hook 15m, deploy-service 35m); a timeout is exit 1 with a
-# TIMED OUT message, said only when `timeout` itself fired (a command's own 124/137 is not one).
-# ssh uses the user's normal ~/.ssh config and keys; under the systemd user unit an agent is only
-# reachable when SSH_AUTH_SOCK is set (see the unit's optional Environment= line). origin is
-# HTTPS (through gh's credential helper), so git push/pull do not use these ssh settings.
+#   HLA_SYNC_CLONE the dedicated clone (default $HOME/localserver-config-sync); absolute, and not
+#                  the tree this script runs from
+#   HLA_CONTAINER  app container (default homelab-arch_app_1); must match ^[A-Za-z0-9._-]+$, not
+#                  start with -
+#   HLA_APP_REPO, HLA_PYTHON  read by scripts/arch-check.sh (the app checkout holding the pinned
+#                  commit, and the python >= 3.12 used for its venv)
+# Every external command runs under `timeout` (podman exec 2m, git pull/push 2m, curl 2m,
+# systemctl 2m, arch-export 15m, arch-check 15m, git commit with its hook 15m); a timeout is exit
+# 1 with a TIMED OUT message, said only when `timeout` itself fired (a command's own 124/137 is
+# not one). git push/pull use HTTPS with GIT_TERMINAL_PROMPT=0, so missing or expired credentials
+# fail the run instead of waiting for a prompt.
 #
 # Exit codes:
 #   0  done, or nothing to do (including: another run holds the lock)
-#   1  a step failed (pull, export, path/check refusal, commit hook, push, deploy, freshness,
+#   1  a step failed (pull, export, path/check refusal, commit hook, push, install, freshness,
 #      a drift check that could not run, any timeout)
-#   2  refused: checkout not on main, not clean, local commits not pushed, or a bad env word
+#   2  refused: clone missing, not on main, not clean, hooks not wired, local commits not pushed,
+#      or a bad env word
 #   3  everything else succeeded but provisioning drift was found (the DRIFT lines say what)
 set -euo pipefail
 umask 022
@@ -62,14 +77,15 @@ err() { log "$@" >&2; }
 refuse() { err "REFUSED: $*"; exit 2; }
 fail() { err "FAILED: $*"; exit 1; }
 
-unset DEPLOY_SSH_DEST DEPLOY_SSH_PORT DEPLOY_REMOTE_PATH
-export SSH_ASKPASS=/bin/false SSH_ASKPASS_REQUIRE=force
+export GIT_TERMINAL_PROMPT=0
+export HLA_EXPORT_LOCAL=1
 
-HOST=${HLA_SSH_HOST-beeblebox}
 C=${HLA_CONTAINER-homelab-arch_app_1}
 re='^[A-Za-z0-9._-]+$'
-[[ $HOST =~ $re && $HOST != -* ]] || refuse "HLA_SSH_HOST must match ^[A-Za-z0-9._-]+\$ and not start with '-'"
 [[ $C =~ $re && $C != -* ]] || refuse "HLA_CONTAINER must match ^[A-Za-z0-9._-]+\$ and not start with '-'"
+export HLA_CONTAINER=$C
+CLONE=${HLA_SYNC_CLONE-${HOME:-}/localserver-config-sync}
+[[ $CLONE == /* ]] || refuse "HLA_SYNC_CLONE must be an absolute path (got '$CLONE')"
 
 PROPOSALS_URL='http://127.0.0.1:8104/api/proposals?status=applied&limit=200'
 CHECK_UNIT=localserver-homelab-arch-export-check.service
@@ -92,8 +108,8 @@ bounded() {
     rm -f -- "$mark"
     return "$rc"
 }
-# One fixed ssh prefix. -n: no remote command may read this script's stdin.
-rssh() { bounded 2m "ssh to $HOST" ssh -n -o BatchMode=yes -o ConnectTimeout=30 -- "$HOST" "$@"; }
+# podman exec in the app container; the command line is fixed apart from the arguments.
+pexec() { bounded 2m "podman exec" podman exec "$C" "$@"; }
 
 # --- 1. lock --------------------------------------------------------------------------------
 LOCK="${XDG_RUNTIME_DIR:-/tmp}/arch-sync-export.lock"
@@ -107,9 +123,12 @@ RUNTMP=$(mktemp -d) || fail "cannot create a temp dir"
 trap 'rm -rf -- "$RUNTMP"' EXIT
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P) || fail "cannot locate the script"
-ROOT=$(dirname -- "$script_dir")
-cd -- "$ROOT" || fail "cannot cd to $ROOT"
-export GIT_TERMINAL_PROMPT=0
+DEPLOY=$(dirname -- "$script_dir")
+CLONE=$(cd -- "$CLONE" 2>/dev/null && pwd -P) || refuse "HLA_SYNC_CLONE is not a directory: $CLONE"
+[[ -e $CLONE/.git ]] || refuse "$CLONE is not a git clone (no .git)"
+[[ $CLONE != "$DEPLOY" ]] ||
+    refuse "HLA_SYNC_CLONE is the tree this script runs from ($DEPLOY): that tree is overwritten by the owner's deploys and has no .git; use a dedicated clone"
+cd -- "$CLONE" || fail "cannot cd to $CLONE"
 
 restore() {
     git checkout -q HEAD -- architecture/ || err "could not restore architecture/ (git checkout)"
@@ -130,12 +149,15 @@ outside_paths() { # stdin: paths; prints each one that is not one of FILES
 # --- 2. checkout state, pull ----------------------------------------------------------------
 branch=$(git symbolic-ref --short -q HEAD) || branch=""
 [[ $branch == main ]] || refuse "the checkout is on '${branch:-a detached HEAD}', not main"
+hooks=$(git config --get core.hooksPath) || hooks=""
+[[ $hooks == .githooks ]] ||
+    refuse "core.hooksPath is '${hooks:-unset}' in $CLONE, not .githooks, so the pre-commit gate would not run (git -C $CLONE config core.hooksPath .githooks)"
 dirty=$(git status --porcelain) || fail "git status failed"
 [[ -z $dirty ]] || refuse "the checkout is not clean (git status --porcelain):"$'\n'"$dirty"
 ahead=$(git rev-list --count '@{u}..HEAD' 2>/dev/null) || refuse "main has no upstream (@{u}) to compare with"
 ((ahead == 0)) || refuse "local main has unpushed commits; push or reset them first ($ahead ahead of @{u})"
 log "pulling (git pull --ff-only)"
-bounded 2m "git pull" git pull -q --ff-only || fail "git pull --ff-only failed"
+bounded 2m "git pull" git pull -q --ff-only || fail "git pull --ff-only failed (network, or the git credential on this host expired?)"
 
 publish=0
 
@@ -161,7 +183,7 @@ else
     log "running scripts/arch-check.sh"
     if ! bounded 15m "scripts/arch-check.sh" scripts/arch-check.sh; then
         restore
-        fail "scripts/arch-check.sh did not pass; nothing committed; architecture/ restored"
+        fail "scripts/arch-check.sh did not pass; nothing committed; architecture/ restored (a missing pinned commit means HLA_APP_REPO on this host needs a git fetch)"
     fi
 
     # --- 5. commit ------------------------------------------------------------------------------
@@ -169,7 +191,7 @@ else
     lines=""
     prc=0
     rm -f -- "$RUNTMP/timed-out"
-    json=$(rssh curl -s -f --max-time 30 "'$PROPOSALS_URL'") || prc=$?
+    json=$(bounded 2m "reading the applied proposals" curl -s -f --max-time 30 "$PROPOSALS_URL") || prc=$?
     if [[ -e $RUNTMP/timed-out ]]; then
         restore
         fail "reading the applied proposals timed out; nothing committed; architecture/ restored"
@@ -205,7 +227,7 @@ for _, line in sorted(out):
     print(line)
 ' "$since" <<<"$json") || lines=""
     else
-        err "could not read the applied proposals from $HOST; using the fallback subject"
+        err "could not read the applied proposals; using the fallback subject"
     fi
     msg="$RUNTMP/commit-msg"
     if [[ -n $lines ]]; then
@@ -233,43 +255,64 @@ for _, line in sorted(out):
     publish=1
 fi
 
-# --- 6. publish -----------------------------------------------------------------------------
+# --- 5b. push -------------------------------------------------------------------------------
 if ((publish)); then
     head=$(git rev-parse --short HEAD)
     log "pushing (git push origin main)"
     bounded 2m "git push" git push -q origin main ||
         fail "git push failed; commit $head is in place locally and NOT pushed"
-    # deploy-service.sh rsyncs the working tree: ship only exactly what was pushed.
-    now=$(git status --porcelain) || now="(git status failed)"
-    [[ -z $now ]] ||
-        fail "the tree changed after the commit; commit $head is pushed but NOT deployed:"$'\n'"$now"
-    [[ $(git rev-parse HEAD) == "$(git rev-parse '@{u}' 2>/dev/null)" ]] ||
-        fail "HEAD is not @{u} after the push; commit $head is NOT deployed"
-    log "deploying (scripts/deploy-service.sh prod $HOST homelab-arch)"
-    bounded 35m "scripts/deploy-service.sh" scripts/deploy-service.sh prod "$HOST" homelab-arch </dev/null ||
-        fail "deploy failed; commit $head is in place and pushed, but NOT deployed"
-    log "published $head"
 fi
+
+# --- 6. install the committed export into the deployed tree ----------------------------------
+# Install only exactly what is pushed: the tree must be clean and HEAD must be @{u}.
+head=$(git rev-parse --short HEAD)
+now=$(git status --porcelain) || now="(git status failed)"
+[[ -z $now ]] ||
+    fail "the tree changed after the commit; $head is not installed into $DEPLOY:"$'\n'"$now"
+[[ $(git rev-parse HEAD) == "$(git rev-parse '@{u}' 2>/dev/null)" ]] ||
+    fail "HEAD is not @{u}; $head is NOT installed into $DEPLOY"
+
+# Copy one export file into DEPLOY/architecture when it differs: temp file in the same directory,
+# then rename, so the container never reads a half-written file.
+install_one() {
+    local f=$1 src="$CLONE/$1" dst="$DEPLOY/$1" tmpf
+    [[ -f $src && ! -L $src ]] || { err "$src is not a regular file"; return 1; }
+    [[ ! -L $dst ]] || { err "$dst is a symlink; refusing to write through it"; return 1; }
+    if [[ -f $dst ]] && cmp -s -- "$src" "$dst"; then return 0; fi
+    tmpf=$(mktemp "$dst.XXXXXX") || return 1
+    if cat -- "$src" >"$tmpf" && chmod 644 -- "$tmpf" && mv -f -- "$tmpf" "$dst"; then
+        log "installed $f into $DEPLOY"
+        return 0
+    fi
+    rm -f -- "$tmpf"
+    return 1
+}
+[[ -d $DEPLOY/architecture && ! -L $DEPLOY/architecture ]] ||
+    fail "$DEPLOY/architecture is not a directory; $head is NOT installed"
+for f in "${FILES[@]}"; do
+    install_one "$f" || fail "could not install $f into $DEPLOY; commit $head is in the clone (pushed if it was new) but NOT installed here"
+done
+if ((publish)); then log "published $head"; fi
 
 # --- 7. freshness ---------------------------------------------------------------------------
 rc=0
-log "freshness: starting $CHECK_UNIT on $HOST"
+log "freshness: starting $CHECK_UNIT"
 start=0
-rssh systemctl --user start "$CHECK_UNIT" || start=$?
-props=$(rssh systemctl --user show -p LoadState -p Result "$CHECK_UNIT") || props=""
+bounded 2m "starting $CHECK_UNIT" systemctl --user start "$CHECK_UNIT" || start=$?
+props=$(bounded 2m "reading $CHECK_UNIT state" systemctl --user show -p LoadState -p Result "$CHECK_UNIT") || props=""
 load=$(sed -n 's/^LoadState=//p' <<<"$props" | head -n1)
 result=$(sed -n 's/^Result=//p' <<<"$props" | head -n1)
 if ((start == 0)) && [[ $load == loaded && $result == success ]]; then
     log "freshness: the graph matches the committed export"
 else
-    err "FAILED: freshness check: start exit $start, LoadState '${load:-?}', Result '${result:-?}' (journalctl --user -u $CHECK_UNIT on $HOST)"
+    err "FAILED: freshness check: start exit $start, LoadState '${load:-?}', Result '${result:-?}' (journalctl --user -u $CHECK_UNIT)"
     rc=1
 fi
 
 # --- 8. drift report (never writes) ---------------------------------------------------------
 drift=0
 src=0
-out=$(rssh podman exec "$C" python -m homelab_arch provisioning-sync /infra/architecture/provisioning --check 2>&1) || src=$?
+out=$(pexec python -m homelab_arch provisioning-sync /infra/architecture/provisioning --check 2>&1) || src=$?
 case $src in
 0) log "provisioning in sync" ;;
 4)
@@ -284,8 +327,8 @@ case $src in
     ;;
 *)
     rc=1
-    if ((src == 255)); then
-        err "FAILED: drift check failed to run: $HOST unreachable over ssh (exit 255)"
+    if ((src == 125 || src == 126 || src == 127)); then
+        err "FAILED: drift check failed to run: podman could not run it (exit $src): is $C running?"
     else
         err "FAILED: drift check failed to run (exit $src): container, graph or config problem"
     fi

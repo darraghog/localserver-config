@@ -1,0 +1,37 @@
+[Unit]
+Description=Publish approved homelab-arch graph changes to localserver-config; report provisioning drift
+Documentation=https://github.com/darraghog/localserver-config
+Wants=network-online.target
+After=network-online.target
+
+# Runs ON THE SERVER (beeblebox), like the backup and the weekly export check: no ssh. It works
+# in a dedicated git clone (HLA_SYNC_CLONE), never in the rsync'd deploy tree it runs from, and
+# only copies the four architecture/ export files into that deploy tree. See the header of
+# scripts/arch-sync-export.sh and docs/ARCH-SYNC-ON-SERVER.md for the one-time setup (clone, git
+# credential, pre-commit hook, python >= 3.12); until that is done the run REFUSES (exit 2).
+
+[Service]
+Type=oneshot
+WorkingDirectory=__REPO_ROOT__
+Environment=PATH=__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HLA_SYNC_CLONE=__HOME__/localserver-config-sync
+# scripts/arch-check.sh materialises the pinned checker commit from this app checkout; keep it
+# fetched whenever architecture/.checker-ref is re-pinned.
+Environment=HLA_APP_REPO=__HOME__/dev/homelab-arch
+# Optional: a python >= 3.12 other than python3 for the checker's venv.
+#Environment=HLA_PYTHON=/usr/bin/python3.12
+# Commits made by this job are recognisable in history.
+Environment="GIT_AUTHOR_NAME=localserver arch-sync"
+Environment=GIT_AUTHOR_EMAIL=arch-sync@localserver.invalid
+Environment="GIT_COMMITTER_NAME=localserver arch-sync"
+Environment=GIT_COMMITTER_EMAIL=arch-sync@localserver.invalid
+ExecStart=__REPO_ROOT__/scripts/arch-sync-export.sh
+# Above the sum of the script's own step timeouts (about 57 minutes); a last resort so a hung run
+# cannot block tomorrow's.
+TimeoutStartSec=70min
+
+# Deliberately NO [Install] section: driven by localserver-homelab-arch-export-sync.timer.
+# Exit 1 (a step failed), 2 (refused: clone state, hooks or bad env) or 3 (provisioning drift
+# found) leaves this unit failed; scripts/emit-unit-metrics.sh reports it and the
+# SystemdUserUnitFailed alert (Alertmanager -> Slack) picks it up after 5 minutes.
+# `journalctl --user -u localserver-homelab-arch-export-sync` says why (lines prefixed [arch-sync]).
