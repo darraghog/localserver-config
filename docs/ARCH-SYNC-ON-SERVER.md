@@ -27,16 +27,34 @@ it finds, so run it (or the manual install in step 6) only after steps 1 to 5.
 
 Run steps 1 to 5 on beeblebox as the service user.
 
-1. **Python 3.12 or newer** for the pinned checker's venv: `python3 --version`. If it is older,
+1. **Python 3.12 or newer** for the pinned checker's venv: `python3 --version` (3.14.4 worked on
+   beeblebox). If it is older,
    install `python3.12` and `python3.12-venv`, and uncomment `Environment=HLA_PYTHON=...` in the
    unit. The first run builds the checker's venv from PyPI (hash-pinned) and caches it under
    `~/.cache/homelab-arch-checker`, so beeblebox needs outbound HTTPS and that first run is slower.
-2. **App checkout** with the pinned commit:
-   `git clone https://github.com/darraghog/homelab-arch.git ~/dev/homelab-arch`, then
+2. **App checkout** with the pinned commit. `homelab-arch` is a **private** repo, so give beeblebox
+   a read-only **deploy key** first (no expiry, one repo, no new token):
+   ```
+   install -d -m 700 ~/.ssh
+   ssh-keygen -t ed25519 -N '' -f ~/.ssh/homelab-arch-deploy -C beeblebox-homelab-arch
+   cat ~/.ssh/homelab-arch-deploy.pub
+   ```
+   Add that public line in GitHub under the `homelab-arch` repo, Settings, Deploy keys, with
+   *Allow write access* unticked. Then clone, and save the key in the clone so later fetches work:
+   ```
+   ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
+   GIT_SSH_COMMAND='ssh -i ~/.ssh/homelab-arch-deploy -o IdentitiesOnly=yes' \
+     git clone git@github.com:darraghog/homelab-arch.git ~/dev/homelab-arch
+   git -C ~/dev/homelab-arch config core.sshCommand \
+     'ssh -i ~/.ssh/homelab-arch-deploy -o IdentitiesOnly=yes'
+   ```
+   (`ssh-keyscan` trusts GitHub's key on first use; compare `ssh-keygen -lf ~/.ssh/known_hosts` with
+   GitHub's published fingerprints if you want to verify it.) Then
    `git -C ~/dev/homelab-arch cat-file -t "$(cat ~/localserver-config/architecture/.checker-ref)"`
    must print `commit`. Whenever `.checker-ref` is re-pinned (playbook section 2 step 5), also run
    `git -C ~/dev/homelab-arch fetch` on beeblebox, or the job's checker step fails.
-3. **Dedicated clone, with the hook wired:**
+3. **Dedicated clone, with the hook wired** (this repo is public, so the clone needs no credential;
+   only the push in step 4 does):
    ```
    git clone https://github.com/darraghog/localserver-config.git ~/localserver-config-sync
    git -C ~/localserver-config-sync config core.hooksPath .githooks
@@ -58,8 +76,10 @@ Run steps 1 to 5 on beeblebox as the service user.
    unset PAT
    chmod 600 ~/.config/arch-sync/git-credentials
    ```
-   Check: `git -C ~/localserver-config-sync pull --ff-only` succeeds. The file is not backed up
-   (regenerate the token if the host is rebuilt). When the token expires the job fails at
+   Check: `git -C ~/localserver-config-sync pull --ff-only` succeeds, and so does
+   `git -C ~/localserver-config-sync push --dry-run origin main` (the repo is public, so only the
+   push proves the token works). The file is not backed up
+   (regenerate the token if the host is rebuilt; the deploy key in `~/.ssh` is not backed up either). When the token expires the job fails at
    `git pull` with "the git credential on this host expired?" and the alert fires.
 5. **Dry look** (changes nothing): `git -C ~/localserver-config-sync status` is clean on `main`,
    and `podman exec homelab-arch_app_1 true` works.
@@ -83,7 +103,10 @@ Run steps 1 to 5 on beeblebox as the service user.
    approved since the last export commit: pull, export, check, an `architecture: export after
    pr_...` commit, push, `installed architecture/...`, `published`, freshness ok, then either
    `provisioning in sync` or DRIFT lines (exit 3, which is the drift alarm in the playbook, not a
-   setup error). Then confirm `export_status` (MCP) is `fresh`.
+   setup error). Then confirm `export_status` (MCP) is `fresh`. A run with nothing new logs `export unchanged` and
+   skips the commit, push and install steps, so the first run after a real approved change is the
+   first full test of those. Ignore the line "Review: git diff architecture/ then commit yourself.
+   Nothing was committed.": it comes from `arch-export.sh` and does not apply to this job.
 8. **Prove the alert path** end to end, harmlessly:
    `systemd-run --user --unit=localserver-alert-test /bin/false`. Within about 6 minutes
    `SystemdUserUnitFailed` for `localserver-alert-test.service` must reach #myagentchannel. Then
@@ -91,7 +114,8 @@ Run steps 1 to 5 on beeblebox as the service user.
 9. **Enable:** `systemctl --user enable --now localserver-homelab-arch-export-sync.timer`.
 10. **Retire the workstation timer** (your machine, outside this repo): on the laptop,
     `systemctl --user disable --now localserver-homelab-arch-export-sync.timer`, and remove its
-    two unit files from `~/.config/systemd/user`. Leaving it enabled would run a second publisher
+    two unit files from `~/.config/systemd/user` (check the path first, and leave the
+    `localserver-homelab-arch-export-check` units alone). Leaving it enabled would run a second publisher
     that fails on the Tailscale SSH check every day.
 
 ## Day to day
