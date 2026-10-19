@@ -76,7 +76,7 @@ em{color:var(--mut)}
 <section id="metamodel">
 <h2>Metamodel</h2>
 <p class="note">The entity types, grouped by layer.</p>
-<div class="layers"><div class="layer"><h3>motivation</h3><span>Driver</span><span>Principle</span><span>Pillar</span></div><div class="layer"><h3>business</h3><span>Capability</span><span>BusinessService</span><span>Actor</span><span>BusinessProcess</span><span>ProcessStep</span></div><div class="layer"><h3>application</h3><span>ApplicationComponent</span><span>ApplicationService</span></div><div class="layer"><h3>data</h3><span>DataEntity</span><span>DataStore</span><span>DataDomain</span><span>DataField</span></div><div class="layer"><h3>technology</h3><span>Node</span><span>TechnologyService</span><span>Network</span><span>ExternalProvider</span><span>Artifact</span></div><div class="layer"><h3>itsm</h3><span>ServiceOffering</span><span>ServiceLevel</span><span>Change</span><span>Incident</span><span>Problem</span></div><div class="layer"><h3>governance</h3><span>ExposureTier</span><span>Control</span><span>Gap</span><span>Risk</span></div><div class="layer"><h3>ai</h3><span>UseCase</span><span>DataProduct</span><span>OutputPort</span><span>VectorIndex</span><span>QualityRule</span><span>AIModel</span><span>Agent</span><span>PromptTemplate</span><span>MCPTool</span><span>EvalSuite</span></div></div>
+<div class="layers"><div class="layer"><h3>motivation</h3><span>Driver</span><span>Principle</span><span>Pillar</span></div><div class="layer"><h3>business</h3><span>Capability</span><span>BusinessService</span><span>Actor</span><span>BusinessProcess</span><span>ProcessStep</span></div><div class="layer"><h3>application</h3><span>Workflow</span><span>ApplicationComponent</span><span>ApplicationService</span></div><div class="layer"><h3>data</h3><span>DataEntity</span><span>DataStore</span><span>DataDomain</span><span>DataField</span></div><div class="layer"><h3>technology</h3><span>Node</span><span>TechnologyService</span><span>Network</span><span>ExternalProvider</span><span>Artifact</span></div><div class="layer"><h3>itsm</h3><span>ServiceOffering</span><span>ServiceLevel</span><span>Change</span><span>Incident</span><span>Problem</span></div><div class="layer"><h3>governance</h3><span>ExposureTier</span><span>Control</span><span>Gap</span><span>Risk</span></div><div class="layer"><h3>ai</h3><span>UseCase</span><span>DataProduct</span><span>OutputPort</span><span>VectorIndex</span><span>QualityRule</span><span>AIModel</span><span>Agent</span><span>PromptTemplate</span><span>MCPTool</span><span>EvalSuite</span></div></div>
 </section>
 <section id="relations">
 <h2>Relations</h2>
@@ -91,7 +91,7 @@ em{color:var(--mut)}
 <tr><td class="mono">realised_by</td><td>Capability</td><td>ApplicationComponent, ExternalProvider</td></tr>
 <tr><td class="mono">supports</td><td>BusinessService</td><td>Capability</td></tr>
 <tr><td class="mono">consumed_by</td><td>BusinessService</td><td>Actor</td></tr>
-<tr><td class="mono">provides</td><td>ApplicationComponent</td><td>ApplicationService</td></tr>
+<tr><td class="mono">provides</td><td>ApplicationComponent, ExternalProvider</td><td>ApplicationService</td></tr>
 <tr><td class="mono">delivers</td><td>ApplicationService</td><td>BusinessService</td></tr>
 <tr><td class="mono">manages</td><td>ApplicationComponent</td><td>DataEntity</td></tr>
 <tr><td class="mono">persisted_in</td><td>DataEntity</td><td>DataStore</td></tr>
@@ -115,9 +115,13 @@ em{color:var(--mut)}
 <tr><td class="mono">caused_by</td><td>Incident</td><td>Change</td></tr>
 <tr><td class="mono">root_cause_of</td><td>Problem</td><td>Incident</td></tr>
 <tr><td class="mono">resolves</td><td>Change</td><td>Problem, Gap</td></tr>
-<tr><td class="mono">contains_step</td><td>BusinessProcess</td><td>ProcessStep</td></tr>
+<tr><td class="mono">contains_step</td><td>BusinessProcess, Workflow</td><td>ProcessStep</td></tr>
 <tr><td class="mono">next_step</td><td>ProcessStep</td><td>ProcessStep</td></tr>
 <tr><td class="mono">invokes</td><td>ProcessStep</td><td>ApplicationService</td></tr>
+<tr><td class="mono">triggers</td><td>ApplicationService</td><td>ProcessStep</td></tr>
+<tr><td class="mono">runs_workflow</td><td>ProcessStep</td><td>Workflow</td></tr>
+<tr><td class="mono">executed_by</td><td>Workflow</td><td>ApplicationComponent</td></tr>
+<tr><td class="mono">realises</td><td>Workflow</td><td>UseCase, BusinessProcess</td></tr>
 <tr><td class="mono">reads</td><td>ProcessStep</td><td>DataField</td></tr>
 <tr><td class="mono">writes</td><td>ProcessStep</td><td>DataField</td></tr>
 <tr><td class="mono">part_of</td><td>DataField</td><td>DataEntity</td></tr>

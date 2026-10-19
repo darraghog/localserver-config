@@ -2,7 +2,7 @@
 meta:
   name: beeblebox-architecture-metamodel
   version: '2.0'
-  ontology_hash: fbe5e82505afcac1ea755b24fbd3f71703cdf4fd70a1952c0e4af30c41110ce7
+  ontology_hash: 02e298a5e0ef05c2c189daf8163d49786560e5635795f4046c4487b77b537712
   renderer_version: 1
   basis: TOGAF Content Metamodel core + ITIL 4 (CMDB, service catalog, change) + AI extension
 common_attributes:
@@ -181,6 +181,18 @@ layers:
         order:
           type: uint32
   application:
+    Workflow:
+      name: workflow
+      standard: togaf-core
+      authority: graph
+      id_prefix: wf_
+      mixins:
+      - common
+      description: A sequence of steps that a workflow engine such as n8n runs by itself or on request.
+      why_it_matters: An unattended workflow fails quietly; knowing its steps and what they call shows where.
+      attributes:
+        trigger:
+          type: string
     ApplicationComponent:
       name: application_component
       standard: togaf-core
@@ -237,6 +249,7 @@ layers:
           - ssh
           - rdp
           - smb
+          - smtp
         auth:
           type: string
           enum:
@@ -247,6 +260,18 @@ layers:
           - oauth
           - edge-identity
           - network-identity
+        interface:
+          type: string
+          enum:
+          - web_ui
+          - api
+          - webhook
+          - form
+          - mcp
+          - mail
+          - console
+          - file_share
+          - remote_access
   data:
     DataEntity:
       name: data_entity
@@ -872,10 +897,11 @@ relationships:
 - name: provides
   from:
   - ApplicationComponent
+  - ExternalProvider
   to:
   - ApplicationService
   authority: provisioning
-  note: The component exposes this service.
+  note: The component or the third party exposes this service.
 - name: delivers
   from:
   - ApplicationService
@@ -1079,10 +1105,11 @@ relationships:
 - name: contains_step
   from:
   - BusinessProcess
+  - Workflow
   to:
   - ProcessStep
   authority: graph
-  note: The process is made of this step.
+  note: The process or workflow is made of this step.
 - name: next_step
   from:
   - ProcessStep
@@ -1097,6 +1124,35 @@ relationships:
   - ApplicationService
   authority: graph
   note: The step calls this application service.
+- name: triggers
+  from:
+  - ApplicationService
+  to:
+  - ProcessStep
+  authority: graph
+  note: A call to this endpoint starts the process at this step.
+- name: runs_workflow
+  from:
+  - ProcessStep
+  to:
+  - Workflow
+  authority: graph
+  note: The step runs another workflow to completion and uses its result.
+- name: executed_by
+  from:
+  - Workflow
+  to:
+  - ApplicationComponent
+  authority: graph
+  note: The component that runs this workflow such as a workflow engine.
+- name: realises
+  from:
+  - Workflow
+  to:
+  - UseCase
+  - BusinessProcess
+  authority: graph
+  note: The workflow is part of how this AI use case or business process is carried out.
 - name: reads
   from:
   - ProcessStep

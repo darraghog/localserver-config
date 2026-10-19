@@ -42,19 +42,20 @@
       "ServiceOffering": 0,
       "TechnologyService": 6,
       "UseCase": 1,
-      "VectorIndex": 0
+      "VectorIndex": 0,
+      "Workflow": 0
     },
     "entities": 237,
     "relationships": 636
   },
   "files": {
-    "metamodel.yaml": "1af7efb54ef2ae4dfdc76a1904a0a132c08cc9f931602541c2bc6d3c743b9f29",
-    "model.yaml": "51120e5ff0efd38444dacb58f0010b0b85b25630c11787fd86ae814a03683328",
-    "overview.html": "24c57b1f22682a7c193712b84d054bbdd31066783419b89abf27d58cfd4c63db"
+    "metamodel.yaml": "f0f3fabdec7dca540469ea459eff2331e0c2566db46ee92e90b93df134feebdd",
+    "model.yaml": "75ae553305f764ac2694626cc9b850cac68f74b293424f4940dad141684f2a9a",
+    "overview.html": "2fc137a4dfeb00ddcd7ea69c07001065a2659af199c11a9442ee871ba62d409a"
   },
   "format": 1,
   "ontology": {
-    "hash": "fbe5e82505afcac1ea755b24fbd3f71703cdf4fd70a1952c0e4af30c41110ce7",
+    "hash": "02e298a5e0ef05c2c189daf8163d49786560e5635795f4046c4487b77b537712",
     "version": "2.0"
   },
   "renderer_version": 1

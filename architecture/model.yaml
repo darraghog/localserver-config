@@ -2,7 +2,7 @@
 model:
   name: beeblebox estate
   ontology_version: '2.0'
-  ontology_hash: fbe5e82505afcac1ea755b24fbd3f71703cdf4fd70a1952c0e4af30c41110ce7
+  ontology_hash: 02e298a5e0ef05c2c189daf8163d49786560e5635795f4046c4487b77b537712
 Driver:
 - id: d_currency
   name: Stay technically current
