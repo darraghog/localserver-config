@@ -1,10 +1,10 @@
 # localserver-config (agent notes)
 
-Owner-only infra repo for the homelab host. Agents read it and never write to it.
+Owner-only infra repo for the homelab host. Agents read it and must get explicit permission to write to it.
 
-## Never run (they contact the graph or the host over ssh)
+## Require explicit approval - they contact the graph or the host over ssh and therefore impact production data
 `scripts/arch-export.sh`, `scripts/arch-sync-export.sh`, `scripts/provisioning-sync.sh`,
-`scripts/hla`, `scripts/deploy-*.sh`, `ssh`, `scp`. If one is needed, tell the owner.
+`scripts/hla`, `scripts/deploy-*.sh`, `ssh`, `scp`. If one is needed, tell the owner the impact and wait for their approval.
 
 ## Generated files: never hand-edit
 `architecture/export.json`, `architecture/model.yaml`, `architecture/metamodel.yaml`,

@@ -58,7 +58,9 @@
       "Bash(podman stop *)",
       "Bash(awk -F'\",\"' '{print $1}')"
     ],
-    "deny": [
+    "ask": [
+      "Bash(./scripts/deploy-*.sh:*)",
+      "Bash(bash scripts/deploy*)",
       "Bash(ssh:*)",
       "Bash(scp:*)",
       "Bash(./scripts/arch-export.sh:*)",

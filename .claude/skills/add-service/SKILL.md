@@ -6,14 +6,14 @@ description: Use when adding, changing or retiring a service stack in localserve
 # Add, change or retire a service
 
 First invoke the `homelab-change-lifecycle` skill (homelab-arch-routing plugin) if it is
-available. This repo is owner-only: agents read it and never write to it. When asked to help,
-you are a guide for the owner: list the files and the exact YAML and compose changes, then hand
-over. You do not scaffold, edit files or create proposals from this session.
+available. This repo is owner-only: agents read it and never write to it without permission. When asked to help,
+you default to being a guide for the owner: list the files and the exact YAML and compose changes, then hand
+over. Unless explicitly asked, you do not scaffold, edit files or create proposals from this session. If asked, ensure the owner is aware of the implications of the change.
 The full procedure is `docs/ADD-SERVICE.md` (section 10 for the model). The lifecycle lives in
 `~/dev/homelab-arch/docs/change-playbook.md` (sections `#4-provisioning-facts-and-infra` and
 `#5-retire-or-rename`); do not restate or reorder it.
 
-## What to hand the owner
+## What to hand the owner or request permission from owner for
 - The files to touch: `compose/<name>/`, the Caddy and TLS changes of `docs/ADD-SERVICE.md`
   sections 1 to 9, and `architecture/provisioning/*.yaml`.
 - The exact YAML (below) and compose text, written out in your reply.
@@ -21,7 +21,7 @@ The full procedure is `docs/ADD-SERVICE.md` (section 10 for the model). The life
   (lowercase letters, digits, hyphen; built-ins `hello-world`, `n8n`, `tls-proxy` are refused).
 
 ## What goes where (ADD-SERVICE section 10)
-In `architecture/provisioning/*.yaml` (the owner edits):
+In `architecture/provisioning/*.yaml` (the owner edits or approves edits):
 - `ApplicationComponent` `ac_<name>`: name, description, stack, image, routing
   (`strip` | `no-strip` | `not-path-mounted`), and `source` (repo that owns the app, or
   `in-repo`) when the image is locally built.
@@ -60,7 +60,7 @@ and sees them only once the entity is gone from the deployed YAML.
 A rename is remove plus add: carry the graph-owned edges over in the same sitting.
 
 ## Agent limits
-Never write to this repo (no scaffolding, file edits or commits) and never create proposals
-from this session. Never run deploy-service, provisioning-sync, arch-export, arch-sync-export,
-`hla`, `ssh` or `scp`; the owner does. Report the ids, class, properties, the YAML text and the
+Request owner permission to write to this repo (including scaffolding, file edits and commits) and never create proposals
+from this session unless specifically asked.  Ask permission to run deploy-service, provisioning-sync, arch-export, arch-sync-export,
+`hla`, `ssh` or `scp`; indicate the impact of the change to the owner before running. Report the ids, class, properties, the YAML text and the
 next owner step.
