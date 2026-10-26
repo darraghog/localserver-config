@@ -273,6 +273,8 @@
 #     host networking, so 127.0.0.1:8099 is reachable from every container) can approve. Any
 #     other value keeps the password.
 #   - Agent routes are not served here (404): agents use :8105.
+#   - The proxy also forwards the signed-in login name as X-HLA-User (empty under tailnet-trust),
+#     so the app records who approved or rejected. It labels the decision and grants nothing.
 #   - Never add CORS headers to this site: the app relies on browsers being unable to send its
 #     custom X-HLA-Client header from another site.
 #   - Secrets are {env.*} placeholders, never {$*}: the approver token is resolved at request
@@ -292,6 +294,9 @@
     header_up -Authorization
     # Replaces any value the client sent.
     header_up X-HLA-Approver {env.HLA_APPROVER_TOKEN}
+    # The signed-in login name, so the app can record who decided. Replaces any value the client
+    # sent; empty under tailnet-trust (no password is asked), and the app treats empty as none.
+    header_up X-HLA-User {http.auth.user.id}
   }
 }
 # Homelab Architecture Manager — agents. Tailnet-only, plain HTTP on loopback. Forwards ONLY the
@@ -312,6 +317,7 @@
     reverse_proxy {env.HOST_INTERNAL_IP}:8104 {
       header_up -X-HLA-Approver
       header_up -X-HLA-Client
+      header_up -X-HLA-User
     }
   }
   handle {
