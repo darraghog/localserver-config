@@ -25,7 +25,7 @@ cd ~/localserver-config
 
 ```bash
 ./scripts/setup-certs.sh
-# With extra SANs: ./scripts/setup-certs.sh myserver myserver.example.com www.example.com 192.168.1.10
+# With extra SANs: ./scripts/setup-certs.sh myserver myserver.example.com www.example.com <lan-ip>
 ```
 
 Run on the server. After cert changes: `cd compose/tls-proxy && podman compose restart`. Trust `certs/ca.pem` on clients—see [docs/tls.md](docs/tls.md).
@@ -47,7 +47,7 @@ Run on the server. After cert changes: `cd compose/tls-proxy && podman compose r
 # sshd on a non-default port (e.g. 2222 on some hosts):
 ./scripts/deploy-to-server.sh prod myserver.example.net 2222
 # Wrong DNS/hosts for the target — real SSH destination (port 22 if omitted):
-# DEPLOY_SSH_DEST=user@192.168.1.10 ./scripts/deploy-to-server.sh dev laptop
+# DEPLOY_SSH_DEST=user@<lan-ip> ./scripts/deploy-to-server.sh dev laptop
 ```
 
 If **`<target>` is this machine** (hostname matches, name resolves to `127.*`/`::1` as on WSL, or `DEPLOY_SSH_DEST` is loopback / this host’s LAN IP), the script **deploys like `local local`**: no rsync/ssh, same steps as below.
@@ -102,7 +102,7 @@ the code; it never applies.
 | Stack | Ports | Description |
 |-------|-------|-------------|
 | hello-world | 8080, 8443 | nginx test |
-| n8n | 5678, 8444 | Workflow automation (SQLite) |
+| n8n | 5678, 8444 | Workflow automation (SQLite by default — dev/single-user only; set `N8N_DATABASE=postgres` for production) |
 | tic-tac-toe | 8091 (host-internal), 8445 | Reference app proving path-based routing |
 | claude-mock-test | 8093 (host-internal), 8446 | Static Claude Professional Architect mock test (nginx) |
 | litellm | 4000 (host-internal), 8447, 8092 (tailnet front, loopback) | LLM proxy + Postgres; serves under `/litellm` (`SERVER_ROOT_PATH`) |
@@ -112,7 +112,8 @@ the code; it never applies.
 | prometheus | 8100 (host-internal) | Metrics, blackbox probes and alert rules; mounted at `/prometheus` on the `:8090` router |
 | alertmanager | 8101 (host-internal) | Alert routing to Slack |
 | grafana | 8102 (host-internal) | Dashboards, provisioned from git; mounted at `/grafana` on the `:8090` router |
-| tls-proxy | LAN TLS 8443–8451 and 9443; loopback-only 8090 (tailnet path router, incl. `/prometheus` and `/grafana`), 8092 (litellm), 8098 (gqldb), 8095 (weather public front), 8097 (wordpress public front); host-internal 8103 (Caddy metrics, Prometheus scrape only) | Caddy HTTPS reverse proxy |
+| homelab-arch | 8104 (host-internal), 8099 and 8105 (tailnet fronts, loopback) | Homelab Architecture Manager: browser app, API and MCP endpoint; app code lives in `~/dev/homelab-arch` (see [compose/homelab-arch/README.md](compose/homelab-arch/README.md)) |
+| tls-proxy | LAN TLS 8443–8451 and 9443; loopback-only 8090 (tailnet path router, incl. `/prometheus` and `/grafana`), 8092 (litellm), 8098 (gqldb), 8095 (weather public front), 8097 (wordpress public front), 8099 and 8105 (homelab-arch); host-internal 8103 (Caddy metrics, Prometheus scrape only) | Caddy HTTPS reverse proxy |
 | Cockpit | 9090 (internal), 9443 (TLS) | Podman container/pod management UI |
 
 ## URLs
@@ -141,10 +142,10 @@ HTTPS through Caddy, using the private CA (trust `certs/ca.pem` — see [docs/tl
 Credentials come from `.env` — there are no defaults, and `deploy.sh` refuses to deploy n8n or
 WordPress without them.
 
-Ports `8090`, `8092`, `8095`, `8097` and `8098` are **not** in that table on purpose: they bind loopback
+Ports `8090`, `8092`, `8095`, `8097`, `8098`, `8099` and `8105` are **not** in that table on purpose: they bind loopback
 only and exist to be mounted by Tailscale or Cloudflare, not visited directly.
 
-`8100`–`8102` (monitoring stacks) and `8103` (Caddy metrics) bind `HOST_INTERNAL_IP`, not loopback, and
+`8100`–`8102` (monitoring stacks), `8103` (Caddy metrics) and `8104` (homelab-arch) bind `HOST_INTERNAL_IP`, not loopback, and
 are absent from the table too: `8100` and `8102` are reached through the `:8090` router, `8101` and
 `8103` only by Prometheus.
 

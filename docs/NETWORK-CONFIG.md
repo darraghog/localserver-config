@@ -4,19 +4,6 @@ Configuration for exposing containerized HTTPS services from your desktop (WSL) 
 
 ---
 
-## Current State
-
-| Component | Your Setup |
-|-----------|------------|
-| Desktop | WSL + Podman, network mirroring, Caddy TLS proxy |
-| Laptop | WSL (same stack possible) |
-| Network | Google Home Wi‑Fi → Verizon FIOS router (bridged) |
-| Domain | thelearningcto.com (Route53, unused) |
-| Certs | Self-signed CA (certs/ca.pem) — clients must trust |
-| DNS | Hosts files only; no local DNS server |
-
----
-
 ## Architecture Overview
 
 ```
@@ -30,7 +17,7 @@ Configuration for exposing containerized HTTPS services from your desktop (WSL) 
                     │   └──────┬───────┘         └──────┬───────┘             │
                     │          │                        │                     │
                     │          │  hosts: <hostname>     │                     │
-                    │          │  → 192.168.86.50       │                     │
+                    │          │  → <lan-ip>       │                     │
                     │          └────────────────────────┘                     │
                     │                     │                                   │
                     └─────────────────────┼───────────────────────────────────┘
@@ -68,7 +55,7 @@ This keeps **no inbound ports** to your home network. Desktop makes outbound con
 
 ### Local access (unchanged)
 
-- Hosts: `192.168.86.50 <hostname>` (or `thelearningcto.com` if you prefer).
+- Hosts: `<lan-ip> <hostname>` (or `thelearningcto.com` if you prefer).
 - Use `https://<hostname>:8443` or `https://thelearningcto.com:8443` locally.
 - Certificates will be valid (Let's Encrypt) — no CA trust needed on clients.
 
@@ -180,15 +167,13 @@ Otherwise omit; direct access to 8443/8444 is enough for your services.
 
 ### Tailscale overwriting resolv.conf
 
-Tailscale injects its MagicDNS (100.100.100.100) into `/etc/resolv.conf`, which overwrites your local DNS (e.g. dnsmasq at 192.168.86.50). To keep your own DNS:
+Tailscale injects its MagicDNS (100.100.100.100) into `/etc/resolv.conf`, which overwrites your local DNS resolver. To keep your own DNS:
 
 ```bash
 sudo tailscale up --accept-dns=false
 ```
 
-This disables Tailscale's DNS management. Your `resolv.conf` stays under your control. Configure it to use 192.168.86.50 (local dnsmasq) or 1.1.1.1 / 8.8.8.8 (Route53 via public resolvers).
-
-**Important:** If dnsmasq is running, stop it before editing resolv.conf: `sudo systemctl stop dnsmasq`. Update resolv.conf, then start it again: `sudo systemctl start dnsmasq`. This avoids conflicts while resolv.conf is being changed.
+This disables Tailscale's DNS management. Your `resolv.conf` stays under your control. Point it at your own resolver or at 1.1.1.1 / 8.8.8.8.
 
 **Trade-off:** You lose Tailscale MagicDNS (e.g. `<hostname>.tailnet.ts.net` won't resolve). Use the Tailscale IP (100.x.x.x) directly for remote access instead.
 
@@ -422,7 +407,7 @@ Run WireGuard on the desktop. Remote clients connect to a single UDP port (e.g. 
 1. Install WireGuard on desktop.
 2. Forward UDP 51820 on Verizon router → desktop.
 3. Configure peers (laptop, phone).
-4. Remote users connect to VPN, then use `https://192.168.86.50:8443` or `https://<hostname>:8443` (via hosts).
+4. Remote users connect to VPN, then use `https://<lan-ip>:8443` or `https://<hostname>:8443` (via hosts).
 
 ### Pros
 
@@ -492,13 +477,13 @@ Example addresses — substitute your own:
 
 | Host | IP |
 |------|-----|
-| `<hostname>` — WSL server | 192.168.86.50 |
+| `<hostname>` — WSL server | <lan-ip> |
 | Client laptop | 192.168.86.51 |
 
 **From the client**, run:
 
 ```bash
-./scripts/check-connectivity.sh 192.168.86.50
+./scripts/check-connectivity.sh <lan-ip>
 ```
 
 **From the server**, verify:
@@ -590,46 +575,18 @@ Symptom: `Test-NetConnection -ComputerName <LAN-IP> -Port <port>` shows `PingSuc
 | Laptop / other WSL | Point at the server LAN IP — `sudo ./scripts/sudo/setup-wsl-hosts.sh <server-ip>` or `LOCALSERVER_HOSTS_ENTRY` |
 | Other LAN devices | Server IP + hostnames your apps use |
 
-Use the server’s **actual** LAN IP (e.g. DHCP reservation at `192.168.86.50`).
+Use the server’s **actual** LAN IP (e.g. DHCP reservation at `<lan-ip>`).
 
 ---
 
 ## DHCP Reservation (Recommended)
 
-On the Google Home app (or router) set a static DHCP reservation for the server's MAC → `192.168.86.50` so the IP is stable.
+On the Google Home app (or router) set a static DHCP reservation for the server's MAC → `<lan-ip>` so the IP is stable.
 
 ---
 
-## Suggested Path
 
-| Priority | Action |
-|----------|--------|
-| 1 | Add DHCP reservation for desktop |
-| 2 | Add `thelearningcto.com` to cert SANs and hosts for local use |
-| 3 | Issue Let's Encrypt cert via Route53 DNS-01 and switch Caddy to it |
-| 4 | Deploy Cloudflare Tunnel for remote access (or Tailscale if you prefer) |
-| 5 | Optional: Cloudflare Access for extra protection |
 
----
-
-## Quick Reference: Local vs Remote
-
-| Access | URL example | Mechanism |
-|--------|-------------|-----------|
-| Local (same machine) | `https://127.0.0.1:8443` | Caddy in WSL |
-| Local (LAN) | `https://<hostname>:8443` or `https://192.168.86.50:8443` | Hosts + Caddy |
-| Remote | `https://n8n.thelearningcto.com` | Cloudflare Tunnel → Caddy |
-
----
-
-## Security Checklist
-
-- [ ] Change n8n default password (see [IMPROVEMENTS.md](IMPROVEMENTS.md))
-- [ ] Set `N8N_ENCRYPTION_KEY` for n8n
-- [ ] Use Let's Encrypt for trusted certs (no manual CA trust)
-- [ ] Prefer Cloudflare Tunnel or Tailscale over port forwarding
-- [ ] Optional: Cloudflare Access or Tailscale ACLs for access control
-- [ ] Firewall: only allow 8443/8444 from LAN if not using tunnel for local-only
 
 ## Publishing an application: where the per-service notes live
 

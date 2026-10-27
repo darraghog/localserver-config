@@ -116,7 +116,7 @@ Every client (LAN PC, phone, browser on Windows next to WSL) must **trust `certs
 
 **Linux firewall** — if you use `ufw` on the server, allow the new **Caddy** TCP port (and the raw HTTP port only if you exposed it LAN-wide on `0.0.0.0`).
 
-**DNS / hosts** — other PCs need a name or IP that reaches the machine running Podman (for example `192.168.86.50 <hostname>` in hosts, or your router DNS). See [docs/NETWORK-CONFIG.md](NETWORK-CONFIG.md).
+**DNS / hosts** — other PCs need a name or IP that reaches the machine running Podman (for example `<lan-ip> <hostname>` in hosts, or your router DNS). See [docs/NETWORK-CONFIG.md](NETWORK-CONFIG.md).
 
 **Windows + WSL2 + Podman** — when listeners are only on IPv6 loopback from Windows’ point of view, run [scripts/setup-windows-podman-lan-ports.ps1](../scripts/setup-windows-podman-lan-ports.ps1) as Administrator after you change the Caddyfile (or rely on a scheduled task). That script reads **Caddy listener ports** from the Caddyfile and merges [compose/windows-lan-extra-ports.txt](../compose/windows-lan-extra-ports.txt) for ports that are **not** declared as `:PORT {` sites (for example plain **8080** for nginx).
 
@@ -232,7 +232,7 @@ this one app) go in `compose/<service-name>/README.md`, not in the platform docs
 
 ## 11. Verify end-to-end
 
-Section 10 ends with the model committed in step 5; after the push and deploy, check the service itself and owner runs `~/dev/homelab-arch/scripts/verify-deployment.sh` (the homelab-arch app repo; it SSHes to the host, so agents only use its `--dry-run`).
+Section 10 ends with the model committed in step 5; after the push and deploy, check the service itself; the owner runs `~/dev/homelab-arch/scripts/verify-deployment.sh` (the homelab-arch app repo; it SSHes to the host, so agents only use its `--dry-run`).
 
 On the server:
 
