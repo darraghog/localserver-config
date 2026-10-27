@@ -89,15 +89,16 @@ Edit [compose/tls-proxy/Caddyfile](../compose/tls-proxy/Caddyfile) and add a **n
 Reload Caddy:
 
 ```bash
-cd compose/tls-proxy && podman compose up -d && podman compose restart
-# or: podman exec <caddy-container> caddy reload --config /etc/caddy/Caddyfile
+./scripts/start-stack.sh tls-proxy up     # force-recreates the container, so the new Caddyfile is read
+# or, only if you have confirmed the file landed (see below):
+./scripts/reload-tls-proxy-caddy.sh
 ```
 
 > **`caddy reload` alone is not enough after a deploy.** The Caddyfile is bind-mounted as a
 > single file, and rsync (and most editors) replace a file by writing a temp copy and
 > renaming it — the running container stays bound to the old inode, so a reload re-reads the
 > *previous* config and still reports success. `scripts/start-stack.sh` therefore
-> force-recreates `tls-proxy` on every `up`. If you reload by hand, confirm the change
+> force-recreates `tls-proxy` on every `up`. If you use `reload-tls-proxy-caddy.sh` or reload by hand, confirm the change
 > actually landed: `podman exec <caddy-container> grep <your-new-port> /etc/caddy/Caddyfile`.
 
 On **WSL2**, if published ports only show up on `[::1]`, LAN access still needs the Windows steps in section 7.
