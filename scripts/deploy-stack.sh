@@ -2,7 +2,7 @@
 # Deploy one or more Podman compose stacks independently (no sudo).
 # After stacks are up: caddy reload on tls-proxy (unless it was the last stack) so the Caddyfile
 # is applied without a container restart, then curls each deployed app via its Caddy HTTPS port.
-# Skip: DEPLOY_SKIP_BUILD=1, DEPLOY_SKIP_TLS_PROXY_RELOAD=1 (or legacy DEPLOY_SKIP_TLS_PROXY_RESTART=1),
+# Skip: DEPLOY_SKIP_BUILD=1, DEPLOY_SKIP_TLS_PROXY_RELOAD=1,
 #       DEPLOY_SKIP_CADDY_VERIFY=1
 # Usage: ./scripts/deploy-stack.sh <stack> [<stack> ...]
 # Example: ./scripts/deploy-stack.sh n8n
@@ -16,28 +16,6 @@ cd "$REPO_ROOT"
 source "$REPO_ROOT/scripts/lib/stack-helpers.sh"
 
 log() { echo "[deploy-stack] $*"; }
-installed() { command -v "$1" &>/dev/null; }
-
-install_compose() {
-  export PATH="${HOME:-/root}/.local/bin:$PATH"
-  if installed podman-compose; then
-    return 0
-  fi
-  if installed uv; then
-    log "Installing podman-compose via uv..."
-    uv tool install podman-compose -q
-    return 0
-  fi
-  echo "ERROR: podman-compose not found. Run ./scripts/sudo/bootstrap-host.sh or install uv." >&2
-  exit 1
-}
-
-verify_podman() {
-  podman info &>/dev/null || {
-    echo "ERROR: Podman not usable (rootless setup?)." >&2
-    exit 1
-  }
-}
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $(basename "$0") <stack> [<stack> ...]" >&2

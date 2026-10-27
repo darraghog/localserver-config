@@ -13,30 +13,6 @@ cd "$REPO_ROOT"
 source "$REPO_ROOT/scripts/lib/stack-helpers.sh"
 
 log() { echo "[deploy] $*"; }
-installed() { command -v "$1" &>/dev/null; }
-
-install_compose() {
-  export PATH="${HOME:-/root}/.local/bin:$PATH"
-
-  if installed podman-compose; then
-    log "Using podman-compose ($(podman-compose --version 2>/dev/null | head -1))"
-    return 0
-  fi
-  if installed uv; then
-    log "Installing podman-compose via uv..."
-    uv tool install podman-compose -q
-    log "Installed podman-compose"
-    return 0
-  fi
-  log "ERROR: podman-compose not found. On a new host run: ./scripts/sudo/bootstrap-host.sh"
-  log "Or install uv (https://docs.astral.sh/uv/) or podman-compose yourself."
-  exit 1
-}
-
-verify_podman() {
-  log "Verifying Podman..."
-  podman info &>/dev/null || { log "Podman failed. Check rootless setup."; exit 1; }
-}
 
 main() {
   log "Deploy stacks (repo: $REPO_ROOT)"

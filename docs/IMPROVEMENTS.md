@@ -10,7 +10,6 @@
 **Remaining:** No explicit `HOST`/`LAN_IP` vars as originally proposed; auto-detection covers most cases but doesn't help when LAN IP must be pinned (e.g. cert SANs) — that's handled separately via `DEPLOY_CERT_EXTRA_SANS`.
 
 ### 1.2 Consolidate compose file names
-**Status:** ⚠️ Partial
 **Status:** ✅ Resolved
 **Current:** No stack ships a `docker-compose.yaml`; the `tls-proxy` symlink went in `967841f` and the `compose/n8n/` one has now followed, along with the unreachable fallback branches that looked for that filename.
 

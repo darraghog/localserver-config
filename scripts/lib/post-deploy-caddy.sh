@@ -3,8 +3,8 @@
 # deployed stack's Caddy front door. Source after REPO_ROOT is set.
 
 reload_tls_proxy_if_possible() {
-  if [[ "${DEPLOY_SKIP_TLS_PROXY_RELOAD:-}" == "1" || "${DEPLOY_SKIP_TLS_PROXY_RESTART:-}" == "1" ]]; then
-    echo "[post-deploy-caddy] Skip Caddy reload (DEPLOY_SKIP_TLS_PROXY_RELOAD or DEPLOY_SKIP_TLS_PROXY_RESTART=1)"
+  if [[ "${DEPLOY_SKIP_TLS_PROXY_RELOAD:-}" == "1" ]]; then
+    echo "[post-deploy-caddy] Skip Caddy reload (DEPLOY_SKIP_TLS_PROXY_RELOAD=1)"
     return 0
   fi
   [[ -f "$REPO_ROOT/certs/server.pem" ]] || {

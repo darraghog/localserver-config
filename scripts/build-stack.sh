@@ -14,28 +14,6 @@ cd "$REPO_ROOT"
 source "$REPO_ROOT/scripts/lib/stack-helpers.sh"
 
 log() { echo "[build-stack] $*"; }
-installed() { command -v "$1" &>/dev/null; }
-
-install_compose() {
-  export PATH="${HOME:-/root}/.local/bin:$PATH"
-  if installed podman-compose; then
-    return 0
-  fi
-  if installed uv; then
-    log "Installing podman-compose via uv..."
-    uv tool install podman-compose -q
-    return 0
-  fi
-  echo "ERROR: podman-compose not found. Run ./scripts/sudo/bootstrap-host.sh or install uv." >&2
-  exit 1
-}
-
-verify_podman() {
-  podman info &>/dev/null || {
-    echo "ERROR: Podman not usable (rootless setup?)." >&2
-    exit 1
-  }
-}
 
 usage() {
   echo "Usage: $(basename "$0") <stack> [<stack> ...] [-- <podman-compose build args...>]" >&2

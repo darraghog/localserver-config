@@ -8,11 +8,12 @@ Throughout, `<hostname>` is the server's LAN hostname and `192.168.86.50` stands
 
 ## 1. Stop and remove the Podman dnsmasq container
 
-If it was running:
+The old `compose/local-dns` stack has been removed from this repo. If a dnsmasq container is
+still running from it, find and remove it:
 
 ```bash
-cd ~/localserver-config/compose/local-dns
-podman compose down
+podman ps --filter name=dnsmasq
+podman rm -f <container>
 ```
 
 ---

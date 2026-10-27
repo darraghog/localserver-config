@@ -56,7 +56,7 @@ and sees them only once the entity is gone from the deployed YAML.
 3. OWNER: `scripts/provisioning-sync.sh --check` names what still blocks (exit 1, `ERROR`
    lines); exit 4 means only the removal itself is pending.
 4. OWNER: `scripts/provisioning-sync.sh`, `scripts/arch-export.sh`, commit together, then
-   `scripts/verify-deployment.sh`.
+   `~/dev/homelab-arch/scripts/verify-deployment.sh`.
 A rename is remove plus add: carry the graph-owned edges over in the same sitting.
 
 ## Agent limits

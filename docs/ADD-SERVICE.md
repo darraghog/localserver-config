@@ -232,7 +232,7 @@ this one app) go in `compose/<service-name>/README.md`, not in the platform docs
 
 ## 11. Verify end-to-end
 
-Section 10 ends with the model committed in step 5; after the push and deploy, check the service itself and run `scripts/verify-deployment.sh`.
+Section 10 ends with the model committed in step 5; after the push and deploy, check the service itself and owner runs `~/dev/homelab-arch/scripts/verify-deployment.sh` (the homelab-arch app repo; it SSHes to the host, so agents only use its `--dry-run`).
 
 On the server:
 

@@ -1,6 +1,28 @@
 # Shared helpers for stack deploy. Source after REPO_ROOT is set.
 # shellcheck shell=bash
 
+# Make podman-compose available (installing it via uv when needed). Callers define log().
+install_compose() {
+  export PATH="${HOME:-/root}/.local/bin:$PATH"
+  if command -v podman-compose &>/dev/null; then
+    return 0
+  fi
+  if command -v uv &>/dev/null; then
+    log "Installing podman-compose via uv..."
+    uv tool install podman-compose -q
+    return 0
+  fi
+  echo "ERROR: podman-compose not found. Run ./scripts/sudo/bootstrap-host.sh or install uv." >&2
+  exit 1
+}
+
+verify_podman() {
+  podman info &>/dev/null || {
+    echo "ERROR: Podman not usable (rootless setup?)." >&2
+    exit 1
+  }
+}
+
 list_stack_order() {
   local f="$REPO_ROOT/compose/stack-order"
   [[ -f "$f" ]] || {
