@@ -34,24 +34,24 @@
       "Pillar": 6,
       "Principle": 7,
       "Problem": 0,
-      "ProcessStep": 21,
+      "ProcessStep": 28,
       "PromptTemplate": 0,
       "QualityRule": 0,
-      "Risk": 7,
+      "Risk": 8,
       "ServiceLevel": 0,
       "ServiceOffering": 0,
       "TechnologyService": 6,
       "UseCase": 1,
       "VectorIndex": 0,
-      "Workflow": 0
+      "Workflow": 2
     },
-    "entities": 237,
-    "relationships": 636
+    "entities": 247,
+    "relationships": 659
   },
   "files": {
     "metamodel.yaml": "f0f3fabdec7dca540469ea459eff2331e0c2566db46ee92e90b93df134feebdd",
-    "model.yaml": "72b9c3dce50347a62be3683a68f09134933f0bfb3d425c4f3288cb5b46cb1400",
-    "overview.html": "2fc137a4dfeb00ddcd7ea69c07001065a2659af199c11a9442ee871ba62d409a"
+    "model.yaml": "74fd2b9bb333f2a9cc2b942ea6ae8cbf4397676bbe98443232b1b8ee417f4c26",
+    "overview.html": "3659d38cad7030cc549b7ff4e1b8b42467383125687d3be481f57b9bbe1d4823"
   },
   "format": 1,
   "ontology": {

@@ -454,6 +454,38 @@ ProcessStep:
 - id: step_form_trigger
   name: Form
   description: Public form intake
+- id: step_mcp_tool
+  name: Shakespear Analysis Workflow
+  description: Tool that runs the Shakespeare analysis workflow and returns its result
+- id: step_mcp_trigger
+  name: MCP Server Trigger
+  description: Receives MCP calls from an agent
+- id: step_mcpa_format
+  name: Code in JavaScript1
+  description: Formats the model answer for Slack
+- id: step_mcpa_llm
+  name: Message a model
+  description: Chat completion through the LiteLLM Router credential
+- id: step_mcpa_prepare
+  name: Code in JavaScript
+  description: Builds the model request
+- id: step_mcpa_slack
+  name: Send a message
+  description: Posts the answer to the myagentchannel Slack channel
+- id: step_mcpa_trigger
+  name: When Executed by Another Workflow
+  description: Receives the tool call from the MCP trigger
+Workflow:
+- id: wf_mcp
+  name: Shakespeare MCP Trigger
+  description: n8n MCP Server Trigger that exposes the Shakespeare analysis workflow to agents as the
+    tool Shakespear Analysis Workflow
+  trigger: mcpTrigger
+- id: wf_mcp_analysis
+  name: Shakespeare Workflow
+  description: Asks the model gateway to analyse a Shakespeare request and posts the result to Slack;
+    exposed to agents as an MCP tool
+  trigger: executeWorkflowTrigger
 ApplicationComponent:
 - id: ac_alertmanager
   name: Alertmanager
@@ -1745,6 +1777,17 @@ Risk:
   mitigation: 'Per-database passwords and per-stack env files (or podman secrets) to shrink blast radius
     and allow per-service rotation; SAS token scoped to the backup container instead of the storage account
     key; restore directories removed after use. Related gap: gap_no_secret_rotation.'
+- id: rk_shakespeare_endpoints_unauthenticated
+  name: Shakespeare workflows can be started anonymously from the internet
+  description: The Shakespeare form and the MCP trigger accept calls with no authentication, and the eval
+    webhook relies on a shared token checked in a code node. All three are reachable through the public
+    Funnel and start workflows that call the local or gateway model, send email and post to Slack.
+  category: security
+  severity: medium
+  likelihood: high
+  status: open
+  mitigation: Put authentication on the n8n form and MCP trigger, or move them to a tailnet-only tier;
+    keep the eval token and rotate it; rate-limit at the edge.
 - id: rk_unreviewed_image_updates
   name: Moving image tags reach production unreviewed
   description: nginx and caddy track moving tags (alpine) and are pulled and swapped on every deploy.
@@ -3367,6 +3410,18 @@ relationships:
 - from: rk_secret_concentration
   name: affects
   to: pl_security
+- from: rk_shakespeare_endpoints_unauthenticated
+  name: affects
+  to: ac_n8n
+- from: rk_shakespeare_endpoints_unauthenticated
+  name: affects
+  to: uc_shakespeare_play_explorer
+- from: rk_shakespeare_endpoints_unauthenticated
+  name: arises_from
+  to: gap_public_demo_surface
+- from: rk_shakespeare_endpoints_unauthenticated
+  name: exposed_through
+  to: et_public_funnel
 - from: rk_unreviewed_image_updates
   name: affects
   to: ac_claudemock
@@ -3457,6 +3512,9 @@ relationships:
 - from: step_core_merge
   name: next_step
   to: step_core_build
+- from: step_core_ollama
+  name: invokes
+  to: as_ollama
 - from: step_core_ollama
   name: next_step
   to: step_core_merge
@@ -3631,6 +3689,27 @@ relationships:
 - from: step_form_trigger
   name: next_step
   to: step_form_map
+- from: step_mcp_tool
+  name: runs_workflow
+  to: wf_mcp_analysis
+- from: step_mcp_trigger
+  name: next_step
+  to: step_mcp_tool
+- from: step_mcpa_format
+  name: next_step
+  to: step_mcpa_slack
+- from: step_mcpa_llm
+  name: invokes
+  to: as_litellm_api
+- from: step_mcpa_llm
+  name: next_step
+  to: step_mcpa_format
+- from: step_mcpa_prepare
+  name: next_step
+  to: step_mcpa_llm
+- from: step_mcpa_trigger
+  name: next_step
+  to: step_mcpa_prepare
 - from: ts_caddy
   name: also_serves
   to: pl_resilience
@@ -3700,3 +3779,36 @@ relationships:
 - from: uc_shakespeare_play_explorer
   name: supports
   to: cap_automation
+- from: wf_mcp
+  name: contains_step
+  to: step_mcp_tool
+- from: wf_mcp
+  name: contains_step
+  to: step_mcp_trigger
+- from: wf_mcp
+  name: executed_by
+  to: ac_n8n
+- from: wf_mcp
+  name: realises
+  to: uc_shakespeare_play_explorer
+- from: wf_mcp_analysis
+  name: contains_step
+  to: step_mcpa_format
+- from: wf_mcp_analysis
+  name: contains_step
+  to: step_mcpa_llm
+- from: wf_mcp_analysis
+  name: contains_step
+  to: step_mcpa_prepare
+- from: wf_mcp_analysis
+  name: contains_step
+  to: step_mcpa_slack
+- from: wf_mcp_analysis
+  name: contains_step
+  to: step_mcpa_trigger
+- from: wf_mcp_analysis
+  name: executed_by
+  to: ac_n8n
+- from: wf_mcp_analysis
+  name: realises
+  to: uc_shakespeare_play_explorer
