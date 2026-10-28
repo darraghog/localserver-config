@@ -13,12 +13,19 @@ lifecycle it implements: `~/dev/homelab-arch/docs/change-playbook.md` section 3 
 
 | Tree | What | Who writes it |
 |---|---|---|
-| `~/localserver-config` (deploy tree) | rsync `--delete` mirror of the workstation (no `.git`); the container bind-mounts its `architecture/` at `/infra/architecture`; the script and units run from here | the owner's deploys; the job writes **only** the four export files into `architecture/` |
+| `~/localserver-config` (deploy tree) | git clone of `origin`, fast-forwarded by deployd's `sync-infra` (the gate needs it clean and equal to `origin/main`); the container bind-mounts its `architecture/` at `/infra/architecture`; the script and units run from here | `deployctl request sync-infra`; the job's step 6 still copies the four export files into `architecture/` (see the note below) |
 | `~/localserver-config-sync` (clone) | dedicated git clone, only this job touches it | the job: pull, export, check, commit, push |
 | `~/dev/homelab-arch` | app checkout holding the commit pinned in `architecture/.checker-ref`, for `scripts/arch-check.sh` | the owner (fetch when re-pinning) |
 
-The job never works in the deploy tree: a deploy overwrites it, it has no `.git`, and a `git pull`
-there would be undone by the next rsync.
+The job does its git work (pull, export, check, commit, push) only in the dedicated clone, never in
+the deploy tree: running from the deploy tree means a `git pull` cannot rewrite the script while
+bash is reading it, and only `sync-infra` moves that tree.
+
+Note: step 6 of the script still copies the four committed export files into the deploy tree's
+`architecture/`. In a git clone those copies are tracked modifications until `sync-infra` brings
+the same commit in, and while they exist the infra gate reports `dirty`. See "Known conflicts" in
+`deployd/INSTALL.md` for the planned change (the deploy tree receiving the exports via
+`sync-infra` only).
 
 ## One-time setup
 
@@ -84,8 +91,8 @@ Run steps 1 to 5 on beeblebox as the service user.
 5. **Dry look** (changes nothing): `git -C ~/localserver-config-sync status` is clean on `main`,
    and `podman exec homelab-arch_app_1 true` works.
 6. **Ship the code and install the units.** On the workstation (patches 08 and 09 are already
-   applied, since you are reading this file): push, and deploy (for example
-   `./scripts/deploy-service.sh prod beeblebox homelab-arch`), so the new script and units reach
+   applied, since you are reading this file): push, then
+   `deployctl request sync-infra` (the owner approves it), so the new script and units reach
    `~/localserver-config`. Then on beeblebox either run
    `scripts/sudo/bootstrap-host.sh` or install just these two units:
    ```
@@ -121,9 +128,11 @@ Run steps 1 to 5 on beeblebox as the service user.
 ## Day to day
 
 - The server now adds `architecture: export after ...` commits to `origin/main`. On the
-  workstation, `git pull --rebase` before committing, pushing or deploying. A deploy rsyncs the
-  workstation's `architecture/` over the server's: an older copy there makes the export look stale
-  until the next 09:00 run heals it (the job re-installs the committed export every run).
+  workstation, `git pull --rebase` before committing, pushing or deploying. Prod is deployed by
+  deployd, not by rsync: push, then `deployctl request sync-infra` brings the server's clone to that
+  commit. `deploy-to-server.sh` and `deploy-service.sh` refuse `prod`. Until `sync-infra` has run,
+  the server's `architecture/` can be older than `origin`, so the export looks stale until then or
+  until the next 09:00 run (the job re-installs the committed export every run).
 - A change in progress alerts. Between deploying a provisioning change and committing the YAML and
   `architecture/` together (playbook section 4, steps 2 to 5), the 09:00 run exports the new graph,
   the checker compares it with the still-committed YAML and fails, and the unit alerts (exit 1).

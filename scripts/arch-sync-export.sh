@@ -8,10 +8,11 @@
 # Source of truth: homelab-arch deploy/infra/arch-sync-export.sh.
 #
 # Two trees, kept apart on purpose:
-#   DEPLOY  the tree this script runs from (~/localserver-config on the server). It is an rsync
-#           --delete mirror of the owner's workstation (no .git), the container bind-mounts its
-#           architecture/ at /infra/architecture, and the owner's deploys overwrite it. This
-#           script only ever writes the four export files into it, never anything else.
+#   DEPLOY  the tree this script runs from (~/localserver-config on the server). It is a git clone
+#           that deployd's sync-infra fast-forwards from origin, the container bind-mounts its
+#           architecture/ at /infra/architecture, and its gate wants it clean. This script never
+#           runs git there and only ever writes the four export files into it (step 6), never
+#           anything else.
 #   CLONE   a dedicated git clone (HLA_SYNC_CLONE) that only this job touches: pull, export,
 #           check, commit, push all happen there. Running from DEPLOY (not CLONE) also means a
 #           `git pull` never rewrites the script while bash is still reading it.
@@ -127,7 +128,7 @@ DEPLOY=$(dirname -- "$script_dir")
 CLONE=$(cd -- "$CLONE" 2>/dev/null && pwd -P) || refuse "HLA_SYNC_CLONE is not a directory: $CLONE"
 [[ -e $CLONE/.git ]] || refuse "$CLONE is not a git clone (no .git)"
 [[ $CLONE != "$DEPLOY" ]] ||
-    refuse "HLA_SYNC_CLONE is the tree this script runs from ($DEPLOY): that tree is overwritten by the owner's deploys and has no .git; use a dedicated clone"
+    refuse "HLA_SYNC_CLONE is the tree this script runs from ($DEPLOY): that tree is managed by deployd's sync-infra and must stay clean; use a dedicated clone"
 cd -- "$CLONE" || fail "cannot cd to $CLONE"
 
 restore() {

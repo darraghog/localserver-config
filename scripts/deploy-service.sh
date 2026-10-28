@@ -190,6 +190,11 @@ if deploy_target_is_this_host; then
   run_deploy_stacks
   post_deploy_checks_local
 else
+  if [[ "$ENV_NAME" == "prod" ]]; then
+    echo "[deploy-service] ERROR: prod deploys go through deployd (deployctl request sync-infra / deploy-stack)." >&2
+    echo "                       The rsync --delete path would dirty the infra clone and delete its catalogue symlink." >&2
+    exit 1
+  fi
   echo "[deploy-service] Environment: $ENV_NAME, target: $TARGET"
   echo "[deploy-service] Remote path: $REMOTE_PATH"
   echo "[deploy-service] Stacks: ${STACKS[*]}"

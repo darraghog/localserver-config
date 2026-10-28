@@ -160,6 +160,11 @@ if deploy_target_is_this_host; then
   echo "  Cockpit:      ./scripts/sudo/deploy-cockpit.sh local  (separate; https://${uh}:9443)"
 
 else
+  if [[ "$ENV_NAME" == "prod" ]]; then
+    echo "[deploy] ERROR: prod deploys go through deployd (deployctl request sync-infra / deploy-stack)." >&2
+    echo "               The rsync --delete path would dirty the infra clone and delete its catalogue symlink." >&2
+    exit 1
+  fi
   echo "[deploy] Environment: $ENV_NAME, target: $TARGET"
   echo "[deploy] Remote: $REMOTE_PATH"
   [[ -n "$SSH_PORT" ]] && echo "[deploy] SSH port: $SSH_PORT"
