@@ -11,8 +11,8 @@
 #   DEPLOY  the tree this script runs from (~/localserver-config on the server). It is a git clone
 #           that deployd's sync-infra fast-forwards from origin, the container bind-mounts its
 #           architecture/ at /infra/architecture, and its gate wants it clean. This script never
-#           runs git there and only ever writes the four export files into it (step 6), never
-#           anything else.
+#           runs git there. Only in an older layout without .git does step 6 write the four export
+#           files into it, never anything else; in a git clone it writes nothing there.
 #   CLONE   a dedicated git clone (HLA_SYNC_CLONE) that only this job touches: pull, export,
 #           check, commit, push all happen there. Running from DEPLOY (not CLONE) also means a
 #           `git pull` never rewrites the script while bash is still reading it.
@@ -37,14 +37,17 @@
 #      touched architecture/export.json; "architecture: export refresh (graph changed)" when the
 #      proposals cannot be read or none qualify. A refusing hook restores the files. Then
 #      git push origin main.
-#   6. Install: only if the tree is still clean and HEAD equals @{u}, copy the four export files
-#      from CLONE into DEPLOY/architecture (atomic rename, only when they differ). This runs on
-#      every run, so a copy that failed yesterday is retried today. No restart is needed: the
-#      container reads the directory live. A failure keeps the commit and says whether it was
-#      pushed.
+#   6. Install: only if the tree is still clean and HEAD equals @{u}. When DEPLOY is a git clone
+#      (has .git) nothing is written there: the commit reaches it through an approved
+#      deployctl sync-infra. Without .git (older layout), copy the four export files from CLONE
+#      into DEPLOY/architecture (atomic rename, only when they differ). This runs on every run,
+#      so a copy that failed yesterday is retried today. No restart is needed: the container
+#      reads the directory live. A failure keeps the commit and says whether it was pushed.
 #   7. Freshness: start localserver-homelab-arch-export-check.service (a oneshot start blocks, so
 #      its exit status counts) and require LoadState=loaded and Result=success. A failure is
-#      exit 1, but step 8 still runs.
+#      exit 1, but step 8 still runs. The check compares the live graph with DEPLOY's
+#      architecture/, so when DEPLOY is a git clone and any of the four files there differs from
+#      CLONE, it is skipped (logged, not a failure) until sync-infra brings them in.
 #   8. Drift report: provisioning-sync /infra/architecture/provisioning --check in the container.
 #      Drift is exit 3; a check that cannot run (podman, container, config) is exit 1, and so is
 #      a check that refuses the files (provisioning-sync exit 1: findings or a blocked removal).
@@ -288,26 +291,42 @@ install_one() {
     rm -f -- "$tmpf"
     return 1
 }
-[[ -d $DEPLOY/architecture && ! -L $DEPLOY/architecture ]] ||
-    fail "$DEPLOY/architecture is not a directory; $head is NOT installed"
-for f in "${FILES[@]}"; do
-    install_one "$f" || fail "could not install $f into $DEPLOY; commit $head is in the clone (pushed if it was new) but NOT installed here"
-done
+installed=1
+if [[ -e $DEPLOY/.git ]]; then
+    installed=0
+    log "deploy tree is a git clone managed by deployd sync-infra: not writing into it; $head reaches it through an approved sync-infra"
+else
+    [[ -d $DEPLOY/architecture && ! -L $DEPLOY/architecture ]] ||
+        fail "$DEPLOY/architecture is not a directory; $head is NOT installed"
+    for f in "${FILES[@]}"; do
+        install_one "$f" || fail "could not install $f into $DEPLOY; commit $head is in the clone (pushed if it was new) but NOT installed here"
+    done
+fi
 if ((publish)); then log "published $head"; fi
 
 # --- 7. freshness ---------------------------------------------------------------------------
 rc=0
-log "freshness: starting $CHECK_UNIT"
-start=0
-bounded 2m "starting $CHECK_UNIT" systemctl --user start "$CHECK_UNIT" || start=$?
-props=$(bounded 2m "reading $CHECK_UNIT state" systemctl --user show -p LoadState -p Result "$CHECK_UNIT") || props=""
-load=$(sed -n 's/^LoadState=//p' <<<"$props" | head -n1)
-result=$(sed -n 's/^Result=//p' <<<"$props" | head -n1)
-if ((start == 0)) && [[ $load == loaded && $result == success ]]; then
-    log "freshness: the graph matches the committed export"
+awaiting=0
+if ((installed == 0)); then
+    for f in "${FILES[@]}"; do
+        cmp -s -- "$CLONE/$f" "$DEPLOY/$f" || awaiting=$((awaiting + 1))
+    done
+fi
+if ((awaiting > 0)); then
+    log "freshness: skipped, $awaiting export file(s) in $DEPLOY await sync-infra"
 else
-    err "FAILED: freshness check: start exit $start, LoadState '${load:-?}', Result '${result:-?}' (journalctl --user -u $CHECK_UNIT)"
-    rc=1
+    log "freshness: starting $CHECK_UNIT"
+    start=0
+    bounded 2m "starting $CHECK_UNIT" systemctl --user start "$CHECK_UNIT" || start=$?
+    props=$(bounded 2m "reading $CHECK_UNIT state" systemctl --user show -p LoadState -p Result "$CHECK_UNIT") || props=""
+    load=$(sed -n 's/^LoadState=//p' <<<"$props" | head -n1)
+    result=$(sed -n 's/^Result=//p' <<<"$props" | head -n1)
+    if ((start == 0)) && [[ $load == loaded && $result == success ]]; then
+        log "freshness: the graph matches the committed export"
+    else
+        err "FAILED: freshness check: start exit $start, LoadState '${load:-?}', Result '${result:-?}' (journalctl --user -u $CHECK_UNIT)"
+        rc=1
+    fi
 fi
 
 # --- 8. drift report (never writes) ---------------------------------------------------------

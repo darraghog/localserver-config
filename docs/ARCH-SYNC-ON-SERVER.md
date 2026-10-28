@@ -13,7 +13,7 @@ lifecycle it implements: `~/dev/homelab-arch/docs/change-playbook.md` section 3 
 
 | Tree | What | Who writes it |
 |---|---|---|
-| `~/localserver-config` (deploy tree) | git clone of `origin`, fast-forwarded by deployd's `sync-infra` (the gate needs it clean and equal to `origin/main`); the container bind-mounts its `architecture/` at `/infra/architecture`; the script and units run from here | `deployctl request sync-infra`; the job's step 6 still copies the four export files into `architecture/` (see the note below) |
+| `~/localserver-config` (deploy tree) | git clone of `origin`, fast-forwarded by deployd's `sync-infra` (the gate needs it clean and equal to `origin/main`); the container bind-mounts its `architecture/` at `/infra/architecture`; the script and units run from here | `deployctl request sync-infra` only; the job never writes into it (see the note below) |
 | `~/localserver-config-sync` (clone) | dedicated git clone, only this job touches it | the job: pull, export, check, commit, push |
 | `~/dev/homelab-arch` | app checkout holding the commit pinned in `architecture/.checker-ref`, for `scripts/arch-check.sh` | the owner (fetch when re-pinning) |
 
@@ -21,11 +21,13 @@ The job does its git work (pull, export, check, commit, push) only in the dedica
 the deploy tree: running from the deploy tree means a `git pull` cannot rewrite the script while
 bash is reading it, and only `sync-infra` moves that tree.
 
-Note: step 6 of the script still copies the four committed export files into the deploy tree's
-`architecture/`. In a git clone those copies are tracked modifications until `sync-infra` brings
-the same commit in, and while they exist the infra gate reports `dirty`. See "Known conflicts" in
-`deployd/INSTALL.md` for the planned change (the deploy tree receiving the exports via
-`sync-infra` only).
+Note: when the deploy tree is a git clone (it has `.git`), step 6 of the script does not copy the
+export files into it: copies would be tracked modifications and the infra gate would report
+`dirty`. The export commit reaches `architecture/` there through an approved `sync-infra`. Step 7
+(freshness) compares the four files in the clone with the deploy tree: if any differ it logs
+`freshness: skipped, N export file(s) ... await sync-infra` and does not fail, because the check
+compares the live graph with the deploy tree's `architecture/` and could only fail until the sync.
+Without `.git` (an older layout) step 6 still copies them, as before.
 
 ## One-time setup
 
@@ -108,7 +110,8 @@ Run steps 1 to 5 on beeblebox as the service user.
    `systemctl --user start localserver-homelab-arch-export-sync.service` and
    `journalctl --user -u localserver-homelab-arch-export-sync -f`. Expected, if proposals were
    approved since the last export commit: pull, export, check, an `architecture: export after
-   pr_...` commit, push, `installed architecture/...`, `published`, freshness ok, then either
+   pr_...` commit, push, `not writing into it` (or `installed architecture/...` on an older
+   layout without `.git`), `published`, freshness skipped (or ok), then either
    `provisioning in sync` or DRIFT lines (exit 3, which is the drift alarm in the playbook, not a
    setup error). Then confirm `export_status` (MCP) is `fresh`. A run with nothing new logs `export unchanged` and
    skips the commit, push and install steps, so the first run after a real approved change is the
@@ -130,9 +133,13 @@ Run steps 1 to 5 on beeblebox as the service user.
 - The server now adds `architecture: export after ...` commits to `origin/main`. On the
   workstation, `git pull --rebase` before committing, pushing or deploying. Prod is deployed by
   deployd, not by rsync: push, then `deployctl request sync-infra` brings the server's clone to that
-  commit. `deploy-to-server.sh` and `deploy-service.sh` refuse `prod`. Until `sync-infra` has run,
-  the server's `architecture/` can be older than `origin`, so the export looks stale until then or
-  until the next 09:00 run (the job re-installs the committed export every run).
+  commit. `deploy-to-server.sh` and `deploy-service.sh` refuse `prod`.
+- After an approved graph change, the 09:00 run pushes the export commit but does not touch the
+  server's `architecture/`. The live model view in the homelab-arch container updates only after
+  `sync-infra`: `deployctl request infra-diff` (state `behind`, only `architecture/` changed, no
+  stacks affected), then `deployctl request sync-infra ref=<origin sha>`, which the owner approves.
+  Until then the freshness step is logged as skipped, `infra-diff` stays `behind` (never `dirty`),
+  and the weekly `localserver-homelab-arch-export-check` fails; that failure is the reminder.
 - A change in progress alerts. Between deploying a provisioning change and committing the YAML and
   `architecture/` together (playbook section 4, steps 2 to 5), the 09:00 run exports the new graph,
   the checker compares it with the still-committed YAML and fails, and the unit alerts (exit 1).
