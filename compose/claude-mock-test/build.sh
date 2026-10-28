@@ -14,7 +14,15 @@ cd "$STACK_DIR"
 compose_files=(-f compose.yaml)
 [[ -f compose.local.yaml ]] && compose_files+=(-f compose.local.yaml)
 
-SITE_DIR="$STACK_DIR/site"
+# MOCK_TEST_SITE: directory holding the site to publish (default ./site, the tracked fallback).
+# Any other directory is copied to .build/site (git-ignored) first, because the image build
+# context is this stack directory; Dockerfile reads the site from SITE_DIR (a build arg).
+SITE_DIR="${MOCK_TEST_SITE:-$STACK_DIR/site}"
+[[ -d "$SITE_DIR" ]] || {
+  echo "ERROR: MOCK_TEST_SITE is not a directory: $SITE_DIR" >&2
+  exit 1
+}
+SITE_DIR="$(cd "$SITE_DIR" && pwd -P)"
 [[ -f "$SITE_DIR/index.html" ]] || {
   echo "ERROR: site/index.html missing. Run compose/claude-mock-test/sync-site.sh on the authoring machine first." >&2
   exit 1
@@ -54,5 +62,14 @@ if [[ -f "$SITE_DIR/version.txt" ]]; then
   sed 's/^/  /' "$SITE_DIR/version.txt"
 fi
 
-echo "[build claude-mock-test] Building container image..."
+if [[ "$SITE_DIR" == "$(pwd -P)/site" ]]; then
+  export MOCK_TEST_SITE_CTX="site"
+else
+  rm -rf "$STACK_DIR/.build/site"
+  mkdir -p "$STACK_DIR/.build"
+  cp -a "$SITE_DIR" "$STACK_DIR/.build/site"
+  export MOCK_TEST_SITE_CTX=".build/site"
+fi
+
+echo "[build claude-mock-test] Building container image (site: $MOCK_TEST_SITE_CTX)..."
 "$COMPOSE_CMD" "${compose_files[@]}" build "$@"
