@@ -3,9 +3,14 @@ services:
     build:
       context: .
       args:
-        SITE_DIR: ${MOCK_TEST_SITE_CTX:-site}
-    # Loopback only: reached through Caddy (:8446 LAN TLS, /claudemock on the :8090
-    # tailnet router), never directly.
+        # Set by build.sh. The fallback is not a site: it only keeps `up`/`down`/`restart`
+        # parseable without it (a `:?` here would break them), and an `up` that has to build
+        # with no staged site fails on COPY. Deploy via deployd's deploy-mock-test.
+        SITE_DIR: ${MOCK_TEST_SITE_CTX:-.build/site}
+    # Published on the host-internal address only (HOST_INTERNAL_IP:8093), never on all
+    # interfaces. The public Funnel mounts /claudemock on :443 straight to port 8093 (no Caddy;
+    # Tailscale strips the prefix); Caddy also fronts it on :8446 (LAN TLS) and /claudemock
+    # on the :8090 tailnet router.
     ports:
       - "${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}:8093:80"
     restart: unless-stopped

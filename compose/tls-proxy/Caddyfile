@@ -125,8 +125,9 @@
 # Tailnet-only path router. Loopback-only — not a LAN front door. Mounted at the
 # tailnet leg via: tailscale serve --bg --https=8090 http://127.0.0.1:8090
 # Plain HTTP by design: Tailscale terminates TLS for tailnet clients.
-# The public :443 Funnel has been torn down (VPN-only access now) — tictactoe was
-# moved here from its old Funnel path mount; see docs/NETWORK-CONFIG.md.
+# tictactoe was moved here from its old Funnel path mount; see docs/NETWORK-CONFIG.md.
+# The public :443 Funnel is separate and still serves n8n at /, weather at /weather and
+# the practice-exam site at /claudemock (straight to 127.0.0.1:8093, not through this router).
 :8090 {
   bind 127.0.0.1
 
@@ -165,7 +166,7 @@
   handle_path /helloworld/* {
     reverse_proxy 127.0.0.1:8080
   }
-  # Strip is fine here: the mock test is a static bundle whose asset references are all
+  # Strip is fine here: the practice-exam site is a static bundle whose asset references are all
   # relative, and it makes no HTTP calls at all (state lives in localStorage) — verified
   # by grep before mounting, as docs/NETWORK-CONFIG.md requires.
   handle_path /claudemock/* {

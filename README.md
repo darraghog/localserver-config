@@ -104,7 +104,7 @@ the code; it never applies.
 | hello-world | 8080, 8443 | nginx test |
 | n8n | 5678, 8444 | Workflow automation (SQLite by default — dev/single-user only; set `N8N_DATABASE=postgres` for production) |
 | tic-tac-toe | 8091 (host-internal), 8445 | Reference app proving path-based routing |
-| claude-mock-test | 8093 (host-internal), 8446 | Static Claude Professional Architect mock test (nginx) |
+| claude-mock-test | 8093 (host-internal), 8446 | Public practice-exam site for Claude Professional Architect candidates (nginx); the site is built from a claude-mock-test release tag by deployd, not tracked here |
 | litellm | 4000 (host-internal), 8447, 8092 (tailnet front, loopback) | LLM proxy + Postgres; serves under `/litellm` (`SERVER_ROOT_PATH`) |
 | weather-mcp | 8094 (host-internal), 8448, 8095 (public front, loopback) | MCP tool server plus a private GUI |
 | wordpress | 8096 (host-internal), 8449, 8097 (public front, loopback) | thelearningcto.com blog — WordPress + MariaDB, public via Cloudflare Tunnel |
@@ -115,6 +115,8 @@ the code; it never applies.
 | homelab-arch | 8104 (host-internal), 8099 and 8105 (tailnet fronts, loopback) | Homelab Architecture Manager: browser app, API and MCP endpoint; app code lives in `~/dev/homelab-arch` (see [compose/homelab-arch/README.md](compose/homelab-arch/README.md)) |
 | tls-proxy | LAN TLS 8443–8451 and 9443; loopback-only 8090 (tailnet path router, incl. `/prometheus` and `/grafana`), 8092 (litellm), 8098 (gqldb), 8095 (weather public front), 8097 (wordpress public front), 8099 and 8105 (homelab-arch); host-internal 8103 (Caddy metrics, Prometheus scrape only) | Caddy HTTPS reverse proxy |
 | Cockpit | 9090 (internal), 9443 (TLS) | Podman container/pod management UI |
+
+**claude-mock-test releases.** The site lives in the `claude-mock-test` repo and is not tracked here. Tag a release (`vX.Y.Z`) and push the tag, then through deployd request `claude-mock-test-pull` with `ref=vX.Y.Z` followed by `deploy-mock-test` (owner approves each). `deploy-mock-test` stages the runtime files and runs `scripts/deploy-stack.sh claude-mock-test` with `MOCK_TEST_SITE` set; `compose/claude-mock-test/build.sh` refuses to run without it. See `deployd/INSTALL.md` (step 5b for the deploy key).
 
 ## URLs
 
