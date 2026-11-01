@@ -326,6 +326,22 @@
   }
 }
 
+# Orbital evaluation. Add to localserver-config/compose/tls-proxy/Caddyfile, AFTER the :84xx TLS sites
+# (scripts/lib/caddy-site-ports.awk maps a backend port to the FIRST site that proxies it), next to :8099/:8105.
+# Tailnet-only: plain HTTP on loopback, never 0.0.0.0; Tailscale terminates TLS in front:
+#   tailscale serve --bg --https=8106 http://127.0.0.1:8106
+# 8106 is a PLACEHOLDER. Proposed by reading the Caddyfile and docs only: 8090-8105 are taken (8103 is
+# Caddy metrics), 8106 is unreferenced. The owner confirms it is free on the host (tests/check-ports.sh,
+# owner-run) before use; if it changes, change the three places it appears: here, `tailscale serve`, the
+# provisioning snippet endpoint.
+# Orbital's UI calls absolute paths, so it is root-mounted on its own port, not on the :8090 router.
+# The UI uses Orbital's own sign-in; the three published estate-lens queries are anonymous (accepted by the owner:
+# tailnet-only is the access control). No basic_auth here. No LAN door on purpose (like :8099/:8105).
+:8106 {
+  bind 127.0.0.1
+  reverse_proxy {env.HOST_INTERNAL_IP}:9022
+}
+
 # Prometheus scrape target for Caddy's own metrics. Bound to the host-internal address
 # (not 0.0.0.0, not loopback-for-tailscale): reachable by containers, not by the LAN or
 # tailnet. Only /metrics is served; the admin API on :2019 stays untouched.

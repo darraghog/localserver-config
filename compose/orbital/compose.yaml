@@ -1,0 +1,113 @@
+## Orbital evaluation on beeblebox. Target path once the owner copies it: localserver-config/compose/orbital/compose.yaml
+## Draft only: nothing here has been deployed. See RUNBOOK.md (ordered, owner-run steps).
+## Adapted from orbital-eval/compose.dev.yaml. Deviations from the dev stack:
+##   - Orbital + Postgres + health stub only: no Nebula (it needs the container socket), no Prometheus.
+##   - Orbital published on ${HOST_INTERNAL_IP} (east-west rule), never 0.0.0.0; Caddy fronts it for the tailnet.
+##   - Postgres is not published; the DB secret reaches Orbital by environment (relaxed binding), not the command line.
+##   - Rootless podman: no `user:` (container root is the host user), hardened with cap_drop ALL.
+## Orbital reads homelab-arch through its unauthenticated WEB spec only (decision D1a):
+##   http://host.containers.internal:8104 (set in workspace/estate-lens/specs/*.taxi.conf). No homelab-arch
+##   agent credential appears anywhere in this stack.
+## The secret ORBITAL_DB_PASSWORD has no default: a missing value fails the compose run.
+services:
+  orbital:
+    # Pinned daily build (same image as `next` on 30 Oct 2026). Chosen over 0.39.1-M1 because only this build has a
+    # working sign-in (see FINDINGS.md). A knowingly accepted exception to the "release tags only" plan rule.
+    # Never the floating `next` or `latest` tag; move the pin deliberately and re-run the tests.
+    image: docker.io/orbitalhq/orbital:next-3009065051
+    networks: [orbital_net]
+    ports:
+      - "${HOST_INTERNAL_IP:?HOST_INTERNAL_IP must be set in .env}:9022:9022"
+    environment:
+      JAVA_OPTS: >-
+        -XX:MaxRAMPercentage=75.0
+        -XX:InitialRAMPercentage=50.0
+      # Non-secret options only. The DB secret is deliberately not here (it would show in `ps` and
+      # `podman inspect` command lines); see ORBITAL_DB_PASSWORD below.
+      OPTIONS: >-
+        --orbital.app.data.path=/opt/service/orbital_data
+        --orbital.db.username=orbital
+        --orbital.db.host=postgres
+        --orbital.toggles.workspace-mode=OrgAndWorkspace
+        --orbital.toggles.nebula-enabled=false
+        --orbital.toggles.policies-enabled=true
+        --orbital.history.persist-remote-call-responses=true
+        --orbital.history.persist-results=true
+      # Spring Boot relaxed binding maps ORBITAL_DB_PASSWORD to orbital.db.password. RUNBOOK step 5
+      # verifies the login works and the value is absent from the process arguments; if Orbital
+      # ignores it, that is a known deviation to report (do not fall back to a CLI flag silently).
+      ORBITAL_DB_PASSWORD: ${ORBITAL_DB_PASSWORD:?ORBITAL_DB_PASSWORD must be set in .env}
+    volumes:
+      - ./orbital_data:/opt/service/orbital_data
+      # 0.39.1-M1 crashed without config/roles.conf (it writes relative to /opt/service, which is
+      # not writable). Kept for safety on the next-* build, where the dev stack writes roles.conf
+      # directly under orbital_data/; RUNBOOK step 5 checks which is used. The runbook pre-creates orbital_data/config.
+      - ./orbital_data/config:/opt/service/config
+      # The estate-lens project, copied into the stack by the runbook (beeblebox sidecars use
+      # host.containers.internal:8104). Registered in workspace.conf as /opt/service/projects/estate-lens.
+      - ./workspace/estate-lens:/opt/service/projects/estate-lens:ro
+      # Licence downloaded by the owner from account.orbitalhq.app; the runbook creates the directory first.
+      - ${HOME}/.orbital/license:/opt/var/orbital/license:ro
+    depends_on: [postgres]
+    restart: unless-stopped
+    init: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits:
+          memory: 1gb
+
+  # Stub ServiceHealth API (orbital-eval/stub/health_api.py): stdlib Python, GET only, stack network only.
+  # Fixed demo data, not real health. Not published.
+  health-stub:
+    image: docker.io/library/python:3.12-slim
+    networks: [orbital_net]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    command: ["python", "-I", "/stub/health_api.py", "--host", "0.0.0.0", "--port", "8110", "--targets", "/stub/targets.json"]
+    volumes:
+      - ./stub:/stub:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-I", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8110/healthz', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128mb
+
+  # Private to this stack: no `ports:`.
+  postgres:
+    image: docker.io/library/postgres:15
+    networks: [orbital_net]
+    environment:
+      POSTGRES_DB: orbital
+      POSTGRES_USER: orbital
+      POSTGRES_PASSWORD: ${ORBITAL_DB_PASSWORD:?ORBITAL_DB_PASSWORD must be set in .env}
+    volumes:
+      # Named volume: the image's entrypoint chowns its data directory, which a bind under the
+      # git-synced stack directory would fight with.
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    cap_drop: [ALL]
+    # The postgres entrypoint needs these to initialise and drop privileges.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits:
+          memory: 512mb
+
+volumes:
+  postgres_data: {}
+
+networks:
+  orbital_net:
+    ipam:
+      config:
+        # Pinned so it cannot collide with podman's auto-allocated 10.89.x.0/24 networks.
+        - subnet: 10.90.46.0/24

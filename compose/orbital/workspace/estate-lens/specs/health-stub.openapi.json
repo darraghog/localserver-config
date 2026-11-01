@@ -1,0 +1,31 @@
+{
+  "openapi": "3.0.3",
+  "info": {"title": "Health stub", "version": "0.1.0", "description": "Stub ServiceHealth API (orbital-eval/stub/health_api.py). Hand-written; `svc` is typed homelab.EntityId."},
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "listServiceHealth",
+        "summary": "Health of each service",
+        "responses": {
+          "200": {
+            "description": "One row per service",
+            "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/ServiceHealth"}}}}
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ServiceHealth": {
+        "type": "object",
+        "required": ["svc", "up", "checked_at"],
+        "properties": {
+          "svc": {"type": "string", "description": "The component id (a homelab-arch ApplicationComponent id).", "x-taxi-type": {"name": "homelab.EntityId"}},
+          "up": {"type": "boolean", "x-taxi-type": {"name": "homelab.ServiceUp"}},
+          "checked_at": {"type": "string", "x-taxi-type": {"name": "homelab.CheckedAt"}}
+        }
+      }
+    }
+  }
+}

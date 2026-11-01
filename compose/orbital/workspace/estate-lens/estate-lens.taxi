@@ -1,0 +1,14 @@
+namespace homelab
+
+// Hand-written types for the Estate Lens queries. Everything else under homelab is generated from the
+// exported model by scripts/build_types.py (types.taxi); mapping/semantic-types.yaml `extra_types` lists
+// these and tests/test_annotate_spec.py checks that each is declared here.
+
+type EntityName inherits String
+type EntityLifecycle inherits String
+type ReadinessValue inherits Int
+type FindingMessage inherits String
+
+// The health stub (specs/health-stub.openapi.json). Its key field `svc` is typed homelab.EntityId.
+type ServiceUp inherits Boolean
+type CheckedAt inherits String

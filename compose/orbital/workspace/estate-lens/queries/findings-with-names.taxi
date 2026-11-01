@@ -1,0 +1,22 @@
+import taxi.http.HttpOperation
+import com.orbitalhq.authentication.AllowAnonymous
+
+namespace estatelens
+
+// Assessment findings of the top severity, with the subject's name looked up through EntityId.
+// The brief asked for Severity = "error"; the ontology's Severity is high | medium | low, so this keeps "high".
+// (Filtering as a find-constraint, `AssessmentFinding[](Severity == "high")`, is rejected by Orbital 0.39.1-M1
+// for a source with no matching parameter; the filter() function is applied by Orbital itself.)
+// Dev only: Free plan has no API keys, so the E2E tests call these anonymously (see FINDINGS.md).
+@AllowAnonymous
+@HttpOperation(url = '/api/q/findings-with-names', method = 'GET')
+query FindingsWithNames {
+  find {
+    filter(homelab.api.AssessmentFinding[], (homelab.Severity) -> homelab.Severity == "high")
+  } as {
+    severity : homelab.Severity
+    subject : homelab.EntityId
+    name : homelab.EntityName
+    message : homelab.FindingMessage
+  }[]
+}

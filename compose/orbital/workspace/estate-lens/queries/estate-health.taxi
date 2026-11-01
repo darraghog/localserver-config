@@ -1,0 +1,18 @@
+import taxi.http.HttpOperation
+import com.orbitalhq.authentication.AllowAnonymous
+
+namespace estatelens
+
+// The cross-source semantic join. The health stub keys its rows by `svc`; homelab-arch calls the same
+// thing `_id`. Both are homelab.EntityId, so Orbital looks the name up in homelab-arch for each row.
+// Dev only: Free plan has no API keys, so the E2E tests call these anonymously (see FINDINGS.md).
+@AllowAnonymous
+@HttpOperation(url = '/api/q/estate-health', method = 'GET')
+query EstateHealth {
+  find { homelab.health.ServiceHealth[] } as {
+    svc : homelab.EntityId
+    name : homelab.EntityName
+    up : homelab.ServiceUp
+    checked_at : homelab.CheckedAt
+  }[]
+}

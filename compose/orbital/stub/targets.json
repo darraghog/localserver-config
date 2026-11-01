@@ -1,0 +1,8 @@
+{
+  "source": "ids read from the throwaway graph hla_test via GET /api/entities?class=application_component (17 ApplicationComponents) on 2026-10-29; not guessed. The `up` values are fixed stub data, not real health.",
+  "targets": [
+    {"svc": "ac_homelab_arch", "up": true},
+    {"svc": "ac_grafana", "up": true},
+    {"svc": "ac_ollama", "up": false}
+  ]
+}

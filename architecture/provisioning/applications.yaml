@@ -93,6 +93,16 @@ ApplicationComponent:
   stack: (host package, not containerised)
   image: ollama 0.35.0 (system service)
   routing: not-path-mounted
+- id: ac_orbital
+  name: Orbital (evaluation)
+  description: 'Orbital data-integration platform on trial: Postgres plus a stub health API, reading the
+    homelab-arch web spec through its east-west port (host.containers.internal:8104, no credential).
+    Root-mounted on its own tailnet port because the UI calls absolute paths. Evaluation only.
+
+    '
+  stack: compose/orbital
+  image: docker.io/orbitalhq/orbital:next-3009065051 + postgres:15 + python:3.12-slim
+  routing: not-path-mounted
 - id: ac_prometheus
   name: Prometheus
   description: 'Metrics store, rule evaluator and probe scheduler. Scrapes metric endpoints where an application
@@ -334,6 +344,16 @@ ApplicationService:
   endpoint: http://beeblebox:11434
   protocol: http
   auth: none
+- id: as_orbital
+  name: Orbital (evaluation)
+  description: 'Orbital UI and published estate-lens query API, behind Caddy :8106 and tailscale serve. The UI
+    uses Orbital-hosted sign-in. The three published queries are anonymous (Free plan has no API keys), so access
+    to them is limited by the tailnet only.
+
+    '
+  endpoint: https://beeblebox.taile98462.ts.net:8106/
+  protocol: https
+  auth: network-identity
 - id: as_prometheus
   name: Prometheus UI and API
   description: Query UI and API on the tailnet path router. Also answers east-west on the host-internal
@@ -509,6 +529,24 @@ relationships:
 - from: ac_ollama
   name: provides
   to: as_ollama
+- from: ac_orbital
+  name: depends_on
+  to: ac_homelab_arch
+- from: ac_orbital
+  name: depends_on
+  to: ep_tailscale
+- from: ac_orbital
+  name: depends_on
+  to: ts_caddy
+- from: ac_orbital
+  name: depends_on
+  to: ts_podman
+- from: ac_orbital
+  name: deployed_on
+  to: n_beeblebox
+- from: ac_orbital
+  name: provides
+  to: as_orbital
 - from: ac_prometheus
   name: depends_on
   to: ts_caddy
@@ -645,6 +683,9 @@ relationships:
   name: exposed_via
   to: et_lan
 - from: as_ollama
+  name: exposed_via
+  to: et_tailnet
+- from: as_orbital
   name: exposed_via
   to: et_tailnet
 - from: as_prometheus

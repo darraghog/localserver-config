@@ -1,0 +1,20 @@
+import taxi.http.HttpOperation
+import com.orbitalhq.authentication.AllowAnonymous
+
+namespace estatelens
+
+// Data products with their readiness score. Two homelab-arch endpoints, joined by Orbital with no join code:
+//   GET /api/assess/readiness            -> id (DataProductId), score (ReadinessValue)
+//   GET /api/entities/{entity_id}        -> name (EntityName), lifecycle (EntityLifecycle), keyed by EntityId
+// DataProductId inherits EntityId, which is the only thing that links them.
+// Dev only: Free plan has no API keys, so the E2E tests call these anonymously (see FINDINGS.md).
+@AllowAnonymous
+@HttpOperation(url = '/api/q/products-by-readiness', method = 'GET')
+query ProductsByReadiness {
+  find { homelab.api.ReadinessScore[] } as {
+    id : homelab.DataProductId
+    name : homelab.EntityName
+    lifecycle : homelab.EntityLifecycle
+    readiness : homelab.ReadinessValue
+  }[]
+}
