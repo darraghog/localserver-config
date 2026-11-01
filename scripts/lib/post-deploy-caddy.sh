@@ -135,11 +135,11 @@ verify_deployed_stacks_via_caddy() {
   for s in "$@"; do
     [[ "$s" == "tls-proxy" ]] && continue
     be="$(compose_first_published_host_port "$s" 2>/dev/null)" || continue
-    # Tailnet-only stacks with no LAN Caddy door (the :8090 router and the :8099/:8105
+    # Tailnet-only stacks with no LAN Caddy door (the :8090 router, :8106 orbital and the :8099/:8105
     # homelab-arch sites are plain HTTP), so probe the backend directly rather than an HTTPS
     # front door that does not exist.
     case "$s" in
-      prometheus|alertmanager|grafana|homelab-arch)
+      prometheus|alertmanager|grafana|homelab-arch|orbital)
         if wait_for_stack_backend "$s" "$be"; then
           echo "[post-deploy-caddy] OK $s (backend healthy; tailnet-only, no LAN Caddy door)"
         else
