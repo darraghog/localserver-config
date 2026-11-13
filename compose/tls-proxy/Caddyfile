@@ -337,6 +337,11 @@
 # Orbital's UI calls absolute paths, so it is root-mounted on its own port, not on the :8090 router.
 # The UI uses Orbital's own sign-in; the three published estate-lens queries are anonymous (accepted by the owner:
 # tailnet-only is the access control). No basic_auth here. No LAN door on purpose (like :8099/:8105).
+# The UI does NOT work through this door: its sign-in service (auth.orbitalhq.app) sends CORS headers only for
+# allow-listed origins (http://localhost:9022 yes; the tailnet hostname and 127.0.0.1 no), so the browser shows
+# "Orbital failed to start ... 0 Unknown Error". Use the UI only via `ssh -L 9022:127.0.0.1:9022 beeblebox`, then
+# http://localhost:9022 (not 127.0.0.1). The published queries work here without sign-in. Nothing in this
+# Caddyfile can fix it (orbital-eval/FINDINGS.md, beeblebox/RUNBOOK.md step 5).
 :8106 {
   bind 127.0.0.1
   reverse_proxy {env.HOST_INTERNAL_IP}:9022
