@@ -48,7 +48,10 @@ services:
       - ./workspace/estate-lens:/opt/service/projects/estate-lens:ro
       # Licence downloaded by the owner from account.orbitalhq.app; the runbook creates the directory first.
       - ${HOME}/.orbital/license:/opt/var/orbital/license:ro
-    depends_on: [postgres]
+    # Wait for Postgres to accept connections (cold boot), not just for its container to start.
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     init: true
     cap_drop: [ALL]
@@ -97,6 +100,13 @@ services:
     # The postgres entrypoint needs these to initialise and drop privileges.
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
     security_opt: ["no-new-privileges:true"]
+    # Same shape as litellm's db. pg_isready only checks the server accepts connections; no password involved.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d orbital -U orbital"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     deploy:
       resources:
         limits:
